@@ -331,6 +331,16 @@
             "group": "vat"
         },
         {
+            "id": "vat_recap_source",
+            "name": "VAT recap source",
+            "name:cs": "Rekapitulace DPH",
+            "name:en": "VAT recap source",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "docs.core.vatRecapSources",
+            "group": "vat"
+        },
+        {
             "id": "vat_place",
             "name": "VAT place",
             "name:cs": "Místo plnění",

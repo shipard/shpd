@@ -106,6 +106,18 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         $this->reconcileRowsToRecap($rows, $recap, $suffix, $tolerance);
     }
 
+    /** @param array<string, mixed>|null $originalData */
+    public function useDeclaredRecapPub(array $data, ?array $originalData): bool
+    {
+        return $this->useDeclaredRecap($data, $originalData);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function takeOverVatRecapitulationPub(array &$data): array
+    {
+        return $this->takeOverVatRecapitulation($data);
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function getComputedRows(): array
     {

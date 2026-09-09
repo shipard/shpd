@@ -45,7 +45,10 @@ tvrzení (`vat_period`, `cs_period`, `rs_period`) dodává extension modulu
 
 `vat_mode` (0 bez DPH / 1 ze základu / 2 z ceny celkem),
 `vat_calc_source` (0 z hlavičky = daň jednou ze součtu cen ve sazbě podle
-normy / 1 z řádků = historický součet řádkových daní), `vat_place` (tuzemsko /
+normy / 1 z řádků = historický součet řádkových daní),
+`vat_recap_source` (0 přepočítaná z řádků při každém uložení / 1 převzatá =
+rekapitulace existujícího dokladu je vstup a fakt — import, přijatý doklad,
+ruční oprava; `beforeSave` ji nepřepočítá), `vat_place` (tuzemsko /
 intracom / zahraničí). Pravidla výpočtu: `docs/vat-calculation.md`.
 
 ### `currency`

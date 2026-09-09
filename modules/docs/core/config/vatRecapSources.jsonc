@@ -1,0 +1,22 @@
+{
+    // docs.core.vatRecapSources
+    //
+    // Autorita rekapitulace DPH dokladu (docs/vat-calculation.md § 5):
+    //   0 = přepočítaná — vzniká z řádků při každém uložení (doklady, které
+    //       vystavuje Shipard: FVB, prodejky, pokladní a opravné doklady)
+    //   1 = převzatá — rekapitulace je vstup a fakt: to, co je na existujícím
+    //       dokladu (import, přijatý doklad dodavatele, ruční oprava účetní).
+    //       beforeSave ji nepřepočítá, jen z ní dopočte domácí měnu, součty
+    //       hlavičky a flagy sčítání z definice kódu.
+
+    "0": {
+        "name": "Computed",
+        "name:cs": "Přepočítaná",
+        "name:en": "Computed"
+    },
+    "1": {
+        "name": "Declared",
+        "name:cs": "Převzatá",
+        "name:en": "Declared"
+    }
+}

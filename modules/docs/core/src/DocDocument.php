@@ -72,6 +72,22 @@ abstract class DocDocument extends Document
      */
     private ?array $importPartnerSnapshot = null;
 
+    /**
+     * Mez dorovnání řádků na **převzatou** rekapitulaci — základ pro
+     * `max(0,02; 0,01 × počet řádků skupiny)`. Nad ní se řádky nedorovnávají
+     * a validace vydá warning `rows_recap_mismatch`: takový rozdíl už není
+     * haléřové zaokrouhlení, ale chybějící nebo špatně zadané řádky.
+     */
+    protected const DECLARED_RECAP_TOLERANCE = 0.02;
+
+    /**
+     * True, když se v posledním `beforeSave` použila **převzatá** rekapitulace
+     * (a je neprázdná). Pak je autoritou celého dokladu: součty hlavičky se
+     * berou jen z ní, řádky mimo ni se nepřičítají — jinak by se u importu
+     * (kód řádku se s kódem rekapitulace nemusí krýt) základ započítal dvakrát.
+     */
+    private bool $recapDeclared = false;
+
     private ?VatRateResolver $vatRateResolver = null;
     private ?OwnCompanyResolver $ownCompanyResolver = null;
     private ?PersonSnapshotBuilder $personSnapshotBuilder = null;
@@ -144,7 +160,159 @@ abstract class DocDocument extends Document
             $this->validateRowOperations($data, $result);
         }
 
+        $this->validateDeclaredRecap($data, $result);
+
         return $result;
+    }
+
+    /**
+     * Kontroly **převzaté** rekapitulace (spec `docs/vat-calculation.md` § 5).
+     * Obě jsou warningy — uložení neblokují: rekapitulace dodavatele je fakt
+     * i když je haléřově „špatně" (nárok na odpočet je částka z faktury),
+     * úkolem kontroly je nesrovnalost zviditelnit.
+     *
+     * - `vat_recap_inconsistent` — řádek si vnitřně neodpovídá (`base + tax`
+     *   ≠ `total`, daň ≠ sazba ze základu, u kódu ze sazebníku neznámá sazba
+     *   k DUZP). Oddaňovací páry a nulové sazby se přeskakují.
+     * - `rows_recap_mismatch` — Σ řádkových cen per (kód, sazba) neodpovídá
+     *   rekapitulaci (v mode 1 základu, v mode 2 celkem). Mez je stejná jako
+     *   u dorovnání řádků ({@see reconcileRowsToRecap}), takže warning padne
+     *   právě tehdy, když se řádky odmítly dorovnat a invariant „Σ řádků =
+     *   rekapitulace" pro tu skupinu neplatí.
+     *
+     * Přepočítaná rekapitulace kontroly nepotřebuje — vzniká z řádků, takže
+     * jim vyhoví konstrukčně.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function validateDeclaredRecap(array &$data, ValidationResult $result): void
+    {
+        if ((int) ($data['vat_recap_source'] ?? 0) !== 1) {
+            return;
+        }
+        $recap = isset($data['vatRecap']) && is_array($data['vatRecap']) && $data['vatRecap'] !== []
+            ? $data['vatRecap']
+            : $this->loadVatRecapFromDb($data['id'] ?? null);
+        if ($recap === []) {
+            return;
+        }
+
+        $resolved = $this->resolveVatCodesForDoc($data);
+        $vatCodes = $resolved['codes'] ?? null;
+        $country  = $resolved['country'] ?? null;
+        $duzp     = (string) ($data['vat_duzp'] ?? $data['issue_date'] ?? '');
+
+        foreach ($recap as $r) {
+            if (!is_array($r) || !empty($r['is_reverse_pair'])) {
+                continue;
+            }
+            $pct = (float) ($r['vat_pct'] ?? 0);
+            if ($pct === 0.0) {
+                continue;
+            }
+            $base  = round((float) ($r['base'] ?? 0), 2);
+            $tax   = round((float) ($r['tax'] ?? 0), 2);
+            $total = round((float) ($r['total'] ?? 0), 2);
+            $code  = (string) ($r['vat_code'] ?? '');
+            $noPayTax = !empty(($vatCodes[$code] ?? [])['noPayTax']);
+
+            $problems = [];
+            // U noPayTax (PDP, EU pořízení, osvobozená plnění) se daň
+            // dodavateli neplatí — celkem je základ, daň je informativní.
+            $expectedTotal = $noPayTax ? $base : round($base + $tax, 2);
+            if (abs($expectedTotal - $total) > 0.02) {
+                $problems[] = $noPayTax
+                    ? "celkem {$total} ≠ základ {$base} (daň se neplatí dodavateli)"
+                    : "základ {$base} + daň {$tax} ≠ celkem {$total}";
+            }
+            if (!($noPayTax && $tax === 0.0)) {
+                $expectedTax = round($base * $pct / 100.0, 2);
+                if (abs($tax - $expectedTax) > max(0.05, abs($base) * 0.001)) {
+                    $problems[] = "daň {$tax} neodpovídá sazbě {$pct} % ze základu {$base}"
+                        . " (očekáváno ~{$expectedTax})";
+                }
+            }
+            if ($country !== null && $duzp !== '' && $code !== '') {
+                try {
+                    $codePct = $this->vatRateResolver()->resolveVatPct($country, $code, $duzp);
+                    if (abs($codePct - $pct) > 0.001) {
+                        $problems[] = "sazba {$pct} % nepatří ke kódu {$code} k datu {$duzp}"
+                            . " (sazebník má {$codePct} %)";
+                    }
+                } catch (\LogicException) {
+                    // Kód bez sazby k datu (oddaňovací kódy, historické
+                    // kombinace) — sazbu z rekapitulace nemáme čím ověřit.
+                }
+            }
+            if ($problems !== []) {
+                $result->addWarning(
+                    'recap',
+                    "Rekapitulace DPH, řádek {$code} {$pct} %: " . implode('; ', $problems) . '.',
+                    'vat_recap_inconsistent',
+                );
+            }
+        }
+
+        $this->checkRowsAgainstDeclaredRecap($data, $recap, $result);
+    }
+
+    /**
+     * Σ řádkových cen per (kód, sazba) proti převzaté rekapitulaci — viz
+     * `rows_recap_mismatch` v {@see validateDeclaredRecap}.
+     *
+     * @param array<string, mixed> $data
+     * @param array<int, array<string, mixed>> $recap
+     */
+    private function checkRowsAgainstDeclaredRecap(
+        array $data,
+        array $recap,
+        ValidationResult $result,
+    ): void {
+        $rows = $this->resolveRowsForCompute($data);
+        if ($rows === []) {
+            return;
+        }
+        $fromTotal = (int) ($data['vat_mode'] ?? 1) === 2;
+
+        $sums = [];
+        foreach ($rows as $row) {
+            if ((int) ($row['row_kind'] ?? 1) !== 1 || empty($row['vat_code'])) {
+                continue;
+            }
+            $key = $this->vatGroupKey($row['vat_code'], $row['vat_pct'] ?? 0);
+            $sums[$key] ??= ['sum' => 0.0, 'count' => 0];
+            $sums[$key]['sum'] += DocRowCalculator::computePrice($row)['net_total'];
+            $sums[$key]['count']++;
+        }
+
+        foreach ($recap as $r) {
+            if (!is_array($r) || !empty($r['is_reverse_pair'])) {
+                continue;
+            }
+            $key = $this->vatGroupKey($r['vat_code'] ?? '', $r['vat_pct'] ?? 0);
+            $rowSum = round($sums[$key]['sum'] ?? 0.0, 2);
+            $count  = $sums[$key]['count'] ?? 0;
+            $expected = round((float) ($fromTotal ? ($r['total'] ?? 0) : ($r['base'] ?? 0)), 2);
+            $limit = max(self::DECLARED_RECAP_TOLERANCE, 0.01 * $count);
+
+            if (abs($rowSum - $expected) <= $limit) {
+                continue;
+            }
+            $label = $fromTotal ? 'celkem' : 'základu';
+            $result->addWarning(
+                'rows',
+                sprintf(
+                    'Součet řádků %s %s %% (%s) neodpovídá %s v rekapitulaci (%s)'
+                        . ' — řádky mohou být neúplné nebo špatně zadané.',
+                    (string) ($r['vat_code'] ?? ''),
+                    (string) (float) ($r['vat_pct'] ?? 0),
+                    number_format($rowSum, 2, ',', ' '),
+                    $label,
+                    number_format($expected, 2, ',', ' '),
+                ),
+                'rows_recap_mismatch',
+            );
+        }
     }
 
     /**
@@ -286,16 +454,21 @@ abstract class DocDocument extends Document
         }
         unset($row);
 
-        $recap = $this->buildVatRecapitulation($data, $rowsForCompute, $resolved);
+        $declared = $this->useDeclaredRecap($data, $originalData);
+        $recap = $declared
+            ? $this->takeOverVatRecapitulation($data, $resolved)
+            : $this->buildVatRecapitulation($data, $rowsForCompute, $resolved);
+        $this->recapDeclared = $declared && $recap !== [];
         $data['vatRecap'] = $recap;
+        $tolerance = $this->recapDeclared ? self::DECLARED_RECAP_TOLERANCE : null;
 
         $this->sumTotals($data, $recap, $rowsForCompute);
         $this->applyTotalRounding($data);
         // Dorovnání řádků na rekapitulaci v měně dokladu (I5) — v domácí
         // měně ho dělá applyDomesticAmounts nad už dorovnanými cur hodnotami,
         // takže při kurzu 1 jsou obě měny shodné.
-        $this->reconcileRowsToRecap($rowsForCompute, $recap);
-        $this->applyDomesticAmounts($data, $rowsForCompute, $recap, $vatCodes);
+        $this->reconcileRowsToRecap($rowsForCompute, $recap, '', $tolerance);
+        $this->applyDomesticAmounts($data, $rowsForCompute, $recap, $vatCodes, $tolerance);
 
         // Propagate computed values back into the payload child set so the
         // gateway's child sync writes them (covers new rows without id).
@@ -862,6 +1035,149 @@ abstract class DocDocument extends Document
         ];
     }
 
+    /**
+     * Má se rekapitulace **převzít** místo přepočtu? (`vat_recap_source = 1`,
+     * spec `docs/vat-calculation.md` § 5.)
+     *
+     * Rozhodnutí I3 — přechody zdroje řeší porovnání se stavem v DB:
+     * - `přepočítaná → převzatá` = false: startovní převzatá vznikne kopií
+     *   aktuální přepočítané (přegeneruje se z řádků a uloží se pod novým
+     *   zdrojem), editace se odemkne až pro další uložení;
+     * - `převzatá → přepočítaná` = false: recap se přegeneruje z řádků;
+     * - uložení už převzatého dokladu = true, i když payload rekapitulaci
+     *   nenese (uložení hlavičky, interní přepočet z DocRowsDocument).
+     *
+     * Bez `$originalData` (applier, interní přepočet) rozhoduje payload:
+     * přišla-li rekapitulace, převezme se; u už uloženého dokladu (má `id`)
+     * se převezme ta v DB. Nový doklad se zdrojem 1 a bez rekapitulace
+     * spadne na přepočet — nemá co převzít.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed>|null $originalData
+     */
+    protected function useDeclaredRecap(array $data, ?array $originalData): bool
+    {
+        if ((int) ($data['vat_recap_source'] ?? 0) !== 1) {
+            return false;
+        }
+        if ($originalData !== null) {
+            return (int) ($originalData['vat_recap_source'] ?? 0) === 1;
+        }
+        if (isset($data['vatRecap']) && is_array($data['vatRecap']) && $data['vatRecap'] !== []) {
+            return true;
+        }
+        return !empty($data['id']);
+    }
+
+    /**
+     * Převzatá rekapitulace: vstup se **nepřepočítává**, jen normalizuje.
+     * Zdroj je payload (formulář, applier), jinak stav v DB (uložení
+     * hlavičky bez dotčené rekapitulace).
+     *
+     * Z definice kódu se vždy doplní flagy sčítání (`sum_*`) — autoritou je
+     * definice, ne vstup; `total` se dopočte jen když ho vstup nenese
+     * (u `noPayTax` bez placené daně = základ). `id` řádku se zachovává, aby
+     * child sync `TableGateway` aktualizoval na místě a ručně editovaná
+     * rekapitulace nepřišla o identitu. Domácí měnu dopočítá
+     * `applyDomesticAmounts` jako u přepočítané (I2).
+     *
+     * Neznámý DPH kód je datová chyba k opravě — stejně jako u přepočítané
+     * rekapitulace končí `DomainException` (gateway z něj dělá domain error).
+     * Řádek bez kódu se zahodit nedá jinak než přeskočením: `vat_code` je
+     * NOT NULL a bez kódu nejdou určit ani flagy sčítání.
+     *
+     * @param array<string, mixed> $data
+     * @param array{country: string, codes: array<string, array<string, mixed>>}|null $resolved
+     * @return array<int, array<string, mixed>>
+     */
+    protected function takeOverVatRecapitulation(array &$data, ?array $resolved = null): array
+    {
+        $incoming = isset($data['vatRecap']) && is_array($data['vatRecap']) && $data['vatRecap'] !== []
+            ? $data['vatRecap']
+            : $this->loadVatRecapFromDb($data['id'] ?? null);
+        if ($incoming === []) {
+            return [];
+        }
+
+        $resolved ??= $this->resolveVatCodesForDoc($data);
+        $vatCodes = $resolved['codes'] ?? null;
+
+        $exchRate = (float) ($data['exchange_rate'] ?? 1.0);
+        if ($exchRate <= 0) {
+            $exchRate = 1.0;
+        }
+
+        $recap = [];
+        $sortOrder = 0;
+        foreach ($incoming as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $code = trim((string) ($r['vat_code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            if ($vatCodes !== null && !isset($vatCodes[$code])) {
+                throw new \DomainException(
+                    "Neznámý DPH kód '{$code}' v rekapitulaci — opravte rekapitulaci dokladu.",
+                );
+            }
+            $codeDef = $vatCodes[$code] ?? [];
+
+            $base = round((float) ($r['base'] ?? 0), 2);
+            $tax  = round((float) ($r['tax'] ?? 0), 2);
+            $hasTotal = array_key_exists('total', $r) && $r['total'] !== null && $r['total'] !== '';
+            $total = $hasTotal
+                ? round((float) $r['total'], 2)
+                : round($base + (empty($codeDef['noPayTax']) ? $tax : 0.0), 2);
+
+            $line = [
+                'vat_code'        => $code,
+                'vat_pct'         => (float) ($r['vat_pct'] ?? 0),
+                'base'            => $base,
+                'tax'             => $tax,
+                'total'           => $total,
+                'sum_base'        => (int) ($codeDef['sumBase']  ?? 1),
+                'sum_tax'         => (int) ($codeDef['sumTax']   ?? 1),
+                'sum_total'       => (int) ($codeDef['sumTotal'] ?? 1),
+                'is_reverse_pair' => empty($r['is_reverse_pair']) ? 0 : 1,
+                'order_pos'       => $sortOrder++,
+            ];
+            if (!empty($r['id'])) {
+                $line['id'] = (int) $r['id'];
+            }
+            $line['base_dom']  = round($base  * $exchRate, 2);
+            $line['tax_dom']   = round($tax   * $exchRate, 2);
+            $line['total_dom'] = round($total * $exchRate, 2);
+
+            $recap[] = $line;
+        }
+
+        return $recap;
+    }
+
+    /**
+     * Rekapitulace uložená u dokladu — stejný fallback jako
+     * resolveRowsForCompute pro řádky.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function loadVatRecapFromDb(mixed $headId): array
+    {
+        $headId = (int) $headId;
+        if ($headId <= 0 || $this->db === null) {
+            return [];
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT * FROM [docs_core_vat_recap] WHERE [doc_head] = %i ORDER BY [order_pos], [id]',
+            $headId,
+        );
+        return array_map(
+            fn($r) => $r instanceof \Dibi\Row ? $r->toArray() : (array) $r,
+            $rows,
+        );
+    }
+
     protected function resolveCountryFromVatRegistration(mixed $vatRegId): ?string
     {
         if ($vatRegId === null || $this->db === null) {
@@ -912,7 +1228,8 @@ abstract class DocDocument extends Document
      */
     protected function headTotalsIncludeRowsOutsideRecap(): bool
     {
-        return true;
+        // Převzatá rekapitulace je autorita celého dokladu — viz $recapDeclared.
+        return !$this->recapDeclared;
     }
 
     /**

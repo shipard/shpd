@@ -197,6 +197,13 @@ class IssuedInvoiceForm extends DocsHeadsFormBase
                 hidden: !$hasVat,
                 hint: self::VAT_CALC_SOURCE_HINT,
             )
+            ->select(
+                'vat_recap_source',
+                options: $this->resolveCfgItemOptions('docs.core.vatRecapSources'),
+                hidden: !$hasVat,
+                triggers: 'reload',
+                hint: self::VAT_RECAP_SOURCE_HINT,
+            )
 
             ->select(
                 'total_rounding_mode',

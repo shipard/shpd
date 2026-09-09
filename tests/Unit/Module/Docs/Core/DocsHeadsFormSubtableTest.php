@@ -21,6 +21,7 @@ use Shipard\Module\Docs\Core\DocsHeadsForm;
 class DocsHeadsFormSubtableTest extends TestCase
 {
     private const ROWS_TABLE = __DIR__ . '/../../../../../modules/docs/core/tables/docs_core_rows.jsonc';
+    private const RECAP_TABLE = __DIR__ . '/../../../../../modules/docs/core/tables/docs_core_vat_recap.jsonc';
 
     private function rowsTableDef(): TableDefinition
     {
@@ -43,6 +44,36 @@ class DocsHeadsFormSubtableTest extends TestCase
         );
         $form->setDb($db);
         return $form;
+    }
+
+    private function recapTableDef(): TableDefinition
+    {
+        $raw = JsoncParser::parseFile(self::RECAP_TABLE);
+        return TableDefinition::fromArray(ConfigLocalizer::localize($raw, 'cs'));
+    }
+
+    /** Form se schématy obou dětských tabulek — pro tab rekapitulace. */
+    private function formWithRecap(): DocsHeadsForm
+    {
+        $form = new DocsHeadsForm('docs_core_heads');
+        $form->setTables([
+            'docs_core_rows' => $this->rowsTableDef(),
+            'docs_core_vat_recap' => $this->recapTableDef(),
+        ]);
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $form->setDb($db);
+        return $form;
+    }
+
+    private function recapTab(): FormTab
+    {
+        return new FormTab(
+            id: 'recap',
+            label: 'Rekapitulace DPH',
+            type: 'subtable',
+            subtable: ['table' => 'docs_core_vat_recap', 'foreignKey' => 'doc_head', 'formId' => 'docs.core.vatRecap'],
+        );
     }
 
     private function rowsTab(): FormTab
@@ -192,5 +223,76 @@ class DocsHeadsFormSubtableTest extends TestCase
         // default renderer nad definicí docs_core_rows: první sloupce schématu bez FK/PK
         $this->assertSame('row_kind', $result['columns'][0]['id']);
         $this->assertCount(6, $result['columns']);
+    }
+
+    // ── Sub-tabulka převzaté rekapitulace DPH (#75) ────────────────────────
+
+    public function testDeclaredRecapSubtableColumnsAndCells(): void
+    {
+        $form = $this->formWithRecap();
+        $rows = [[
+            'id' => 5, 'doc_head' => 1, 'order_pos' => 1,
+            'vat_code' => 'cz-110', 'vat_pct' => '21.00',
+            'base' => '90.91', 'tax' => '19.09', 'total' => '110.00',
+            'base_dom' => '90.91', 'tax_dom' => '19.09', 'total_dom' => '110.00',
+            'sum_base' => 1, 'sum_tax' => 1, 'sum_total' => 1, 'is_reverse_pair' => 0,
+        ]];
+        $result = $form->renderSubtable($this->recapTab(), $rows, [
+            'id' => 1, 'vat_mode' => 2, 'doc_currency' => 'czk', 'home_currency' => 'czk',
+        ]);
+
+        $this->assertSame(
+            ['order_pos', 'vat_code', 'vat_pct', 'base', 'tax', 'total'],
+            array_column($result['columns'], 'id'),
+            'tuzemský doklad nemá sloupce domácí měny',
+        );
+        $cells = $result['rows'][0]['cells'];
+        $this->assertSame('1', $cells['order_pos']);
+        $this->assertSame('21', $cells['vat_pct']);
+        $this->assertSame('90,91', $cells['base']);
+        $this->assertSame('19,09', $cells['tax']);
+        $this->assertSame('110,00', $cells['total']);
+        $this->assertSame(5, $result['rows'][0]['id']);
+    }
+
+    public function testDeclaredRecapSubtableAddsDomesticColumnsForForeignCurrency(): void
+    {
+        $form = $this->formWithRecap();
+        $rows = [[
+            'id' => 5, 'doc_head' => 1, 'order_pos' => 1,
+            'vat_code' => 'cz-110', 'vat_pct' => '21.00',
+            'base' => '100.00', 'tax' => '21.00', 'total' => '121.00',
+            'base_dom' => '2500.00', 'tax_dom' => '525.00', 'total_dom' => '3025.00',
+            'sum_base' => 1, 'sum_tax' => 1, 'sum_total' => 1, 'is_reverse_pair' => 0,
+        ]];
+        $result = $form->renderSubtable($this->recapTab(), $rows, [
+            'id' => 1, 'vat_mode' => 1, 'doc_currency' => 'eur', 'home_currency' => 'czk',
+        ]);
+
+        $cols = array_column($result['columns'], 'id');
+        $this->assertContains('base_dom', $cols);
+        $this->assertContains('tax_dom', $cols);
+        $this->assertContains('total_dom', $cols);
+        $this->assertSame('Základ (CZK)', $this->columnsById($result)['base_dom']['label']);
+        $this->assertSame('2 500,00', $result['rows'][0]['cells']['base_dom']);
+    }
+
+    public function testDeclaredRecapSubtableMutesAmountsOutsideHeadTotals(): void
+    {
+        $form = $this->formWithRecap();
+        // Oddaňovací pár samovyměření — sum_* = 0, do součtů nevstupuje.
+        $rows = [[
+            'id' => 6, 'doc_head' => 1, 'order_pos' => 2,
+            'vat_code' => 'cz-203', 'vat_pct' => '21.00',
+            'base' => '1000.00', 'tax' => '210.00', 'total' => '1210.00',
+            'sum_base' => 0, 'sum_tax' => 0, 'sum_total' => 0, 'is_reverse_pair' => 1,
+        ]];
+        $result = $form->renderSubtable($this->recapTab(), $rows, [
+            'id' => 1, 'vat_mode' => 1, 'doc_currency' => 'czk', 'home_currency' => 'czk',
+        ]);
+
+        $cells = $result['rows'][0]['cells'];
+        $this->assertSame(['text' => '1 000,00', 'class' => 'muted'], $cells['base']);
+        $this->assertSame(['text' => '210,00', 'class' => 'muted'], $cells['tax']);
     }
 }

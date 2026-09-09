@@ -46,6 +46,14 @@ abstract class DocsHeadsFormBase extends TableForm
         'Z hlavičky = daň ze součtu řádků v sazbě (norma). '
         . 'Z řádků = součet řádkových daní (historický režim).';
 
+    /**
+     * Hint u selectu `vat_recap_source` — vysvětluje, co znamená převzít
+     * rekapitulaci (docs/vat-calculation.md § 5).
+     */
+    protected const VAT_RECAP_SOURCE_HINT =
+        'Přepočítaná = vzniká z řádků při každém uložení. '
+        . 'Převzatá = rekapitulace z dokladu, uložení ji nepřepočítá a jde ji upravit.';
+
     /** Per-instance cache — viz vatAgendaDisabled(). */
     private ?bool $vatAgendaDisabled = null;
 
@@ -492,6 +500,15 @@ abstract class DocsHeadsFormBase extends TableForm
                         hidden: !$hasVat,
                         hint: self::VAT_CALC_SOURCE_HINT,
                     )
+                    ->select('vat_recap_source',
+                        options: $this->resolveCfgItemOptions('docs.core.vatRecapSources'),
+                        hidden: !$hasVat,
+                        // reload: přepnutí mění tab Rekapitulace DPH
+                        // (přepočítaná = přehled, převzatá = editovatelná
+                        // sub-tabulka)
+                        triggers: 'reload',
+                        hint: self::VAT_RECAP_SOURCE_HINT,
+                    )
                     ->select('vat_place',
                         options: $this->resolveCfgItemOptions('docs.core.vatPlaces'),
                         triggers: 'reload',
@@ -594,10 +611,75 @@ abstract class DocsHeadsFormBase extends TableForm
      */
     public function renderSubtable(FormTab $tab, array $rows, array $parentData): array
     {
+        if ($tab->id === 'recap') {
+            return $this->renderRecapRows($rows, $parentData);
+        }
         if ($tab->id !== 'rows') {
             return parent::renderSubtable($tab, $rows, $parentData);
         }
         return $this->renderItemRows($rows, $parentData);
+    }
+
+    /**
+     * Sada řádků **převzaté** rekapitulace: # · Sazba · % · Základ · Daň ·
+     * Celkem, u cizí měny navíc trojice v domácí měně (ke čtení —
+     * dopočítává je uložení z kurzu dokladu). Zešedivělé jsou částky, které
+     * do součtů hlavičky nevstupují (`sum_*` z definice kódu — typicky
+     * oddaňovací pár samovyměření), stejně jako v přehledu u přepočítané
+     * rekapitulace.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param array<string, mixed> $parentData
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    protected function renderRecapRows(array $rows, array $parentData): array
+    {
+        $t = 'docs_core_vat_recap';
+        $currency = strtolower((string) ($parentData['doc_currency'] ?? 'czk'));
+        $homeCurrency = strtolower((string) ($parentData['home_currency'] ?? 'czk'));
+        $hasExchange = $currency !== $homeCurrency && $homeCurrency !== '';
+
+        $columns = [
+            ['id' => 'order_pos', 'label' => '#', 'align' => 'right', 'width' => 44],
+            ['id' => 'vat_code',  'label' => $this->subtableLabel($t, 'vat_code', 'Kód DPH'), 'grow' => true],
+            ['id' => 'vat_pct',   'label' => $this->subtableLabel($t, 'vat_pct', 'DPH %'), 'align' => 'right'],
+            ['id' => 'base',      'label' => $this->subtableLabel($t, 'base', 'Základ'), 'align' => 'right'],
+            ['id' => 'tax',       'label' => $this->subtableLabel($t, 'tax', 'Daň'), 'align' => 'right'],
+            ['id' => 'total',     'label' => $this->subtableLabel($t, 'total', 'Celkem'), 'align' => 'right'],
+        ];
+        if ($hasExchange) {
+            $home = strtoupper($homeCurrency);
+            $columns[] = ['id' => 'base_dom',  'label' => "Základ ({$home})", 'align' => 'right'];
+            $columns[] = ['id' => 'tax_dom',   'label' => "Daň ({$home})", 'align' => 'right'];
+            $columns[] = ['id' => 'total_dom', 'label' => "Celkem ({$home})", 'align' => 'right'];
+        }
+
+        $out = [];
+        foreach (array_values($rows) as $i => $row) {
+            $cells = ['order_pos' => $this->rowNumber($row, $i)];
+            $cells['vat_code'] = $this->vatCodeLabel((string) ($row['vat_code'] ?? ''), $parentData);
+            $this->putCell($cells, 'vat_pct', SubtableCellFormatter::trimmedNumber($row['vat_pct'] ?? null, 2));
+
+            foreach (['base' => 'sum_base', 'tax' => 'sum_tax', 'total' => 'sum_total'] as $col => $flag) {
+                $text = SubtableCellFormatter::money($row[$col] ?? null);
+                if ($text === null) {
+                    continue;
+                }
+                $cells[$col] = empty($row[$flag]) ? ['text' => $text, 'class' => 'muted'] : $text;
+                if ($hasExchange) {
+                    $domText = SubtableCellFormatter::money($row[$col . '_dom'] ?? null);
+                    if ($domText !== null) {
+                        $cells[$col . '_dom'] = empty($row[$flag])
+                            ? ['text' => $domText, 'class' => 'muted']
+                            : $domText;
+                    }
+                }
+            }
+
+            $out[] = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+        }
+
+        return ['columns' => $columns, 'rows' => $out, 'order_column' => null];
     }
 
     /**
@@ -822,9 +904,33 @@ abstract class DocsHeadsFormBase extends TableForm
         return array_keys($ids);
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * Tab „Rekapitulace DPH" má dvě podoby podle autority rekapitulace
+     * (`vat_recap_source`, docs/vat-calculation.md § 5):
+     *
+     * - **přepočítaná** — přehled ke čtení: rekapitulace vzniká z řádků,
+     *   editovat ji nemá smysl (uložení by změnu zahodilo). Dvouřádkový
+     *   HTML rozpis umí ukázat i domácí měnu a zešedivělé částky, které
+     *   do součtů hlavičky nevstupují;
+     * - **převzatá** — sub-tabulka `docs_core_vat_recap` s vlastním
+     *   formulářem (`docs.core.vatRecap`): účetní opisuje, co je na
+     *   dokladu, a uložení jí to nepřepíše.
+     *
+     * @param array<string, mixed> $data
+     */
     protected function buildRecapTab(array $data): FormTab
     {
+        if ((int) ($data['vat_recap_source'] ?? 0) === 1) {
+            return $this->subtableTab(
+                'recap',
+                'Rekapitulace DPH',
+                'docs_core_vat_recap',
+                'doc_head',
+                formId: 'docs.core.vatRecap',
+                orderColumn: 'order_pos',
+            );
+        }
+
         // FormController::meta loads only the head row (SELECT * FROM heads),
         // so $data doesn't carry the recap from the docs_core_vat_recap child
         // table. Load it here — same pattern as DocDocument::resolveRowsForCompute.

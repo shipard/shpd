@@ -80,6 +80,13 @@
             "table": "docs_core_rows",
             "id": "docs.core.rows",
             "class": "Shipard\\Module\\Docs\\Core\\DocRowsForm"
+        },
+        {
+            // Sub-formulář řádku rekapitulace DPH — otevírá se jen u dokladu
+            // s převzatou rekapitulací (vat_recap_source = 1).
+            "table": "docs_core_vat_recap",
+            "id": "docs.core.vatRecap",
+            "class": "Shipard\\Module\\Docs\\Core\\VatRecapForm"
         }
     ],
 
@@ -103,6 +110,12 @@
             // totals + VAT recap whenever a row is added, edited, or deleted.
             "table": "docs_core_rows",
             "class": "Shipard\\Module\\Docs\\Core\\DocRowsDocument"
+        },
+        {
+            // Totéž pro ručně editovanou (převzatou) rekapitulaci DPH:
+            // po změně řádku se přepočítají součty hlavičky a dorovnají řádky.
+            "table": "docs_core_vat_recap",
+            "class": "Shipard\\Module\\Docs\\Core\\VatRecapDocument"
         }
     ],
 

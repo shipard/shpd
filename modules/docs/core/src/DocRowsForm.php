@@ -574,56 +574,7 @@ class DocRowsForm extends TableForm
      */
     private function loadHeadContext(mixed $docHeadId): ?array
     {
-        if ($docHeadId === null || $docHeadId === '' || $this->db === null) {
-            return null;
-        }
-        $head = $this->db->fetchRow(
-            'SELECT `vat_registration`, `doc_type`, `cash_dir`, `vat_place`, `vat_duzp`, `vat_mode`,'
-            . ' `doc_currency` FROM `docs_core_heads` WHERE `id` = %i',
-            (int) $docHeadId,
-        );
-        if ($head === null) {
-            return null;
-        }
-
-        $context = [
-            'doc_type'  => (string) ($head['doc_type'] ?? ''),
-            'cash_dir'  => (int) ($head['cash_dir'] ?? 0),
-            'vat_place' => (int) ($head['vat_place'] ?? 0),
-            'vat_duzp'  => $head['vat_duzp'] ?? null,
-            'vat_mode'  => (int) ($head['vat_mode'] ?? 1),
-            'doc_currency' => (string) ($head['doc_currency'] ?? ''),
-            'country'   => null,
-            'direction' => null,
-            'place'     => 'domestic',
-        ];
-
-        if (!empty($head['vat_registration'])) {
-            $reg = $this->db->fetchRow(
-                'SELECT `country` FROM `economy_codebooks_vat_registrations` WHERE `id` = %i',
-                (int) $head['vat_registration'],
-            );
-            if ($reg !== null && !empty($reg['country'])) {
-                $context['country'] = (string) $reg['country'];
-            }
-        }
-
-        // Směr DPH kódů = směr obchodu dokladu (per typ, u pokladního
-        // dokladu per doklad z cash_dir) — jediná autorita DocDocument.
-        $context['direction'] = match (DocDocument::resolveTradeDir($head, $this->config)) {
-            1 => 'output',
-            2 => 'input',
-            default => null,
-        };
-
-        $context['place'] = match ($context['vat_place']) {
-            0 => 'domestic',
-            1 => 'intracom',
-            2 => 'foreign',
-            default => 'domestic',
-        };
-
-        return $context;
+        return DocHeadVatContext::load($this->db, $this->config, $docHeadId);
     }
 
     /**
@@ -632,30 +583,7 @@ class DocRowsForm extends TableForm
      */
     private function buildVatCodeOptions(?array $context): array
     {
-        if ($context === null
-            || empty($context['country'])
-            || empty($context['direction'])
-            || $this->config === null
-        ) {
-            return [];
-        }
-        $resolver = new VatRateResolver($this->config);
-        try {
-            $codes = $resolver->getVatCodes(
-                (string) $context['country'],
-                (string) $context['direction'],
-                (string) $context['place'],
-                includeHidden: false,
-            );
-        } catch (\LogicException) {
-            return [];
-        }
-        $options = [];
-        foreach ($codes as $key => $code) {
-            $label = (string) ($code['fullName'] ?? $code['name'] ?? $key);
-            $options[] = ['value' => (string) $key, 'label' => $label];
-        }
-        return $options;
+        return DocHeadVatContext::vatCodeOptions($context, $this->config);
     }
 
     /** @return list<array{value: int, label: string}> */

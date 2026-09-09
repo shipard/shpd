@@ -428,6 +428,45 @@ class DocsHeadsFormTest extends TestCase
         $this->assertNotNull($html);
     }
 
+    /** #75: převzatá rekapitulace je editovatelná sub-tabulka, ne přehled. */
+    public function testDeclaredRecapTabIsEditableSubtable(): void
+    {
+        $form = $this->createForm();
+        $def = $form->buildFormDefinition(['id' => 1, 'vat_recap_source' => 1], false);
+
+        $tab = $this->findTab($def, 'recap');
+        $this->assertNotNull($tab);
+        $this->assertSame('subtable', $tab->type);
+        $this->assertSame('docs_core_vat_recap', $tab->subtable['table']);
+        $this->assertSame('doc_head', $tab->subtable['foreignKey']);
+        $this->assertSame('docs.core.vatRecap', $tab->subtable['formId']);
+        $this->assertSame('order_pos', $tab->subtable['orderColumn']);
+        $this->assertNull($this->findElementByType($def, 'recap', 'html'));
+    }
+
+    public function testComputedRecapTabStaysReadOnlyOverview(): void
+    {
+        $form = $this->createForm();
+        $def = $form->buildFormDefinition(['id' => 1, 'vat_recap_source' => 0], false);
+
+        $tab = $this->findTab($def, 'recap');
+        $this->assertNotNull($tab);
+        $this->assertNotSame('subtable', $tab->type);
+        $this->assertNotNull($this->findElementByType($def, 'recap', 'html'));
+    }
+
+    /** Přepínač zdroje rekapitulace musí překreslit formulář (tab recap). */
+    public function testRecapSourceSelectTriggersReload(): void
+    {
+        $form = $this->createForm();
+        $def = $form->buildFormDefinition(['vat_mode' => 1], true);
+
+        $el = $this->findElement($def, 'basic', 'vat_recap_source');
+        $this->assertNotNull($el);
+        $this->assertSame('reload', $el->triggers);
+        $this->assertFalse($el->hidden);
+    }
+
     public function testRecapWithoutRowsShowsEmptyState(): void
     {
         $form = $this->createForm();

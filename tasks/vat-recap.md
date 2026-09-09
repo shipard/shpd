@@ -60,6 +60,15 @@ Před implementací **přečti**:
   řádek projde `checkVatRecapArithmetic` bez `vat_recap_inconsistent`; jinak
   `přepočítaná` + dnešní chování. Applier zapíše důvod do `_resolve.issues`
   (`recap_source_computed_fallback`, info).
+- **I5 — Dorovnání řádků v obou měnách (spec § 7, rozhodnutí 2026-09-09).** Řádkové
+  `vat_base`/`vat_amount` se dorovnávají na rekapitulaci top-down **i v měně dokladu**,
+  ne jen v `_dom` — stejný algoritmus jako dnešní krok 3 `applyDomesticAmounts`,
+  aplikovaný dvakrát nezávisle (cur → recap cur; dom → recap dom). Důvod: deník účtuje
+  výnos/náklad z řádků a 311/321 z hlavičky v obou měnách; bez dorovnání cur je
+  sloupec měny dokladu rozjetý o haléře (a u kurzu 1 se dva sloupce téhož řádku liší);
+  tisk řádkových DPH musí dávat rekapitulaci. Cena řádku (`total_price`) se nemění.
+  U `převzatá` jen do tolerance `max(0,02; 0,01 × počet řádků skupiny)` — nad ni řádky
+  zůstanou a vydá se `rows_recap_mismatch`; u `přepočítaná` je rozdíl konstrukčně v mezi.
 
 ## Scope A — výpočet
 
@@ -75,6 +84,11 @@ Před implementací **přečti**:
   `round(Σ base × pct)` v mode 1) — vyčlenit do samostatné privátní metody, aby
   obě větve byly čitelné.
 - `DocRowCalculator::computeVat` beze změny (řádkové hodnoty zůstávají informativní).
+- **Dorovnání cur (I5):** z kroku 3 `applyDomesticAmounts` vyčlenit čistou metodu
+  `reconcileRowsToRecap(array &$rows, array $recap, string $suffix, ?float $tolerance)`
+  (`$suffix` `''` / `'_dom'`), volat pro obě měny; `vat_total` řádku v mode 1 =
+  `vat_base + vat_amount` po dorovnání, v mode 2 zůstává = cena. Pořadí kroků
+  `beforeSave` beze změny (recap → součty → zaokrouhlení → dom + dorovnání obou měn).
 
 ### A2. Formuláře
 
@@ -90,6 +104,11 @@ Před implementací **přečti**:
   s očekáváním dokladové úrovně (2 × 55 → 90,91 / 19,09 / 110,00). Mode 1: potvrdit,
   že `0` a `1` dávají totéž při jednom řádku a liší se při více řádcích se zbytky.
   `vat_rounding_mode` na celé Kč v mode 2 (základ na Kč, daň rozdílem).
+- **Invarianty v obou měnách (I5, spec § 7):** nový test nad dokladovou úrovní
+  (mode 1 i 2, tuzemský kurz 1 i cizí měna, více řádků se zbytky): Σ řádků = recap
+  per skupina v cur i dom; Σ recap = hlavička; `total_base + total_vat + total_rounding
+  = total_amount` v obou; u kurzu 1 `vat_base == vat_base_dom` na každém řádku.
+  Dorovnání dopadá na poslední nenulový řádek skupiny; `total_price` řádků nezměněno.
 - Regres: existující testy `_dom` invariant, reverse-charge, `noPayTax` zelené.
 
 ### A4. Dokumentace
@@ -119,8 +138,10 @@ přepočítaná; reimport je přepíše na převzatou).
 - Přechod zdroje (I3) řeší `beforeSave` porovnáním staré a nové hodnoty
   `vat_recap_source`.
 - **`rows_recap_mismatch` jako warning při uložení** (R4): Σ řádkových cen per (kód,
-  sazba) vs. recap `base` (mode 1) / `total` (mode 2), tolerance 0,02 × počet řádků.
-  Warning mechanismus formuláře: `docs/edit-forms.md` §8 „Warningy (neblokující)".
+  sazba) vs. recap `base` (mode 1) / `total` (mode 2), tolerance `max(0,02; 0,01 ×
+  počet řádků skupiny)` — **stejná mez jako pro dorovnání (I5)**: v mezi se řádky
+  dorovnají a warning není; nad mez se řádky nedotknou a warning je. Warning
+  mechanismus formuláře: `docs/edit-forms.md` §8 „Warningy (neblokující)".
 
 ### B3. Formuláře (R4)
 
@@ -191,7 +212,10 @@ B4. Dokumentace (B7).
 
 ## Hotovo když
 
-- [ ] Testy zelené (recap obě metody, převzatá, applier, `_dom`).
+- [ ] Testy zelené (recap obě metody, převzatá, applier, invarianty dorovnání v cur i dom).
+- [ ] Tuzemský doklad v mode 2 se dvěma řádky se zbytky: řádkové `vat_base` a
+      `vat_base_dom` jsou shodné, Σ řádků = rekapitulace, deník dokladu vyrovnaný
+      v cur i dom.
 - [ ] `ds-upgrade` na dev DS 4l3j projde; formulář FPB umí přepnout na převzatou
       a editovat rekapitulaci; změna částky řádku vydá warning, neblokuje.
 - [ ] Nová prodejka v Novém Shipardu 2 × 55,00 s DPH 21 % má rekapitulaci

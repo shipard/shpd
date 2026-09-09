@@ -98,12 +98,39 @@ Až po rekapitulaci: `total_amount` se zaokrouhlí (na celé jednotky, nahoru, d
 na haléře), rozdíl jde do `total_rounding`; rekapitulace zůstává. Hotovostní úhrada
 faktury na celé Kč = #73.
 
-## 7. Domácí měna
+## 7. Dorovnání řádků na rekapitulaci — obě měny
 
-`applyDomesticAmounts`: `base_dom`/`tax_dom` rekapitulace = `round(cur × kurz)`;
-hlavička se sčítá z rekapitulace; řádky se **dorovnávají** na rekapitulaci
-(top-down), `total_rounding_dom` absorbuje haléřový zbytek. Platí i pro převzatou
-rekapitulaci. Invarianty viz docblock metody.
+Rekapitulace je autorita (§ 1); řádkové `vat_base` / `vat_amount` jsou z ní odvozené
+a **dorovnávají se na ni top-down v obou měnách nezávisle** — v měně dokladu i v
+domácí. Rozdíl per skupina (kód, sazba) absorbuje poslední řádek skupiny s nenulovou
+hodnotou; cena řádku (`total_price`) se nikdy nemění, jen odvozený rozpad. V mode 1
+se dorovnává jen `vat_amount` (základ = cena, sedí konstrukčně); v mode 2 `vat_base`
+i `vat_amount` (`vat_total` = cena, sedí konstrukčně).
+
+Proč obě měny: deník účtuje výnos/náklad z řádků a 311/321 z hlavičky v obou
+měnách — bez dorovnání cur by byl sloupec měny dokladu per doklad rozjetý o haléře
+(u tuzemského dokladu s kurzem 1 dokonce dva sloupce téhož řádku různě). A tisk
+řádkových DPH hodnot musí dávat rekapitulaci. Starý Shipard dorovnával jen Hc
+(`taxBaseHcCorr`, jen tuzemské doklady); tuzemsky to vyšlo nastejno, cizoměnově ne.
+
+Domácí měna: `base_dom`/`tax_dom` rekapitulace = `round(cur × kurz)`; hlavička se
+sčítá z rekapitulace; `total_rounding_dom` absorbuje kurzový zbytek hlavičky.
+
+Invarianty (per skupina kód+sazba a per doklad, v cur i dom):
+
+```
+Σ rows.vat_base      == recap.base        Σ rows.vat_base_dom   == recap.base_dom
+Σ rows.vat_amount    == recap.tax         Σ rows.vat_amount_dom == recap.tax_dom
+Σ recap.base (sum_base) == total_base     Σ recap.base_dom == total_base_dom
+Σ recap.tax  (sum_tax)  == total_vat      Σ recap.tax_dom  == total_vat_dom
+total_base + total_vat + total_rounding == total_amount   (obdobně _dom)
+```
+
+**Tolerance u převzaté rekapitulace (§ 5):** dorovnání se provede jen do meze
+haléřového zaokrouhlení — `max(0,02; 0,01 × počet řádků skupiny)` na základ i daň.
+Větší rozdíl znamená chybějící nebo špatně zadané řádky: řádky zůstanou, jak jsou,
+invariant pro tu skupinu neplatí a uložení vydá `rows_recap_mismatch`. U přepočítané
+je rozdíl konstrukčně vždy v mezi.
 
 ## 8. Co se tiskne
 

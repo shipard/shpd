@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 272 tasků: **naplánováno** 4 · **částečně** 8 · **hotovo** 260.
+Celkem 273 tasků: **naplánováno** 4 · **částečně** 9 · **hotovo** 260.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -32,6 +32,7 @@ nevypisují — níže je jen to, co není dokončené.
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `docs-import-party-snapshots.md` | částečně | kód, testy a docs hotové 2026-09-01; zbývá ověření po re-importu qrce (task 29 old_shipard, ops) — poslední dva body checklistu |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
+| `mail-import-partner-title.md` | částečně | implementace, testy a dokumentace hotové 2026-09-10 (5 commitů), backfill ověřen na dev DS; zbývá nasazení na alfu, re-import a SQL kontroly ze sekce „Ověření na alfě“ |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 | `mail-preprocess.md` | částečně | Fáze 1 hotová (2026-08-29, 6 commitů), otevřený jen Bolt E2E na alfě (živý odkaz ze vzorku); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) hotová 2026-08-29 — `tasks/mail-preprocess-phase2.md` |
 | `taxes-phase01.md` | částečně | implementace kompletní (mapping, jádro reportů s periodSource vatPeriod + text/date sloupci, kalkulátory, buildery, UI, testy); zbývá ds-upgrade + proklik na dev DS a read-only ověření na alfě dle „Hotovo když" |
@@ -254,6 +255,7 @@ Evidence → API endpoint → AI analýza do dokladů. Kontrakt endpointu
 | `mail-states-and-classification.md` | Oddělení `analysis_state` od `docState` + AI klasifikace `primary_type`, karta „Není faktura“ |
 | `mail-isdoc-import.md` | Deterministický import ISDOC příloh místo AI analýzy |
 | `mail-message-title-partner.md` | Partner dokumentu (`partner_person`/`partner_name`) a titulek zprávy z AI (`ai_title`) — zobrazení v seznamu, fulltext, ruční partner má přednost (#43) |
+| `mail-import-partner-title.md` | Partner a titulek u zpráv navázaných na doklad (import, Použít před #43) — odvození při `POST /_mail/import` + backfill `mail-target-backfill` (#43 D6) |
 | `mail-analysis-schema-fixes.md` | Opravy AI analýzy: schema_error (kind/vat/courtRegistration), prompt v2.3.0, frontování dle docState + data fix |
 | `mail-config-viewers.md` | Viewery a formuláře pro mailové konfigurační tabulky |
 | `mail-invoice-rounding.md` | Zaokrouhlení celkové částky faktur: derivace `total_rounding_mode` v applieru, rounding-aware validace součtů, módy nahoru/dolů, prompt v3.1.0 |

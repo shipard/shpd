@@ -496,9 +496,30 @@ Plní se ve dvou vrstvách, obě řeší `MessagePartnerWriter`
    Cíl bez partnera (účtenka bez dodavatele) partnera zprávy nemění.
    Vrátit (unapply) `partner_person` nesahá.
 
-Pořadí priorit tedy je: ruční volba ve formuláři > Použít > návrh.
-Re-analýza po Použít je blokovaná už v `reanalyze`; guard `target_row IS
-NULL` v UPDATE je druhá pojistka (P2).
+3. **Třetí cesta — cílový doklad** (`MessageTargetWriter`,
+   [tasks/mail-import-partner-title.md](../../../../tasks/mail-import-partner-title.md)):
+   zpráva **navázaná na doklad**, která neprošla ani AI, ani ISDOC. Typicky
+   import ze starého Shipardu — `MailRunner` posílá `analysis_state = 0`,
+   takže zpráva do AI fronty nikdy nevstoupí a `/result` ji nikdy nepotká.
+   Fakta si server dopočítá z `target_table_id` / `target_row`, které už
+   v payloadu má: `partner_person` = `docs_core_heads.partner`,
+   `partner_name` = `full_name` Osoby (u importu je snapshot ze stejného
+   jména odvozený, Osoba má lepší pokrytí).
+   - `POST /_mail/import` je aplikuje **před** `validate()`, takže zpráva
+     vzniká rovnou v cílovém stavu. Volitelná payload pole `partner_person`
+     / `partner_name` jsou jen **návrh** (vrstva 1) — u navázané zprávy
+     vyhrává doklad bez ohledu na pořadí, u nenavázané se použijí (partnera
+     z doclinku dodává runner, ten server odjinud nezjistí).
+   - `shpd-ds mail-target-backfill` (`docs/cli.md`) doplní historii:
+     import, zprávy aplikované přes Použít před zavedením partnera zprávy
+     a zprávy, jejichž doklad se doimportoval později. Zapisuje jen do NULL
+     sloupců, takže ruční volbu ani titulek od AI nepřepíše. Tím je **D6
+     rodičovského tasku uzavřené** — backfill historických zpráv už není
+     odložený.
+
+Pořadí priorit tedy je: ruční volba ve formuláři > Použít / cílový doklad
+> návrh. Re-analýza po Použít je blokovaná už v `reanalyze`; guard
+`target_row IS NULL` v UPDATE je druhá pojistka (P2).
 
 **Zobrazení** (`IncomingMessagesViewer`, D7): t1 předmět, t2 partner
 (`full_name` Osoby přes LEFT JOIN, jinak `partner_name`) s fallbackem na
@@ -517,7 +538,7 @@ vrací u položky `partner {name, person}` odděleně od `sender`.
 **Dataset** (`MailExporter` / `MailSeeder`): `partnerPerson` je odkaz
 stejného tvaru jako `senderPerson` (jméno + identifikátory, na cílovém DS se
 páruje jen identifikátorem), `partnerName` řetězec. Backfill historických
-zpráv se neřeší (D6 — import ze starého Shipardu).
+zpráv řeší `mail-target-backfill` (třetí cesta výš).
 
 ## Titulek zprávy (ai_title)
 
@@ -539,6 +560,17 @@ sloupec `core_mail_incoming_messages.ai_title` (varchar 200):
   requestu: intake od mail-routeru `Accept-Language` nenese a bez
   `defaultLanguage` v main.json by titulek vyšel anglicky, zatímco AI píše
   v jazyce profilu. Bez compiled configu se label vynechá.
+- **Třetí zdroj — cílový doklad:** u zprávy navázané na doklad, která
+  neprošla ani AI, ani ISDOC (import ze starého Shipardu), skládá titulek
+  `MessageTitleComposer::fromDocument()` z hlavičky cíle:
+  `{label typu} {doc_number} — {partner}, {total_amount} {doc_currency}`.
+  Label je z **`docs.core.docTypes`**, ne z `core.mail.primaryTypes` —
+  navázané vydané faktury a účetní doklady v mail primaryTypes klíč nemají
+  a skončily by jako „Ostatní". Jazyk stejný jako výš (profil DS, ne
+  request), zdroj `MessageTargetWriter` při `POST /_mail/import` a při
+  `shpd-ds mail-target-backfill`. U zprávy **bez** navázaného dokladu
+  titulek nevzniká — není z čeho. Detail:
+  [tasks/mail-import-partner-title.md](../../../../tasks/mail-import-partner-title.md).
 - **Zápis:** `AnalysisController::applyMessageTitle` v transakci resultu,
   **vždy** (i `null` — re-analýza bez dokumentu titulek smaže), bez guardů
   na `primary_type_source` (uživatel titulek needituje, ve formuláři je

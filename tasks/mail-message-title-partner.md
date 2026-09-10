@@ -77,7 +77,9 @@ GitHub Issue: shipard/shpd#43.
      (`docs_core_heads.partner` / `base_registry_documents.partner`).
   3. ISDOC import plní obě vrstvy sám (obchází AI).
 - **D6 — Backfill existujících zpráv se neřeší.** Vyřeší se v návrhu
-  importu ze starého Shipardu.
+  importu ze starého Shipardu. → **Uzavřeno** v
+  `tasks/mail-import-partner-title.md` (server odvozuje fakta z cílového
+  dokladu, historii doplní `shpd-ds mail-target-backfill`).
 - **D7 — Zobrazení:** t1 = titulek dle D3; t2 = partner (jméno Osoby ??
   `partner_name`) s fallbackem na odesílatele; odesílatel se přesune do t3
   (`[Schránka] od: …`). Detail header analogicky.

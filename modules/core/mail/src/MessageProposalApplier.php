@@ -513,6 +513,11 @@ final class MessageProposalApplier
      * zapisují ve své transakci), jednotně pro docs, registry i recovery
      * cestu. Null = cíl bez partnera nebo nedostupný; jen warn, apply se
      * nevrací.
+     *
+     * Podobné čtení má `MessageTargetWriter::factsFor()` (import navázané
+     * zprávy). Vědomě se nesjednocuje: Použít je pro `partner_person`
+     * autoritativní a přepisuje bez guardu, writer zapisuje jen do NULL
+     * (tasks/mail-import-partner-title.md P5).
      */
     private function targetPartnerId(int $messageNdx): ?int
     {

@@ -87,6 +87,45 @@
                 }
             }
         },
+        "partnerPerson": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "companyId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "taxId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "vatId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "partnerName": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
         "receivedAt": {
             "$ref": "#/$defs/LocalDateTime"
         },

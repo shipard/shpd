@@ -16,6 +16,7 @@ use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\IsdocImportService;
+use Shipard\Module\Core\Mail\MessagePartnerWriter;
 use Shipard\Module\Core\Mail\Preprocess\Action\FetchLinkedDocumentAction;
 use Shipard\Module\Core\Mail\Preprocess\Action\RenderBodyToPdfAction;
 use Shipard\Module\Core\Mail\Preprocess\Http\CurlHttpFetcher;
@@ -56,6 +57,7 @@ final class PreprocessRunnerFactory
                 new SchemaValidator(SchemaLoader::default()),
                 $enricher,
                 $dsDir,
+                partnerWriter: MessagePartnerWriter::create($dibi),
             );
         };
 

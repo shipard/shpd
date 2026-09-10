@@ -26,6 +26,12 @@
             "name:en": "Headers"
         },
         {
+            "id": "partner",
+            "name": "Partner",
+            "name:cs": "Partner",
+            "name:en": "Partner"
+        },
+        {
             "id": "body",
             "name": "Body",
             "name:cs": "Tělo zprávy",
@@ -206,6 +212,36 @@
             "default": 0,
             "nullable": false,
             "group": "headers"
+        },
+
+        // --- partner (protistrana dokumentu, ne odesílatel) ---
+        // tasks/mail-message-title-partner.md D4/D5/D8
+
+        {
+            // Osoba, která doklad/dokument vystavila. Vrstva 1 (/result, ISDOC)
+            // zapisuje jen do NULL a jen dokud target_row IS NULL; vrstva 2
+            // (Použít) přepisuje partnerem založeného záznamu. Ručně editovatelné.
+            "id": "partner_person",
+            "name": "Partner (person)",
+            "name:cs": "Partner (osoba)",
+            "name:en": "Partner (person)",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons",
+            "group": "partner"
+        },
+        {
+            // Jméno protistrany z canonicalu (supplier.name / party.name) —
+            // denormalizace pro fulltext a pro partnery mimo Osoby. Historický
+            // snapshot toho, co bylo na dokladu; po Použít se nepřepisuje.
+            "id": "partner_name",
+            "name": "Partner name",
+            "name:cs": "Partner (název)",
+            "name:en": "Partner name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "partner"
         },
 
         // --- body ---
@@ -488,6 +524,13 @@
             "type": "index",
             "columns": [
                 {"column": "sender_person"}
+            ]
+        },
+        {
+            "id": "idx_partner_person",
+            "type": "index",
+            "columns": [
+                {"column": "partner_person"}
             ]
         },
         {

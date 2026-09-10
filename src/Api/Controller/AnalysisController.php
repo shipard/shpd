@@ -28,6 +28,7 @@ use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Ai\AIBackendDocument;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
+use Shipard\Module\Core\Mail\MessagePartnerWriter;
 use Shipard\Module\Core\Mail\MessageProposalApplier;
 use Shipard\Module\Core\Mail\PrimaryTypes;
 use Shipard\Module\Core\Mail\ProposalApplyOutcome;
@@ -89,6 +90,9 @@ class AnalysisController
 
     /** Lazy validator registry canonicalu (viz registrySchemaValidator()). */
     private ?SchemaValidator $registrySchemaValidator = null;
+
+    /** Lazy zápis partnera zprávy z canonicalu (viz partnerWriter()). */
+    private ?MessagePartnerWriter $partnerWriter = null;
 
     /**
      * SchemaValidator + DocumentApplier are intentionally nullable for
@@ -763,6 +767,9 @@ class AnalysisController
      * pole `extracted_documents` se od v4 nepřijímá (D11 — big-bang, bez
      * kompatibilní mezivrstvy). `secondary_findings` se strukturálně
      * nevaliduje — žije jen v analysis_json.
+     *
+     * Z validního canonicalu se navíc zapíše partner zprávy
+     * (`partner_name` / `partner_person`, vrstva 1 — {@see MessagePartnerWriter}).
      */
     public function result(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -839,6 +846,11 @@ class AnalysisController
             );
         }
         $contentTag = $this->extractContentTag($canonicalJson, $documentValid);
+        // Canonical jako pole pro zápis partnera (vrstva 1) — jen validní
+        // návrh, forenzní wrapper se do partnera nepropisuje.
+        $canonical = $documentValid && $canonicalJson !== null
+            ? json_decode($canonicalJson, true)
+            : null;
 
         $dibi = $this->db->getDibiConnection();
         $dibi->begin();
@@ -903,6 +915,22 @@ class AnalysisController
 
             // 6) AI klasifikace typu zprávy (message_classification).
             $this->applyMessageClassification($dibi, $messageNdx, $body);
+
+            // 7) Partner zprávy z canonicalu — vrstva 1
+            //    (tasks/mail-message-title-partner.md D5/D8): partner_name
+            //    dokud target_row IS NULL, partner_person jen do NULL a jen
+            //    shodou identifikátorem. Best-effort — selhání nesmí shodit
+            //    uložení výsledku (analyzer by zprávu retryoval).
+            if (is_array($canonical) && $proposedType !== null) {
+                try {
+                    $this->partnerWriter()->writeFromCanonical($dibi, $messageNdx, $canonical, $proposedType);
+                } catch (\Throwable $e) {
+                    ErrorLogger::warn('AnalysisController::result partner write failed', [
+                        'messageNdx' => $messageNdx,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             $dibi->commit();
         } catch (\Throwable $e) {
@@ -1475,6 +1503,18 @@ class AnalysisController
             $this->config,
             $this->eventDispatcher,
             $def->docStates,
+        );
+    }
+
+    /**
+     * Zápis partnera zprávy z canonicalu (vrstva 1) — resolver nad DS
+     * connection, lazy (běh bez dokumentu ho nepotřebuje).
+     */
+    private function partnerWriter(): MessagePartnerWriter
+    {
+        return $this->partnerWriter ??= MessagePartnerWriter::create(
+            $this->db->getDibiConnection(),
+            $this->configRuntime,
         );
     }
 

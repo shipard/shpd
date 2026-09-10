@@ -1,6 +1,6 @@
 # Task: Došlá pošta — partner dokladu a titulek zprávy z AI analýzy (Issue #43)
 
-**Stav:** naplánováno — rozhodnutí D1–D8 potvrzena 2026-09-10; fáze 1 (partner) → fáze 2 (titulek)
+**Stav:** částečně — fáze 1 (partner) hotovo 2026-09-10, fáze 2 (titulek) naplánována
 
 ## Status / cíl
 
@@ -229,6 +229,26 @@ Viewer / formulář / fulltext
 9. Aktualizovat `modules/core/mail/docs/ai-analysis.md` (nová sekce
    „Partner zprávy") a `tasks/README.md` (řádek v tabulce Došlá pošta).
    Commit, hlavička `**Stav:** částečně — fáze 1 hotovo`.
+
+**Poznámky k implementaci fáze 1 (odchylky schválené 2026-09-10):**
+
+- Bod 3: `TargetApplyResult` ani `ApplyResult` se nerozšiřují. Partner po
+  Použít se čte z **cílového záznamu** přes `target_table_id` /
+  `target_row` zprávy (`MessageProposalApplier::targetPartnerId`) — jednotně
+  pro docs, registry i recovery cestu `completeApplied`. Docs cesta vrací
+  sdílený `ApplyResult` z exchange, který partnera nenese, a `_resolve`
+  neodráží pravidla hlavičkového partnera u pokladních dokladů.
+- Vrstva 1 při canonicalu **bez jména** protistrany `partner_name` nenuluje
+  (ponechá předchozí hodnotu); „přepisuje vždy" míní hodnotu.
+- Vrátit (unapply) `partner_person` nesahá — partner založeného dokladu byl
+  s velkou pravděpodobností správně a re-analýza ho dle D8 nepřepíše.
+- Fulltext prohledává i `full_name` Osoby (LEFT JOIN), jinak by ručně
+  vybraný partner bez `partner_name` nebyl dohledatelný.
+- Sdílená třída se jmenuje `MessagePartnerWriter`; `IsdocImportService` ji
+  dostává injektovanou (bez ní partnera nezapisuje — unit testy), wiring
+  v `public/index.php` a `PreprocessRunnerFactory`.
+- Popisek „od:" v t3 / detailu jde z cfgItem
+  `core.mail.viewerDetailLabels.labels.from` (backend labels přes cfgItems).
 
 ### Fáze 2 — titulek (D1, D2, D3, D7 část)
 

@@ -455,6 +455,63 @@ kartě a v detailu zprávy.
 Enum typů v promptu i output_schema je zatím natvrdo; generování
 z `primaryTypes.jsonc` je future work.
 
+## Partner zprávy (partner_person / partner_name)
+
+Spec [tasks/mail-message-title-partner.md](../../../../tasks/mail-message-title-partner.md)
+(D4, D5, D7, D8). Zprávy ze skeneru nebo ruční nahrání nesou technického
+odesílatele (`sender_person` = kolega / zařízení), nikdy dodavatele. Partner
+zprávy je proto samostatný pojem — **protistrana dokumentu**, ne odesílatel:
+
+- `partner_person` — FK na `base_persons_persons`, ručně editovatelný ve
+  formuláři (lookup Osoby);
+- `partner_name` — jméno protistrany z canonicalu (`supplier.name` u docs,
+  `party.name` u registry), denormalizace pro fulltext a pro partnery, kteří
+  v Osobách nejsou. Po Použít zůstává snapshotem toho, co bylo na dokladu
+  (může znít jinak než `full_name` Osoby — zobrazení preferuje Osobu).
+
+Plní se ve dvou vrstvách, obě řeší `MessagePartnerWriter`
+(`modules/core/mail/src/`) resp. `MessageProposalApplier`:
+
+1. **Vrstva 1 — návrh** (`POST /result` v transakci resultu, hned za
+   klasifikací; `IsdocImportService` ve své transakci — ISDOC obchází AI,
+   proto si partnera plní sám). Jen z **validního** canonicalu (forenzní
+   wrapper se ignoruje). Strana: docs → `supplier` (při `selfParty =
+   supplier` `customer`), registry → `party`.
+   - `partner_name` se přepíše vždy, dokud `target_row IS NULL`
+     (bez jména v canonicalu se ponechá předchozí hodnota, nenuluje se);
+   - `partner_person` se zapíše **jen do NULL** a jen dokud `target_row IS
+     NULL`, a výhradně při deterministické shodě identifikátorem
+     (`PartyResolver::resolve(…, identifiersOnly: true)` nad IČO / DIČ /
+     VAT ID). Shoda jménem se nikdy nepoužívá (u tisíců skenů by ukazovala
+     špatné partnery), Osoba se nikdy nezakládá.
+   - Selhání resolveru nebo UPDATE je jen warning — výsledek analýzy se
+     kvůli partnerovi nikdy neztratí.
+2. **Vrstva 2 — Použít** (`MessageProposalApplier`): po úspěšném apply se
+   `partner_person` přepíše **autoritativně** partnerem založeného záznamu.
+   Hodnota se čte z cílového záznamu přes `target_table_id` / `target_row`
+   zprávy (`docs_core_heads.partner`, `base_registry_documents.partner`) —
+   jednotně pro docs, registry i recovery cestu `completeApplied`; zápis
+   jde ve stejné transakci jako verdikt, ale bez guardu na `docState`.
+   Cíl bez partnera (účtenka bez dodavatele) partnera zprávy nemění.
+   Vrátit (unapply) `partner_person` nesahá.
+
+Pořadí priorit tedy je: ruční volba ve formuláři > Použít > návrh.
+Re-analýza po Použít je blokovaná už v `reanalyze`; guard `target_row IS
+NULL` v UPDATE je druhá pojistka (P2).
+
+**Zobrazení** (`IncomingMessagesViewer`, D7): t1 předmět, t2 partner
+(`full_name` Osoby přes LEFT JOIN, jinak `partner_name`) s fallbackem na
+odesílatele; když t2 nese partnera, odesílatel se přesune do t3 jako
+`[Schránka] od: …` (popisek z `core.mail.viewerDetailLabels.labels.from`).
+Hlavička detailu: partner · od: odesílatel · schránka · doručeno. Fulltext
+prohledává navíc `partner_name` i `full_name` Osoby. Smazaná Osoba řádek
+nefiltruje (LEFT JOIN), t2 padá na `partner_name`.
+
+**Dataset** (`MailExporter` / `MailSeeder`): `partnerPerson` je odkaz
+stejného tvaru jako `senderPerson` (jméno + identifikátory, na cílovém DS se
+páruje jen identifikátorem), `partnerName` řetězec. Backfill historických
+zpráv se neřeší (D6 — import ze starého Shipardu).
+
 ## Deterministický ISDOC import
 
 Když došlá zpráva nese ISDOC, extrahuje se doklad **deterministicky
@@ -502,7 +559,11 @@ až runner `mail-preprocess` po dokončení akcí. Service:
      žádná jiná entita nevzniká, návrh čeká na verdikt jako u AI,
    - message: `analysis_state=30`, `primary_type='invoiceReceived'`
      + `primary_type_source='isdoc'` (jen pokud source není `user`),
-     docState 10→20 jen pokud je stále 10.
+     docState 10→20 jen pokud je stále 10,
+   - partner zprávy (`partner_name` z dodavatele ISDOC, `partner_person`
+     při shodě IČO / DIČ) přes `MessagePartnerWriter` — stejná pravidla
+     jako u `/result`, viz [Partner zprávy](#partner-zprávy-partner_person--partner_name);
+     best-effort, selhání import neshodí.
 
 Vztah k frontě: úspěšně naimportovaná zpráva se v AI frontě **vůbec
 neobjeví** (analysis_state přeskočí 10 → 30); analyzer daemon nevyžaduje

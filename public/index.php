@@ -966,6 +966,7 @@ function dispatchMail(
 				? \Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection())
 				: null,
 			$dsPath,
+			partnerWriter: \Shipard\Module\Core\Mail\MessagePartnerWriter::create($db->getDibiConnection(), $configRuntime),
 		);
 
 	$ctrl = new MailController(

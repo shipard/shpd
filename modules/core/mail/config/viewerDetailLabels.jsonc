@@ -32,5 +32,15 @@
             "name:cs": "Originál",
             "name:en": "Original"
         }
+    },
+
+    // Drobné popisky řádku / hlavičky detailu.
+    "labels": {
+        // „od: odesílatel" v t3 a v subtitle detailu, když t2 nese partnera.
+        "from": {
+            "name": "from",
+            "name:cs": "od",
+            "name:en": "from"
+        }
     }
 }

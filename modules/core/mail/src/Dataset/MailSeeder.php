@@ -94,7 +94,9 @@ final class MailSeeder implements SectionSeeder
             'subject'             => (string) ($m['subject'] ?? ''),
             'sender_email'        => (string) ($m['senderEmail'] ?? ''),
             'sender_name'         => $m['senderName'] ?? null,
-            'sender_person'       => $this->senderPerson(is_array($m['senderPerson'] ?? null) ? $m['senderPerson'] : null),
+            'sender_person'       => $this->personRef(is_array($m['senderPerson'] ?? null) ? $m['senderPerson'] : null),
+            'partner_person'      => $this->personRef(is_array($m['partnerPerson'] ?? null) ? $m['partnerPerson'] : null),
+            'partner_name'        => $m['partnerName'] ?? null,
             'received_at'         => SeedContext::dbDateTime((string) $m['receivedAt']),
             'external_message_id' => $m['externalMessageId'] ?? null,
             'in_reply_to'         => $m['inReplyTo'] ?? null,
@@ -337,7 +339,11 @@ final class MailSeeder implements SectionSeeder
     /**
      * @param array<string, mixed>|null $person
      */
-    private function senderPerson(?array $person): ?int
+    /**
+     * Osoba z exportovaného odkazu (sender_person / partner_person) — jen
+     * deterministická shoda identifikátorem, nikdy jménem, nikdy create.
+     */
+    private function personRef(?array $person): ?int
     {
         if ($person === null) {
             return null;

@@ -14,11 +14,14 @@ use Shipard\Module\Core\Mail\Preprocess\PreprocessRunner;
  * Layout řádku podle spec §5.1:
  *   t1 — subject (orientováno vlevo, bold)
  *   i1 — received_at relativní („před 2 h", „včera 14:32", „12. 3.")
- *   t2 — sender_name ?? sender_email
+ *   t2 — partner dokumentu (Osoba ?? partner_name), fallback odesílatel
+ *        (tasks/mail-message-title-partner.md D7)
  *   i2 — badge primárního typu (barva dle cfgItem)
- *   t3 — [mailbox.name] + první řádek body_plain (preview)
+ *   t3 — [mailbox.name] + „od: odesílatel" (jen když t2 nese partnera)
+ *        + první řádek body_plain (preview)
  *
- * Detail panel (§5.3): hlavička (předmět · odesílatel · schránka · doručeno
+ * Detail panel (§5.3): hlavička (předmět · partner · od: odesílatel ·
+ * schránka · doručeno
  * + badges stavu a primárního typu) nad taby, taby Obsah (tělo, přílohy,
  * technické údaje) / Analýzy / Extrahované dokumenty / Originál.
  */
@@ -50,12 +53,16 @@ class IncomingMessagesViewer extends TableViewer
 
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
+        // LEFT JOIN Osoby — smazaná/archivovaná Osoba nesmí řádek vyfiltrovat
+        // (t2 pak padá na partner_name, P9).
         $sql = 'SELECT m.`id`, m.`message_id`, m.`subject`, m.`sender_email`, m.`sender_name`,'
             . ' m.`primary_type`, m.`received_at`, m.`body_plain`, m.`docState`, m.`docStateMain`,'
-            . ' m.`analysis_state`, m.`is_bulk`,'
+            . ' m.`analysis_state`, m.`is_bulk`, m.`partner_person`, m.`partner_name`,'
+            . ' p.`full_name` AS partner_full_name,'
             . ' m.`mailbox`, mb.`name` AS mailbox_name, mb.`mailbox_id` AS mailbox_code'
             . ' FROM `' . $this->table . '` m'
-            . ' LEFT JOIN `core_mail_mailboxes` mb ON mb.`id` = m.`mailbox`';
+            . ' LEFT JOIN `core_mail_mailboxes` mb ON mb.`id` = m.`mailbox`'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = m.`partner_person`';
 
         $conditions = [];
         $params     = [];
@@ -81,15 +88,14 @@ class IncomingMessagesViewer extends TableViewer
             }
         }
 
-        // Fulltext search — subject, sender_email, sender_name, body_plain
+        // Fulltext search — subject, sender_email, sender_name, partner
+        // (snapshot z canonicalu i jméno Osoby), body_plain
         if ($search !== null && $search !== '') {
             $term = '%' . $search . '%';
             $conditions[] = '(m.`subject` LIKE %s OR m.`sender_email` LIKE %s'
-                . ' OR m.`sender_name` LIKE %s OR m.`body_plain` LIKE %s)';
-            $params[] = $term;
-            $params[] = $term;
-            $params[] = $term;
-            $params[] = $term;
+                . ' OR m.`sender_name` LIKE %s OR m.`partner_name` LIKE %s'
+                . ' OR p.`full_name` LIKE %s OR m.`body_plain` LIKE %s)';
+            $params = array_merge($params, array_fill(0, 6, $term));
         }
 
         if ($conditions !== []) {
@@ -117,10 +123,13 @@ class IncomingMessagesViewer extends TableViewer
             'stateStyle' => $stateStyle,
         ];
 
-        // t2: sender_name preferované, jinak sender_email
+        // t2: partner dokumentu (Osoba, jinak jméno z canonicalu), fallback
+        // odesílatel (sender_name, jinak sender_email) — D7.
         $senderName = trim((string) ($rowData['sender_name'] ?? ''));
         $senderEmail = trim((string) ($rowData['sender_email'] ?? ''));
-        $row['t2'] = $senderName !== '' ? $senderName : ($senderEmail !== '' ? $senderEmail : null);
+        $sender = $senderName !== '' ? $senderName : $senderEmail;
+        $partner = $this->partnerLabel($rowData);
+        $row['t2'] = $partner !== '' ? $partner : ($sender !== '' ? $sender : null);
 
         // i2: primární typ (badge s lokalizovaným jménem a barvou dle typu)
         // + badge stavu AI analýzy (hodnota 0 = Bez analýzy se nezobrazuje)
@@ -142,12 +151,16 @@ class IncomingMessagesViewer extends TableViewer
         }
         $row['i2'] = $i2;
 
-        // t3: [mailbox.name] + první řádek body_plain
+        // t3: [mailbox.name] + „od: odesílatel" (jen když ho t2 vytlačil
+        // partner) + první řádek body_plain
         $mailboxName = trim((string) ($rowData['mailbox_name'] ?? ''));
         $bodyPreview = $this->firstBodyLine($rowData['body_plain'] ?? null, 100);
         $t3Parts = [];
         if ($mailboxName !== '') {
             $t3Parts[] = ['text' => '[' . $mailboxName . ']', 'class' => 'muted'];
+        }
+        if ($partner !== '' && $sender !== '') {
+            $t3Parts[] = ['text' => $this->fromLabel() . ': ' . $sender, 'class' => 'muted'];
         }
         if ($bodyPreview !== '') {
             $t3Parts[] = ['text' => $bodyPreview];
@@ -160,9 +173,11 @@ class IncomingMessagesViewer extends TableViewer
     public function renderDetail(int $recordId): array
     {
         $record = $this->db->fetchRow(
-            'SELECT m.*, mb.`name` AS mailbox_name, mb.`mailbox_id` AS mailbox_code'
+            'SELECT m.*, mb.`name` AS mailbox_name, mb.`mailbox_id` AS mailbox_code,'
+            . ' p.`full_name` AS partner_full_name'
             . ' FROM `' . $this->table . '` m'
             . ' LEFT JOIN `core_mail_mailboxes` mb ON mb.`id` = m.`mailbox`'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = m.`partner_person`'
             . ' WHERE m.`id` = %i',
             $recordId,
         );
@@ -309,9 +324,15 @@ class IncomingMessagesViewer extends TableViewer
             default                                   => $senderEmail,
         };
 
+        // Subtitle: partner · od: odesílatel · schránka · doručeno (D7);
+        // bez partnera zůstává odesílatel bez prefixu jako dřív.
+        $partner = $this->partnerLabel($record);
         $subtitleParts = [];
+        if ($partner !== '') {
+            $subtitleParts[] = $partner;
+        }
         if ($sender !== '') {
-            $subtitleParts[] = $sender;
+            $subtitleParts[] = $partner !== '' ? $this->fromLabel() . ': ' . $sender : $sender;
         }
         $mailbox = $this->formatMailbox($record);
         if ($mailbox !== '') {
@@ -891,6 +912,31 @@ class IncomingMessagesViewer extends TableViewer
             'complaint'       => 'Reklamace',
             default           => $key,
         };
+    }
+
+    /**
+     * Partner zprávy pro zobrazení: jméno Osoby (`partner_full_name` z JOINu),
+     * jinak snapshot `partner_name` z canonicalu (P7), jinak prázdný řetězec.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function partnerLabel(array $row): string
+    {
+        $fullName = trim((string) ($row['partner_full_name'] ?? ''));
+        if ($fullName !== '') {
+            return $fullName;
+        }
+        return trim((string) ($row['partner_name'] ?? ''));
+    }
+
+    /**
+     * Popisek „od" před odesílatelem (t3, subtitle detailu) — z cfgItem
+     * `core.mail.viewerDetailLabels.labels.from`, bez configu anglicky.
+     */
+    private function fromLabel(): string
+    {
+        $labels = ($this->config?->cfgItem('core.mail.viewerDetailLabels') ?? [])['labels'] ?? [];
+        return (string) ($labels['from']['name'] ?? 'from');
     }
 
     private function formatMailbox(array $record): string

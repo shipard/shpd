@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 272 tasků: **naplánováno** 6 · **částečně** 7 · **hotovo** 259.
+Celkem 272 tasků: **naplánováno** 5 · **částečně** 8 · **hotovo** 259.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -28,13 +28,13 @@ nevypisují — níže je jen to, co není dokončené.
 | `ai-profile-sync-in-ds-upgrade.md` | naplánováno | sync není v `DsUpgradeCommand` |
 | `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
-| `mail-message-title-partner.md` | naplánováno | rozhodnutí D1–D8 potvrzena 2026-09-10; fáze 1 (partner) → fáze 2 (titulek) |
 | `migration-check.md` | naplánováno | návrh, čeká na schválení rozhodnutí M1–M7, pak implementace |
 | `vat-filing-xml.md` | naplánováno | PRD hotové 2026-09-10, čeká na implementaci (prerekvizita #74 hotová) |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `docs-import-party-snapshots.md` | částečně | kód, testy a docs hotové 2026-09-01; zbývá ověření po re-importu qrce (task 29 old_shipard, ops) — poslední dva body checklistu |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
+| `mail-message-title-partner.md` | částečně | fáze 1 (partner) hotovo 2026-09-10, fáze 2 (titulek) naplánována |
 | `mail-preprocess.md` | částečně | Fáze 1 hotová (2026-08-29, 6 commitů), otevřený jen Bolt E2E na alfě (živý odkaz ze vzorku); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) hotová 2026-08-29 — `tasks/mail-preprocess-phase2.md` |
 | `taxes-phase01.md` | částečně | implementace kompletní (mapping, jádro reportů s periodSource vatPeriod + text/date sloupci, kalkulátory, buildery, UI, testy); zbývá ds-upgrade + proklik na dev DS a read-only ověření na alfě dle „Hotovo když" |
 | `vat-report-periods.md` | částečně | implementace kompletní (5 commitů 2026-09-03: tabulka + eventy jádra, přiřazení + on-demand, reporty nad instancemi, cron + zrušení `vat_periods`, docs); E2E na dev DS prošlo (uložení dokladu → koncepty, reporty `--period`, alert, guard, přepočet, ruční přesun). Zbývá ruční proklik UI (picker, viewer Daňová tvrzení, selecty na dokladu) a ověření po re-importu qrce (task 30) — poslední bod „Hotovo když“. |
@@ -254,6 +254,7 @@ Evidence → API endpoint → AI analýza do dokladů. Kontrakt endpointu
 | `mail-phase3a.md` | AI analýza (shpd strana): backendy, profily, claims, extrahované doklady |
 | `mail-states-and-classification.md` | Oddělení `analysis_state` od `docState` + AI klasifikace `primary_type`, karta „Není faktura“ |
 | `mail-isdoc-import.md` | Deterministický import ISDOC příloh místo AI analýzy |
+| `mail-message-title-partner.md` | Partner dokumentu (`partner_person`/`partner_name`) a titulek zprávy z AI (`ai_title`) — zobrazení v seznamu, fulltext, ruční partner má přednost (#43) |
 | `mail-analysis-schema-fixes.md` | Opravy AI analýzy: schema_error (kind/vat/courtRegistration), prompt v2.3.0, frontování dle docState + data fix |
 | `mail-config-viewers.md` | Viewery a formuláře pro mailové konfigurační tabulky |
 | `mail-invoice-rounding.md` | Zaokrouhlení celkové částky faktur: derivace `total_rounding_mode` v applieru, rounding-aware validace součtů, módy nahoru/dolů, prompt v3.1.0 |

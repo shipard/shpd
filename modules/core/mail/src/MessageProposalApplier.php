@@ -238,7 +238,7 @@ final class MessageProposalApplier
         // doklad už existuje a zpráva má target_row (zapsal DocumentApplier
         // v transakci uložení) — opakovaný apply doběhne přes recovery cestu
         // výše, proto jen warn a hlásí se úspěch.
-        if (!$this->writeApplyResolution($analysisNdx, $messageNdx, $userId)) {
+        if (!$this->writeApplyResolution($analysisNdx, $messageNdx, $userId, $this->targetPartnerId($messageNdx))) {
             ErrorLogger::warn('MessageProposalApplier::apply resolution write failed after successful apply', [
                 'messageNdx' => $messageNdx,
                 'analysisNdx' => $analysisNdx,
@@ -286,7 +286,7 @@ final class MessageProposalApplier
         }
 
         $savedId = (int) ($result->savedId ?? 0);
-        if (!$this->writeApplyResolution($analysisNdx, $messageNdx, $userId)) {
+        if (!$this->writeApplyResolution($analysisNdx, $messageNdx, $userId, $this->targetPartnerId($messageNdx))) {
             ErrorLogger::warn('MessageProposalApplier::apply resolution write failed after successful apply', [
                 'messageNdx' => $messageNdx,
                 'analysisNdx' => $analysisNdx,
@@ -316,7 +316,7 @@ final class MessageProposalApplier
             return ProposalApplyOutcome::ok($messageNdx, $analysisNdx, $savedDocId, null, idempotent: true);
         }
 
-        if (!$this->writeApplyResolution($analysisNdx, $messageNdx, $userId)) {
+        if (!$this->writeApplyResolution($analysisNdx, $messageNdx, $userId, $this->targetPartnerId($messageNdx))) {
             return ProposalApplyOutcome::error(
                 $messageNdx, $analysisNdx, 'INTERNAL_ERROR',
                 'Resolution write failed', 500,
@@ -506,9 +506,45 @@ final class MessageProposalApplier
     // Zápis verdiktu — jedna transakce: analysis resolution + docState zprávy
     // -------------------------------------------------------------------
 
-    private function writeApplyResolution(int $analysisNdx, int $messageNdx, ?int $userId): bool
+    /**
+     * Partner cílového záznamu po úspěšném Použít (vrstva 2,
+     * tasks/mail-message-title-partner.md D5/D8) — čte se z právě založeného
+     * záznamu přes `target_table_id`/`target_row` zprávy (oba appliery je
+     * zapisují ve své transakci), jednotně pro docs, registry i recovery
+     * cestu. Null = cíl bez partnera nebo nedostupný; jen warn, apply se
+     * nevrací.
+     */
+    private function targetPartnerId(int $messageNdx): ?int
     {
-        return $this->writeResolution($analysisNdx, $messageNdx, $userId, self::RESOLUTION_APPLIED, null);
+        try {
+            $message = $this->db->fetchRow(
+                'SELECT target_table_id, target_row FROM %n WHERE id = %i',
+                self::MESSAGES_TABLE, $messageNdx,
+            );
+            $table = (string) ($message['target_table_id'] ?? '');
+            $targetId = (int) ($message['target_row'] ?? 0);
+            if ($targetId <= 0 || preg_match('/^[a-z0-9_]+$/', $table) !== 1) {
+                return null;
+            }
+            $target = $this->db->fetchRow('SELECT partner FROM %n WHERE id = %i', $table, $targetId);
+            $partner = $target['partner'] ?? null;
+            return $partner !== null && (int) $partner > 0 ? (int) $partner : null;
+        } catch (\Throwable $e) {
+            ErrorLogger::warn('MessageProposalApplier: target partner lookup failed', [
+                'messageNdx' => $messageNdx,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * @param ?int $partnerId partner založeného záznamu → `partner_person`
+     *        zprávy (autoritativně, bez guardu); null = nesahat
+     */
+    private function writeApplyResolution(int $analysisNdx, int $messageNdx, ?int $userId, ?int $partnerId = null): bool
+    {
+        return $this->writeResolution($analysisNdx, $messageNdx, $userId, self::RESOLUTION_APPLIED, null, $partnerId);
     }
 
     private function writeRejectResolution(int $analysisNdx, int $messageNdx, ?int $userId, string $reason): bool
@@ -519,7 +555,9 @@ final class MessageProposalApplier
     /**
      * Verdikt + workflow zprávy atomicky: resolution/resolved_at/by na
      * analýze, zpráva → Hotovo (40) z Nové (10) i K řešení (20). Ruční
-     * docState mimo {10,20} se nepřepisuje (WHERE guard).
+     * docState mimo {10,20} se nepřepisuje (WHERE guard). Partner
+     * založeného záznamu (apply) jde ve stejné transakci, ale samostatným
+     * UPDATE bez guardu — Použít je pro `partner_person` autoritativní (D8).
      */
     private function writeResolution(
         int $analysisNdx,
@@ -527,6 +565,7 @@ final class MessageProposalApplier
         ?int $userId,
         int $resolution,
         ?string $rejectedReason,
+        ?int $partnerId = null,
     ): bool {
         $dibi = $this->db->getDibiConnection();
         $now = date('Y-m-d H:i:s');
@@ -552,6 +591,12 @@ final class MessageProposalApplier
             ->where('id = %i', $messageNdx)
             ->where('docState IN %in', [self::MSG_STATE_NEW, self::MSG_STATE_IN_PROGRESS])
             ->execute();
+
+            if ($partnerId !== null) {
+                $dibi->update(self::MESSAGES_TABLE, ['partner_person' => $partnerId])
+                    ->where('id = %i', $messageNdx)
+                    ->execute();
+            }
 
             $dibi->commit();
         } catch (\Throwable $e) {

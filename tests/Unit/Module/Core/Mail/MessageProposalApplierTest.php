@@ -172,6 +172,61 @@ class MessageProposalApplierTest extends TestCase
         $this->assertFalse($outcome->recovered);
     }
 
+    public function testApplyWritesPartnerOfCreatedDocumentOnMessage(): void
+    {
+        // Vrstva 2 (tasks/mail-message-title-partner.md D5/D8): po úspěšném
+        // apply se partner_person přepíše partnerem založeného záznamu —
+        // čte se přes target_table_id/target_row zprávy, které applier
+        // zapsal ve své transakci.
+        $message = $this->messageRow();
+        $analysis = $this->analysisRow();
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnCallback(
+            static function (mixed ...$args) use ($message, $analysis): ?array {
+                $sql = (string) $args[0];
+                return match (true) {
+                    str_contains($sql, 'status')          => $analysis,
+                    str_contains($sql, 'target_table_id') => ['target_table_id' => 'docs_core_heads', 'target_row' => 9999],
+                    str_contains($sql, 'partner')         => ['partner' => 55],
+                    default                               => $message,
+                };
+            },
+        );
+        $this->withWorkingDibi($db);
+
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->method('apply')->willReturn(ApplyResult::ok($this->happyCanonical(), savedId: 9999));
+
+        $outcome = $this->service($db, $applier)->apply(self::MESSAGE_NDX, 7, null);
+
+        $this->assertTrue($outcome->ok);
+        $partnerUpdates = array_values(array_filter(
+            $this->updates,
+            static fn(array $u): bool => array_key_exists('partner_person', $u[1]),
+        ));
+        $this->assertCount(1, $partnerUpdates);
+        $this->assertSame(['core_mail_incoming_messages', ['partner_person' => 55]], $partnerUpdates[0]);
+    }
+
+    public function testApplyWithoutTargetPartnerLeavesMessagePartnerUntouched(): void
+    {
+        // Cíl bez partnera (např. účtenka bez dodavatele) → žádný UPDATE
+        // partner_person; verdikt se zapíše normálně.
+        $db = $this->db($this->messageRow(), $this->analysisRow());
+        $this->withWorkingDibi($db);
+
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->method('apply')->willReturn(ApplyResult::ok($this->happyCanonical(), savedId: 9999));
+
+        $outcome = $this->service($db, $applier)->apply(self::MESSAGE_NDX, 7, null);
+
+        $this->assertTrue($outcome->ok);
+        foreach ($this->updates as [$table, $data]) {
+            $this->assertArrayNotHasKey('partner_person', $data);
+        }
+        $this->assertNotEmpty($this->updates, 'verdikt se zapsal');
+    }
+
     public function testApplyNotFound(): void
     {
         $db = $this->db(null, null);

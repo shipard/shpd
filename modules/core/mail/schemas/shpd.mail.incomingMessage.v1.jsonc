@@ -51,6 +51,21 @@
                 "vatId":     { "type": ["string", "null"] }
             }
         },
+
+        // ── Partner (protistrana dokumentu, ne odesílatel) ────────────────
+        // Odkaz stejného tvaru jako senderPerson — seeder páruje jen
+        // identifikátorem; partnerName je snapshot jména z canonicalu.
+        "partnerPerson": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "name":      { "type": ["string", "null"] },
+                "companyId": { "type": ["string", "null"] },
+                "taxId":     { "type": ["string", "null"] },
+                "vatId":     { "type": ["string", "null"] }
+            }
+        },
+        "partnerName": { "type": ["string", "null"] },
         "receivedAt":        { "$ref": "#/$defs/LocalDateTime" },
         "externalMessageId": { "type": ["string", "null"] },
         "inReplyTo":         { "type": ["string", "null"] },

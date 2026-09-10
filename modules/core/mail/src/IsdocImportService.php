@@ -34,7 +34,11 @@ use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
  *     deduplikují identitou (element UUID, fallback kompozit číslo dokladu
  *     + DIČ/IČ výstavce + datum vystavení); shodná identita = jeden doklad
  *     (preference samostatná příloha > embedded), více odlišných identit →
- *     větev se celá vzdá, AI vybere primární dokument.
+ *     větev se celá vzdá, AI vybere primární dokument,
+ *   - partner zprávy (`partner_name` / `partner_person`) si plní sám přes
+ *     {@see MessagePartnerWriter} — ISDOC obchází `/result`
+ *     (tasks/mail-message-title-partner.md P6); bez injektovaného writeru
+ *     se partner nezapisuje (unit testy).
  *
  * Embedded ISDOC v PDF (PDF/A-3 /EmbeddedFiles) se extrahuje přes
  * `pdfdetach` (poppler-utils) — binárka chybí → embedded detekce vypnuta
@@ -74,6 +78,7 @@ class IsdocImportService
         private readonly ?RowHistoryEnricher $enricher,
         private readonly string $dsPath,
         ?IsdocReader $reader = null,
+        private readonly ?MessagePartnerWriter $partnerWriter = null,
     ) {
         $this->reader = $reader ?? new IsdocReader();
     }
@@ -310,6 +315,24 @@ class IsdocImportService
                 ->where('id = %i', $messageNdx)
                 ->where('docState = %i', self::DOC_STATE_NEW)
                 ->execute();
+            }
+
+            // Partner zprávy z canonicalu (vrstva 1) — ISDOC obchází /result,
+            // plní si ho sám. Best-effort: selhání import neshodí.
+            if ($this->partnerWriter !== null) {
+                try {
+                    $this->partnerWriter->writeFromCanonical(
+                        $dibi,
+                        $messageNdx,
+                        $document['canonical'],
+                        $document['docType'],
+                    );
+                } catch (\Throwable $e) {
+                    ErrorLogger::warn('ISDOC import: partner write failed', [
+                        'message' => $messageNdx,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             $dibi->commit();

@@ -140,6 +140,10 @@ class FakeIncomingMessageGenerator
             'sender_email'          => $senderEmail,
             'sender_name'           => $senderName,
             'sender_person'         => null,
+            // Partner dokumentu — u fakturových šablon je odesílající firma
+            // zároveň dodavatelem; Osoba se u fake dat nepáruje.
+            'partner_person'        => null,
+            'partner_name'          => $isInvoiceTemplate ? $company : null,
             'received_at'           => $receivedAt,
             'external_message_id'   => null,
             'in_reply_to'           => null,

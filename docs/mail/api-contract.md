@@ -381,6 +381,12 @@ Server transakčně:
    neznámý klíč → server-side warning + pole se ignoruje, **ne** 422).
    UPDATE `primary_type` + `primary_type_source='ai'` — **jen pokud**
    `primary_type_source != 'user'` (volba uživatele má vždy přednost).
+6. Partner zprávy z validního canonicalu (`MessagePartnerWriter`, spec
+   `tasks/mail-message-title-partner.md`): UPDATE `partner_name` ←
+   `supplier.name` / `party.name` (jen dokud `target_row IS NULL`) a
+   `partner_person` ← Osoba při shodě IČO / DIČ / VAT ID (jen do NULL a jen
+   dokud `target_row IS NULL`; nikdy shoda jménem). Best-effort — selhání
+   nevrací chybu.
 
 Response 201: `{ analysis_ndx }`.
 

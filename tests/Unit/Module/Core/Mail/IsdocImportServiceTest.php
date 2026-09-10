@@ -12,6 +12,7 @@ use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\IsdocImportService;
+use Shipard\Module\Core\Mail\MessagePartnerWriter;
 
 /**
  * Deterministický ISDOC import (tasks/mail-isdoc-import.md, krok 3;
@@ -114,6 +115,18 @@ class IsdocImportServiceTest extends TestCase
             new SchemaValidator(SchemaLoader::default()),
             $enricher,
             $this->tmpDir,
+        );
+    }
+
+    /** Service s injektovaným zápisem partnera (vrstva 1, mail-message-title-partner.md). */
+    private function serviceWithPartnerWriter(DataSourceConnection $db, MessagePartnerWriter $writer): IsdocImportService
+    {
+        return new IsdocImportService(
+            $db,
+            new SchemaValidator(SchemaLoader::default()),
+            null,
+            $this->tmpDir,
+            partnerWriter: $writer,
         );
     }
 
@@ -230,6 +243,57 @@ class IsdocImportServiceTest extends TestCase
             $this->updates[1][1],
         );
         $this->assertSame(['docState' => 20, 'docStateMain' => 2], $this->updates[2][1]);
+    }
+
+    public function testImportWritesPartnerFromIsdocSupplier(): void
+    {
+        // ISDOC obchází /result — partner zprávy si plní sám (P6): jméno
+        // dodavatele z ISDOC + Osoba při shodě identifikátorem.
+        $files = [
+            $this->storedAttachment(501, 'faktura.isdoc', $this->fixture('invoice_min.isdoc'), 'application/xml'),
+        ];
+        $dibi = $this->makeDibi($this->messageRow());
+
+        $captured = null;
+        $party = $this->createMock(PartyResolver::class);
+        $party->expects($this->once())->method('resolve')->willReturnCallback(
+            static function (array $ids, mixed $type = null, bool $identifiersOnly = false) use (&$captured): ResolveResult {
+                $captured = [$ids, $identifiersOnly];
+                return ResolveResult::matched(77, 'companyId');
+            },
+        );
+
+        $result = $this->serviceWithPartnerWriter($this->makeDb($dibi), new MessagePartnerWriter($party))
+            ->tryImport(self::MESSAGE_NDX, $files);
+
+        $this->assertTrue($result);
+        // analysis_state, primary_type, docState + partner_name, partner_person
+        $this->assertCount(5, $this->updates);
+        $this->assertSame(['partner_name' => 'Testovací dodavatel s.r.o.'], $this->updates[3][1]);
+        $this->assertSame(['partner_person' => 77], $this->updates[4][1]);
+        $this->assertSame('12345678', $captured[0]['companyId']);
+        $this->assertTrue($captured[1], 'jen deterministická shoda identifikátorem');
+    }
+
+    public function testPartnerWriterFailureDoesNotAbortImport(): void
+    {
+        $files = [
+            $this->storedAttachment(501, 'faktura.isdoc', $this->fixture('invoice_min.isdoc'), 'application/xml'),
+        ];
+        $dibi = $this->makeDibi($this->messageRow());
+        $dibi->expects($this->once())->method('commit');
+        $dibi->expects($this->never())->method('rollback');
+
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willThrowException(new \RuntimeException('DB down'));
+
+        $result = $this->serviceWithPartnerWriter($this->makeDb($dibi), new MessagePartnerWriter($party))
+            ->tryImport(self::MESSAGE_NDX, $files);
+
+        $this->assertTrue($result);
+        // Jméno se zapsalo, Osoba ne — import doběhl.
+        $this->assertCount(4, $this->updates);
+        $this->assertSame(['partner_name' => 'Testovací dodavatel s.r.o.'], $this->updates[3][1]);
     }
 
     public function testEnrichmentFillsOurCodeInCanonical(): void

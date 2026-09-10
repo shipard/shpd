@@ -13,12 +13,17 @@ use Shipard\Core\Form\TableForm;
  * Formulář pro ruční pořízení / úpravu došlé zprávy.
  *
  * Layout odpovídá spec §6.1 — tři taby:
- *   1) „Zpráva" — všechny hlavičky + tělo, vpravo read-only náhledy příloh
+ *   1) „Zpráva" — všechny hlavičky + partner dokumentu + tělo, vpravo
+ *      read-only náhledy příloh
  *   2) „Přílohy" — standardní attachments panel (tableId = 303)
  *   3) „Nastavení" — schránka + datum doručení
  *
  * `source_type` (zdroj) ani `message_id` (lidský kód) se v UI neupravují —
  * Form je nevystavuje, Document je nastaví v beforeSave.
+ *
+ * Partner (tasks/mail-message-title-partner.md D4/D8): `partner_person` je
+ * editovatelný lookup na Osoby — ruční volba má přednost, analýza zapisuje
+ * jen do NULL; `partner_name` je read-only snapshot jména z canonicalu.
  */
 class IncomingMessagesForm extends TableForm
 {
@@ -38,6 +43,13 @@ class IncomingMessagesForm extends TableForm
                     ->separator('Odesílatel')
                     ->input('sender_email', required: true, inputType: 'email')
                     ->input('sender_name')
+                    ->separator('Partner')
+                    ->lookup('partner_person',
+                        table: 'base_persons_persons',
+                        placeholder: 'Hledat partnera…',
+                        hint: 'Protistrana dokumentu (dodavatel), ne odesílatel zprávy. Doplní se z analýzy, ruční volba má přednost.',
+                    )
+                    ->input('partner_name', readOnly: true)
                     ->separator('Obsah')
                     ->input('subject', required: true)
                     ->textarea('body_plain',

@@ -117,7 +117,9 @@ final class MailExporter implements RecordExporter
             'subject'           => (string) ($m['subject'] ?? ''),
             'senderEmail'       => (string) ($m['sender_email'] ?? ''),
             'senderName'        => V::str($m['sender_name'] ?? null),
-            'senderPerson'      => $this->senderPerson(V::int($m['sender_person'] ?? null)),
+            'senderPerson'      => $this->personRef(V::int($m['sender_person'] ?? null)),
+            'partnerPerson'     => $this->personRef(V::int($m['partner_person'] ?? null)),
+            'partnerName'       => V::str($m['partner_name'] ?? null),
             'receivedAt'        => V::dateTime($m['received_at'] ?? null),
             'externalMessageId' => V::str($m['external_message_id'] ?? null),
             'inReplyTo'         => V::str($m['in_reply_to'] ?? null),
@@ -149,9 +151,12 @@ final class MailExporter implements RecordExporter
     // ── části zprávy ───────────────────────────────────────────────────────
 
     /**
+     * Odkaz na Osobu identifikátory (jméno + IČO/DIČ/VAT ID) — sender_person
+     * i partner_person; seeder ho na cílovém DS rozřeší jen shodou identifikátorem.
+     *
      * @return array<string, mixed>|null
      */
-    private function senderPerson(?int $personId): ?array
+    private function personRef(?int $personId): ?array
     {
         if ($personId === null || $personId <= 0) {
             return null;

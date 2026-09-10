@@ -8,7 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
-  import { recomposeFiling } from '../../api/vat.js';
+  import { recomposeFiling, generateFilingFiles } from '../../api/vat.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import { inviteUser } from '../../api/security.js';
   import { fileFromMessage } from '../../api/registry.js';
@@ -658,6 +658,29 @@
       const result = await recomposeFiling(recordId);
       if (result?.success) refreshAfterAction();
       else alert(translateError(result?.error));
+      return;
+    }
+    // Vyrobit soubory podání pro daňový portál (FilingsViewer). Chyby
+    // hlavičky přijdou jako 422 se seznamem polí — uživatel je doplní ve
+    // formuláři, proto se vypisují i s názvem pole. Hotové soubory jsou
+    // v záložce Přílohy.
+    if (actionId === 'generateFilingFiles') {
+      const result = await generateFilingFiles(recordId);
+      if (result?.success) {
+        const names = (result.data?.files ?? []).map((f) => f.name).join(', ');
+        const warnings = result.data?.warnings ?? [];
+        alert(
+          t('viewer.detail.filingFilesCreated', { names })
+          + (warnings.length ? `\n\n${warnings.join('\n')}` : ''),
+        );
+        refreshAfterAction();
+      } else {
+        const details = result?.error?.details ?? [];
+        alert(
+          translateError(result?.error)
+          + (details.length ? `\n\n${details.map((d) => `• ${d.message}`).join('\n')}` : ''),
+        );
+      }
       return;
     }
     // Nastavit heslo SMTP senderu (SendersViewer) — dialog, plaintext jde

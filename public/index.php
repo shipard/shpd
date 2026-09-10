@@ -323,7 +323,7 @@ function dispatch(
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db, $resolved),
 		'password' => dispatchPassword($route, $request, $auth, $db, $resolved),
 		'crud'       => dispatchCrud($route, $request, $auth, $tables, $db, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
-		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
+		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved, $modulePathResolver),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $alertCheckRegistry),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables, $resolved->isReadOnly()),
@@ -345,7 +345,7 @@ function dispatch(
 		'dsAbout' => dispatchDsAbout($route, $auth, $db, $configRuntime, $resolved->config, resolveLanguage($request, $resolved->config), $tables),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
-		'vat' => dispatchVat($route, $request, $db, $configRuntime),
+		'vat' => dispatchVat($route, $request, $db, $configRuntime, $resolved, $auth),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'hostingPortal' => dispatchHostingPortal($route, $request, $auth, $db, $tables, $resolved, $modulePathResolver, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -480,10 +480,18 @@ function dispatchVat(
 	Request $request,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	AuthContext $auth,
 ): Response {
-	$ctrl = new \Shipard\Module\Economy\Vat\VatFilingController($db, $configRuntime);
+	$ctrl = new \Shipard\Module\Economy\Vat\VatFilingController(
+		$db,
+		$configRuntime,
+		$resolved->config,
+		$auth->userId,
+	);
 	return match ($route->action) {
 		'filingCompose' => $ctrl->compose($request),
+		'filingFiles'   => $ctrl->files($request),
 		default         => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
 	};
 }
@@ -1159,9 +1167,14 @@ function dispatchAttachment(
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	\Shipard\Api\ResolvedDataSource $resolved,
+	ModulePathResolver $modulePathResolver,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
-	$ctrl   = new AttachmentController($db, $dsPath, $tables);
+	// Guardy příloh (#55 X16) — chrání soubory vázané na nevratný stav
+	// záznamu (podané tvrzení DPH). Jinde než v API se nenačítají: CLI
+	// a seedery s přílohami pracují záměrně bez omezení.
+	$guards = \Shipard\Api\AttachmentGuardLoader::load($resolved->config, $modulePathResolver);
+	$ctrl   = new AttachmentController($db, $dsPath, $tables, $guards);
 	return match ($route->action) {
 		'upload'    => $ctrl->upload($auth),
 		'download'  => $ctrl->download((int) $route->id, $request),

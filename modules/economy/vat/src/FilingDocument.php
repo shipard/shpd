@@ -7,6 +7,7 @@ namespace Shipard\Module\Economy\Vat;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
+use Shipard\Core\Logging\ErrorLogger;
 
 /**
  * Podání DPH (`economy_vat_filings`, issue #55 D14–D18).
@@ -283,10 +284,75 @@ class FilingDocument extends Document
                     'Podání ještě nemá sestavený snapshot — nejdřív ho přepočítejte.',
                     'not_composed',
                 );
+            } elseif ($selfId !== null) {
+                // Soubor pro daňový portál vzniká při podání (#55 X6), takže
+                // se nedovyplněná hlavička musí ukázat **teď** — po přechodu
+                // je podání zmrazené a opravit by ho šlo jen novým podáním.
+                $this->validateXml($result, $selfId);
             }
         }
 
         return $result;
+    }
+
+    /**
+     * Kontrola, že z podání půjde vyrobit soubor pro EPO. Chyby jsou
+     * field-level na `header.*`, takže je formulář ukáže u příslušného
+     * pole. Nedostupné mapování (nezkompilovaný config) přechod neblokuje —
+     * degraduje se stejně jako živé reporty.
+     */
+    protected function validateXml(ValidationResult $result, int $filingId): void
+    {
+        if ($this->db === null) {
+            return;
+        }
+
+        try {
+            $input   = (new Xml\FilingXmlInputLoader($this->db))->load($filingId);
+            $mapping = Xml\VatXmlMapping::forReportType($this->config, $input->reportType);
+            if ($mapping === null) {
+                return;
+            }
+            foreach ((new Xml\FilingXmlValidator($mapping))->validate($input) as $error) {
+                $result->addError($error->column, $error->message, $error->code);
+            }
+        } catch (\DomainException $e) {
+            $result->addError(ValidationError::FIELD_FORM, $e->getMessage(), 'xml_invalid');
+        }
+    }
+
+    /**
+     * Po podání se dogenerují soubory pro daňový portál, pokud chybí
+     * (#55 X6). Běží **po commitu**: obsah podání je už zmrazený a případné
+     * selhání infrastruktury nesmí vrátit přechod zpět — soubory jde
+     * vyrobit znovu akcí „Vytvořit soubory".
+     */
+    public function afterSave(array $data): void
+    {
+        if ($this->db === null
+            || (int) ($data['docState'] ?? 0) !== self::DOC_STATE_FILED
+            || empty($data['id'])
+        ) {
+            return;
+        }
+        $this->generateFiles((int) $data['id']);
+    }
+
+    /** Seam pro testy — bez DS adresáře se soubory neukládají. */
+    protected function generateFiles(int $filingId): void
+    {
+        if ($this->db === null || $this->dsConfig === null) {
+            return;
+        }
+
+        try {
+            $service = Xml\FilingFilesFactory::create($this->db, $this->config, $this->dsConfig);
+            if (!$service->hasXml($filingId)) {
+                $service->generate($filingId);
+            }
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, "Podání #{$filingId}: soubory pro EPO se nepodařilo vytvořit");
+        }
     }
 
     /**

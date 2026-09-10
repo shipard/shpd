@@ -367,6 +367,34 @@ ID modulu přímo odpovídá cestě v souborovém systému:
 | `documentEventHandlers[].table` | string | Ano | Ne | ID cílové tabulky |
 | `documentEventHandlers[].class` | string | Ano | Ne | FQCN handleru (implements `DocumentEventHandler`) |
 | `documentEventHandlers[].events` | string[] | Ne | Ne | `beforeSave`, `afterSave`, `stateChanged`, `beforeDelete`; default všechny |
+| `attachmentGuards` | object[] | Ne | Ne | Ochrana příloh záznamu před změnou (viz níže) |
+| `attachmentGuards[].table` | string | Ano | Ne | ID cílové tabulky |
+| `attachmentGuards[].class` | string | Ano | Ne | FQCN guardu (implements `AttachmentGuard`) |
+
+### Pole `attachmentGuards`
+
+Ochrana příloh záznamu před smazáním, přejmenováním a přeřazením — pro
+záznamy, jejichž přílohy jsou vázané na nevratný stav. Registrace se čtou
+za běhu (`AttachmentGuardLoader`, vzor `documentEventHandlers`), ptá se jich
+`AttachmentService` a odmítnutí vrátí API jako 409 `ATTACHMENT_LOCKED`.
+
+Guard **neblokuje nahrání** nové přílohy: k podanému tvrzení DPH je potřeba
+doložit potvrzení o přijetí, k uzavřenému dokladu korespondenci. Blokuje se
+jen změna toho, co už tam je — a typicky ne všeho, ale jen souborů, které
+si záznam vygeneroval sám (`FilingAttachmentGuard` pozná svoje podle
+`metadata.kind`).
+
+Guardy se načítají **jen v API**; CLI a seedery s přílohami pracují záměrně
+bez omezení (migrace, úklid).
+
+```jsonc
+"attachmentGuards": [
+    {
+        "table": "economy_vat_filings",
+        "class": "Shipard\\Module\\Economy\\Vat\\FilingAttachmentGuard"
+    }
+]
+```
 
 ### Pole `documentEventHandlers`
 

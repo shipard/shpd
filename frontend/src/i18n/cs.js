@@ -223,6 +223,7 @@ export default {
   'viewer.detail.setPasswordLabel': 'Nové SMTP heslo:',
   'viewer.detail.setPasswordFailed': 'Nepodařilo se nastavit heslo: {msg}',
   'viewer.detail.inviteSent': 'Pozvánka byla odeslána.',
+  'viewer.detail.filingFilesCreated': 'Soubory podání byly vytvořeny: {names}. Najdete je v záložce Přílohy.',
   'viewer.detail.inviteFailed': 'Nepodařilo se poslat pozvánku: {msg}',
   'viewer.detail.deleteTagRuleConfirm': 'Opravdu smazat toto pravidlo? Smazání je trvalé; pravidlo může znovu vzniknout učením.',
   'viewer.detail.mailBody': 'Tělo zprávy',

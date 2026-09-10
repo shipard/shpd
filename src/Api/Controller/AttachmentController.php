@@ -30,12 +30,18 @@ class AttachmentController
     /**
      * @param array<string, TableDefinition> $tables
      */
+    /**
+     * @param array<string, TableDefinition>     $tables
+     * @param array<string, list<class-string>>  $guards ochrana příloh
+     *        per cílová tabulka (#55 X16) — `AttachmentGuardLoader`
+     */
     public function __construct(
         private DataSourceConnection $db,
         private string $dsPath,
         private array $tables,
+        array $guards = [],
     ) {
-        $this->service = new AttachmentService($db, $dsPath, $tables);
+        $this->service = new AttachmentService($db, $dsPath, $tables, $guards);
     }
 
     /**
@@ -229,8 +235,14 @@ class AttachmentController
      */
     public function delete(int $id): Response
     {
-        if (!$this->service->softDelete($id)) {
-            return Response::error('NOT_FOUND', 'Příloha nenalezena', 404);
+        try {
+            if (!$this->service->softDelete($id)) {
+                return Response::error('NOT_FOUND', 'Příloha nenalezena', 404);
+            }
+        } catch (\DomainException $e) {
+            // Guard cílové tabulky (#55 X16) — přílohu chrání stav záznamu,
+            // ne oprávnění uživatele, proto 409 a ne 403.
+            return Response::error('ATTACHMENT_LOCKED', $e->getMessage(), 409);
         }
 
         return Response::success(null, 204);

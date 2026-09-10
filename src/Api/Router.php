@@ -356,6 +356,14 @@ class Router
 			return new Route('vat', 'filingCompose');
 		}
 
+		// POST /_vat/filing-files — soubory podání pro daňový portál (#55 X6)
+		if ($subpath === '/_vat/filing-files') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('vat', 'filingFiles');
+		}
+
 		// POST /_bank/import-statement — import bankovního výpisu (multipart)
 		if ($subpath === '/_bank/import-statement') {
 			if ($method !== 'POST') {

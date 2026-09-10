@@ -197,14 +197,28 @@ class FilingsViewer extends TableViewer
 
         $detail = ['tabs' => $tabs];
 
+        $docState = (int) ($record['docState'] ?? 0);
+
         // Přepočet je smysluplný jen u konceptu — podané podání je záznam
         // o tom, co odešlo, a composer ho odmítne.
-        if ((int) ($record['docState'] ?? 0) === FilingDocument::DOC_STATE_COMPOSED) {
+        if ($docState === FilingDocument::DOC_STATE_COMPOSED) {
             $detail['actions'] = [[
                 'id'      => 'recomposeFiling',
                 'label'   => $cs ? 'Přepočítat' : 'Recompose',
                 'variant' => 'secondary',
             ]];
+        }
+
+        // Soubory pro daňový portál (#55 X6): u konceptu si je lze vyrobit
+        // dopředu (a opakovaně), u podaného podání jen doplnit, když
+        // automatické vytvoření při podání selhalo. Hotové soubory jsou
+        // v záložce Přílohy, odkud se i stahují.
+        if ($docState !== FilingDocument::DOC_STATE_CANCELLED) {
+            $detail['actions'][] = [
+                'id'      => 'generateFilingFiles',
+                'label'   => $cs ? 'Vytvořit soubory' : 'Create files',
+                'variant' => 'secondary',
+            ];
         }
 
         return $detail;

@@ -26,6 +26,14 @@ class AttachmentService
         private string $dsPath,
         /** @var array<string, TableDefinition> */
         private array $tableDefinitions = [],
+        /**
+         * Ochrana příloh per cílová tabulka (#55 X16) — `tabulka => [třídy]`.
+         * Sbírá je `AttachmentGuardLoader` z module.jsonc; instancují se až
+         * při změně přílohy. Prázdná mapa = žádná ochrana (CLI, seedery).
+         *
+         * @var array<string, list<class-string>>
+         */
+        private array $guards = [],
     ) {
         $this->fileStorage = new FileStorage();
         $this->thumbnailGen = new ThumbnailGenerator();
@@ -282,6 +290,8 @@ class AttachmentService
 
     /**
      * Rename an attachment (change display name only).
+     *
+     * @throws \DomainException když změnu odmítne guard cílové tabulky
      */
     public function rename(int $id, string $newName): bool
     {
@@ -289,6 +299,7 @@ class AttachmentService
         if ($attachment === null) {
             return false;
         }
+        $this->assertChangeAllowed($attachment, AttachmentGuard::OPERATION_RENAME);
 
         $this->db->updateWhere(
             self::TABLE,
@@ -309,6 +320,7 @@ class AttachmentService
         if ($attachment === null) {
             return false;
         }
+        $this->assertChangeAllowed($attachment, AttachmentGuard::OPERATION_REORDER);
 
         $this->db->updateWhere(
             self::TABLE,
@@ -355,6 +367,8 @@ class AttachmentService
 
     /**
      * Soft-delete an attachment.
+     *
+     * @throws \DomainException když smazání odmítne guard cílové tabulky
      */
     public function softDelete(int $id): bool
     {
@@ -362,6 +376,7 @@ class AttachmentService
         if ($attachment === null) {
             return false;
         }
+        $this->assertChangeAllowed($attachment, AttachmentGuard::OPERATION_DELETE);
 
         $this->db->updateWhere(
             self::TABLE,
@@ -400,6 +415,34 @@ class AttachmentService
     /**
      * Resolve numeric tableId to string table name.
      */
+    /**
+     * Zeptá se guardů cílové tabulky, jestli se s přílohou smí hýbat
+     * (#55 X16). Odmítnutí je `DomainException` — controller ho převede na
+     * 409 s hláškou guardu.
+     *
+     * @param array<string, mixed> $attachment
+     * @throws \DomainException
+     */
+    private function assertChangeAllowed(array $attachment, string $operation): void
+    {
+        if ($this->guards === []) {
+            return;
+        }
+        $tableName = $this->resolveTableName((int) ($attachment['table_id'] ?? 0));
+        if ($tableName === null) {
+            return;
+        }
+        foreach ($this->guards[$tableName] ?? [] as $class) {
+            if (!class_exists($class) || !is_subclass_of($class, AttachmentGuard::class)) {
+                continue;
+            }
+            $reason = (new $class($this->db))->refuse($attachment, $operation);
+            if ($reason !== null) {
+                throw new \DomainException($reason);
+            }
+        }
+    }
+
     private function resolveTableName(int $tableId): ?string
     {
         foreach ($this->tableDefinitions as $name => $def) {

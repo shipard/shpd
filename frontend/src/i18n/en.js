@@ -214,6 +214,7 @@ export default {
   'viewer.detail.setPasswordLabel': 'New SMTP password:',
   'viewer.detail.setPasswordFailed': 'Failed to set password: {msg}',
   'viewer.detail.inviteSent': 'Invitation sent.',
+  'viewer.detail.filingFilesCreated': 'Filing files created: {names}. You will find them in the Attachments tab.',
   'viewer.detail.inviteFailed': 'Failed to send invitation: {msg}',
   'viewer.detail.deleteTagRuleConfirm': 'Really delete this rule? Deletion is permanent; the rule can be re-learned.',
   'viewer.detail.mailBody': 'Message body',

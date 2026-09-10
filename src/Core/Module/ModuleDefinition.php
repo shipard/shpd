@@ -28,6 +28,7 @@ class ModuleDefinition
         public readonly array $panels = [],
         public readonly array $navigationProviders = [],
         public readonly array $reports = [],
+        public readonly array $attachmentGuards = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -172,6 +173,24 @@ class ModuleDefinition
             }
         }
 
+        // attachmentGuards — ochrana příloh záznamu před změnou (#55 X16).
+        // Tvar {table, class}; třída implementuje AttachmentGuard a ptá se
+        // jí AttachmentService u mazání, přejmenování a řazení.
+        $attachmentGuards = [];
+        if (isset($data['attachmentGuards']) && is_array($data['attachmentGuards'])) {
+            foreach ($data['attachmentGuards'] as $idx => $reg) {
+                if (!is_array($reg)
+                    || !isset($reg['table']) || !is_string($reg['table']) || $reg['table'] === ''
+                    || !isset($reg['class']) || !is_string($reg['class']) || $reg['class'] === ''
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': attachmentGuards[{$idx}] requires 'table' and 'class'",
+                    );
+                }
+                $attachmentGuards[] = ['table' => $reg['table'], 'class' => $reg['class']];
+            }
+        }
+
         // journalEventHandlers — hooky na zápis účetního deníku (journalWritten
         // po commitu (pře)zápisu/vymazání). Mirror documentEventHandlers, ale
         // registrace je {class, events} bez `table` (události nejsou per-tabulka);
@@ -287,6 +306,7 @@ class ModuleDefinition
             panels: $panels,
             navigationProviders: $navigationProviders,
             reports: $reports,
+            attachmentGuards: $attachmentGuards,
         );
     }
 

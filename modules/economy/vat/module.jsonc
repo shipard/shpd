@@ -48,6 +48,15 @@
         }
     ],
 
+    // Soubory podaného tvrzení jsou nevratný doklad — guard je chrání
+    // před smazáním a přejmenováním (#55 X16).
+    "attachmentGuards": [
+        {
+            "table": "economy_vat_filings",
+            "class": "Shipard\\Module\\Economy\\Vat\\FilingAttachmentGuard"
+        }
+    ],
+
     "alertChecks": [
         {
             "id": "economy.vat.draft_report_periods",

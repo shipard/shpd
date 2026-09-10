@@ -103,6 +103,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>report-diff</info>             Porovná dva ReportResult JSON soubory (kontrolní diff)');
         $output->writeln('  <info>vat-periods-ensure</info>      Zajistí instance daňových tvrzení (přiznání/KH/SH) pro dnešek a zítřek — denní cron');
         $output->writeln('  <info>vat-filing-compose</info>      Sestaví podání DPH za instanci tvrzení, nebo přepočítá snapshot konceptu');
+        $output->writeln('  <info>vat-filing-files</info>        Vyrobí soubory podání DPH pro daňový portál (XML, PDF opis)');
         $output->writeln('');
         $output->writeln('<comment>Registry (Spisovna):</comment>');
         $output->writeln('  <info>registry-extract-texts</info>  Fill registry documents extracted_text from attachments (default: missing only)');

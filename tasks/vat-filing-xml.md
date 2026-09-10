@@ -1,7 +1,9 @@
 # Task: Podání DPH — XML pro EPO (DPHDP3 / DPHKH1 / DPHSHV), hlavička, PDF opis (M1 Fáze 3) — #55
 
-**Stav:** částečně — PRD hotové 2026-09-10, implementace běží: hotový commit 1
-(XSD v repozitáři + `vat-xml-cz.jsonc` + test úplnosti proti schématům)
+**Stav:** částečně — implementace hotová 2026-09-10 (commity 1–7): XSD + mapování,
+hlavička per typ, generátory DP3/KH1/SHV, validace, soubory jako přílohy s guardem,
+PDF opis a obsah, `EpoXmlDiff` + CLI. Zbývá **zlatý test** (čeká na podané soubory
+zdroje 689089 v `tests/Fixtures/vat-xml/689089/`), ruční proklik UI a nasazení na alfě
 **Issue:** #55 (Fáze 3), návaznost D19 (#74 hotovo), D20 (přílohy na podání), D17 (zaokrouhlení)
 **Návaznost:** staví na Fázi 2 (`tasks/vat-filings.md` — snapshot `economy_vat_filings`
 + výstupní řádky `_return_rows` / `_cs_rows` / `_rs_rows`), na strukturovaných polích
@@ -302,12 +304,24 @@ Věta C součty; SHV řádek per (stát, DIČ, kód plnění).
 
 ## Hotovo když
 
-- [ ] Testy zelené; každé vygenerované XML v testech validní proti XSD z repa.
-- [ ] Dev DS 4l3j: podání Q3/2026 → tab Hlavička editovatelný, „Vytvořit soubory" uloží
-      XML + 2 PDF jako přílohy; po „Podat" jsou přílohy immutable; vadná hlavička ukáže
-      chybu u pole.
-- [ ] **Zlatý test:** `vat-filing-files` pro řádná DP3 01–04/2026 a KH 01/2026 na
-      `btpg-p` dává XML atributově shodné s podanými soubory (ignorované: `nazevSW`,
-      `verzeSW`, `d_poddp`, `sest_*`, `c_telef`, `email`).
-- [ ] XML vygenerované z podání ve 40 je bajtově stejné při opakovaném generování
+- [x] Testy zelené; každé vygenerované XML v testech validní proti XSD z repa.
+      (5 700 unit testů, 9 integračních nad 4l3j vč. reálného Gotenbergu.)
+- [x] Dev DS 4l3j: tab Hlavička se kreslí se 35 poli a českými popisky, „Vytvořit
+      soubory" uloží XML + 2 PDF jako přílohy, po podání je guard zamkne, vadná
+      hlavička vrátí 422 s chybami na `header.*`. Ověřeno přes API a integrační
+      testy; **ruční proklik v prohlížeči zbývá**.
+- [ ] **Zlatý test:** čeká na podané soubory zdroje 689089
+      (`tests/Fixtures/vat-xml/689089/`, viz README v adresáři). Harness hotový
+      a ověřený proti vygenerovanému souboru — `GoldenFilingXmlTest` se zatím
+      přeskakuje.
+- [x] XML vygenerované z podání ve 40 je bajtově stejné při opakovaném generování
       (determinismus ze snapshotu).
+
+## Zbývá
+
+- Ruční proklik v prohlížeči (tab Hlavička, akce Vytvořit soubory, Přílohy).
+- Zlatý test po dodání referenčních souborů; při něm ověřit dvě otevřené věci:
+  zápis atributu `stat` (kód země vs. název) a to, jestli zdroj vykazuje
+  třístranný obchod v souhrnném hlášení (`k_pln_eu` = 2, dnes nemapované).
+- Nasazení na alfu: `ds-upgrade` (nové cfgItems, jinak generování skončí na
+  chybějícím `valueScale`) a kontrola, že render služba běží.

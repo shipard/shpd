@@ -101,10 +101,23 @@ final class VatXmlMapping
         return (string) $forma[$kind];
     }
 
-    /** Desetinná místa hodnot písemnosti (0 = celé Kč, 2 = haléře). */
+    /**
+     * Desetinná místa hodnot písemnosti (0 = celé Kč, 2 = haléře).
+     *
+     * Chybějící hodnota je **výjimka**, ne default: tiše zvolený počet
+     * míst by vyrobil podání s haléři tam, kde úřad čeká koruny — a XSD
+     * to nechytí (`fractionDigits` nepovinné atributy nekontroluje, když
+     * hodnota sedí do rozsahu). Typicky znamená nezkompilovanou
+     * konfiguraci po změně configu.
+     */
     public function valueScale(): int
     {
-        return (int) ($this->document['valueScale'] ?? 2);
+        if (!isset($this->document['valueScale'])) {
+            throw new \DomainException(
+                "XML mapování ({$this->reportType}): chybí `valueScale` — spusťte ds-upgrade",
+            );
+        }
+        return (int) $this->document['valueScale'];
     }
 
     /** Desetinná místa koeficientu v procentech. */

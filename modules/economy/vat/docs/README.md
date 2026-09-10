@@ -293,12 +293,13 @@ proti aktuálnímu XSD** daňového portálu; do té doby profil jen sbírá dat
 Povinný je jen typ subjektu, a to teprve v neprázdném profilu — registraci
 k DPH jde uložit bez podacích údajů.
 
-**Co doplní Fáze 3:** hlavička podání `economy_vat_filings.header` dostane
-schéma **per typ tvrzení** (DP3 / KH / SH mají jinou sadu polí) přes hook
-`Document::structuredSchemaFor()`. Snapshot hlavičky si tím připne verzi
-schématu, aby zůstal doslovně interpretovatelný i po změně formuláře úřadu.
-Generátor XML pak skládá větu P z profilu podatele a větu D z hlavičky
-a instance.
+**Hlavička podání** (`economy_vat_filings.header`, Fáze 3) je strukturované
+pole se schématem **per typ tvrzení** — vybírá ho `FilingHeaderSchema::
+forReportType()`, na který delegují `FilingDocument::structuredSchemaFor()`
+i `FilingsForm`. Composer ji při sestavení předvyplní z profilu podatele,
+z vlastní firmy a z registrace (DIČ); **přepočet ji nepřepisuje**, protože
+ruční úpravy jsou jediná část snapshotu, kterou zadává člověk. Podáním
+zmrzne jako zbytek snapshotu.
 
 ### UI (D20)
 
@@ -310,8 +311,108 @@ v Daňových tvrzeních nese seznam podání a akci **Sestavit podání**.
 Hlavičky živých reportů hlásí poslední podání a jeho podanou daňovou
 povinnost — vidět rozdíl proti živému výpočtu je celý smysl.
 
-Přílohy (XML, PDF opis) jdou přes `core.attachments` s `table_id` = 443;
-Fáze 2 je jen deklaruje (tab Přílohy ve formuláři), plní je Fáze 3.
+Přílohy jdou přes `core.attachments` s `table_id` = 443: soubory pro
+daňový portál plní Fáze 3 (viz níže), ručně nahrané doklady o podání
+zůstávají na uživateli.
+
+## XML pro EPO (Fáze 3)
+
+Z podaného snapshotu se vyrábí **soubor pro daňový portál** podle oficiální
+struktury Finanční správy: `Pisemnost` → `DPHDP3` / `DPHKH1` / `DPHSHV`.
+
+### Zdroje pravdy
+
+| Co | Kde |
+|---|---|
+| Struktura písemnosti | `xsd/*.xsd` — schémata stažená z adisspr.mfcr.cz, viz `xsd/README.md` (verze, datum, MD5) |
+| Řádek/sekce → věta a atribut | `config/vat-xml-cz.jsonc` (cfgItem `economy.vat.xml.cz`) |
+| Hodnoty | **jen** snapshot podání (`economy_vat_filings` + řádkové tabulky) |
+| Sada polí hlavičky | `config/filingHeaderCz{Dp3,Kh1,Shv}.jsonc` |
+
+Writery neznají jediné číslo řádku ani jméno atributu — všechno je
+v configu, takže nové vydání formuláře je změna konfigurace, ne kódu.
+`VatXmlMappingCompletenessTest` drží invariant „mapované ∪ vědomě
+nemapované = atributy schématu" a hlídá i počet desetinných míst, kódy
+forem, sekce hlášení a pole hlavičky proti větě P.
+
+### Co je deterministické a proč
+
+Vstupem generátoru je `FilingXmlInput` — **celý obsah podání jako
+hodnota**, načtený ze snapshotu (`FilingXmlInputLoader`). Doklady,
+koeficient odpočtu ani registrace se znovu nevyhodnocují, takže podané
+tvrzení vydá při opakovaném generování týž soubor i po jejich pozdější
+změně. Proto je ve snapshotu i zálohový koeficient ř. 52
+(`result.return.coefficient`) a DIČ v hlavičce.
+
+Jediná výjimka je rozsah instance tvrzení, ze kterého plyne zdaňovací
+období — ten instanci s podaným tvrzením zmrazuje `ReportPeriodDocument`.
+
+### Odvozená pole hlavičky
+
+Věta P se opíše z hlavičky, věta D se z větší části dopočítá
+(`FilingHeaderResolver`): konstanty `dokument` / `k_uladis`, kód formy
+z druhu podání a jeho předchůdce (řádné B, opravné O, dodatečné D,
+opravné dodatečné E; u KH navíc následné N), datum podání, rok a měsíc
+nebo čtvrtletí z rozsahu instance. Rozsah, který nepokrývá celý měsíc ani
+čtvrtletí, se navíc vypíše jako `zdobd_od` / `zdobd_do`.
+
+Kontrolní ani souhrnné hlášení nemá ve větě D **žádné** needvozené pole —
+proto mají tenčí schéma hlavičky než přiznání.
+
+### Kontrolní hlášení: co snapshot nenese
+
+Schéma vyžaduje pár atributů, na které M1 nemá agendu — vypisují se jako
+konstanty z configu (`sections.*.constants`): `kod_rezim_pl` = 0 (zvláštní
+režimy § 89 a § 90), `zdph_44` = N (oprava u nedobytné pohledávky § 46),
+`pomer` = N (poměrný nárok § 75). Až agenda vznikne, nahradí konstantu
+sloupec ve snapshotu.
+
+Sekce **A.1 a B.1 vykazují DUZP**, ostatní DPPD — jméno atributu ve schématu
+(`duzp` vs. `dppd`) je samo tím rozhodnutím a `ControlStatementCalculator`
+je s ním v souladu (hlídá test).
+
+**Věta C** není součet řádků hlášení, ale kontrola proti přiznání: bere
+základy řádků přiznání spočítané nad toutéž dokladovou úrovní, které
+composer ukládá do `result.cs.dp3Base`.
+
+### Soubory a lifecycle
+
+`FilingFilesService` skládá cestu **validace → XML → kontrola proti XSD →
+PDF → přílohy**:
+
+- `FilingXmlValidator` hlásí to, co schéma neumí (obchodní jméno u PO,
+  jména u FO, masky, datum zjištění u forem D/E/N, neúplné řádky hlášení)
+  jako **field-level chyby** na `header.*`, takže je formulář ukáže u pole;
+- `EpoXsdValidator` je poslední pojistka: co neprojde schématem, se neuloží;
+- **XML je povinné, PDF ne** — selhání renderu je warning.
+
+Ve stavu Sestaveno lze generování opakovat (starší sada se nahradí), do
+stavu Podáno se soubory dogenerují automaticky při přechodu. Hlavičku,
+kterou by portál odmítl, ohlásí `FilingDocument::validate()` **už při
+přechodu** — po podání je pozdě, opravit by šlo jen novým podáním.
+
+Soubory podaného tvrzení jsou zamčené (`FilingAttachmentGuard`, registrace
+`attachmentGuards` v module.jsonc); ručně nahrané přílohy — třeba potvrzení
+o přijetí — zůstávají plně v rukou uživatele.
+
+### CLI
+
+```bash
+# soubory jako přílohy podání (totéž co akce „Vytvořit soubory")
+vendor/bin/shpd-ds vat-filing-files --filing=42
+
+# jen do adresáře, bez zápisu do DB (E2E, zlatý test)
+vendor/bin/shpd-ds vat-filing-files --filing=42 --out=/tmp/epo --xml-only
+
+# porovnání s tím, co se doopravdy podalo
+vendor/bin/shpd-ds vat-filing-xml-diff podano.xml /tmp/epo/DPHDP3-…xml
+```
+
+`EpoXmlDiff` porovnává **věty a atributy po normalizaci**: pořadí atributů,
+pořadí řádků v sekci ani zápis čísla (`210` vs. `210.00`) rozdíl nedělají,
+jiná hodnota a chybějící či přebývající řádek ano. Zlatý test
+(`GoldenFilingXmlTest`) na něm staví — porovnává vygenerované soubory
+s podanými, které leží v `tests/Fixtures/vat-xml/689089/`.
 
 ## Architektura
 
@@ -339,7 +440,21 @@ src/
 ├── FilingRounding.php                     # podané hodnoty (čistá třída): řádky na Kč, dopočty, diff
 ├── FilingComposer.php                     # snapshot: items + výstupní řádky + result/messages
 ├── FilingsViewer.php / FilingsForm.php    # viewer Podání DPH (vč. rozdílů) a formulář
-├── VatFilingController.php                # POST /_vat/filing-compose (akce Přepočítat)
+├── VatFilingController.php                # POST /_vat/filing-compose, /_vat/filing-files
+├── FilingHeaderSchema.php                 # výběr schématu hlavičky per typ + předvyplnění
+├── FilingAttachmentGuard.php              # soubory podaného tvrzení jsou zamčené
+├── Xml/                                   # XML pro EPO (Fáze 3) — viz výše
+│   ├── VatXmlMapping.php                  #   resolver mapování per písemnost
+│   ├── FilingXmlInput.php / …Loader.php   #   obsah podání jako hodnota (ze snapshotu)
+│   ├── FilingPeriod.php                   #   měsíc / čtvrtletí / částečné období
+│   ├── FilingHeaderResolver.php           #   věta D a P (odvozená pole)
+│   ├── EpoXmlWriter.php + Dp3/Kh1/Shv     #   generátory per písemnost
+│   ├── EpoXmlFormat.php                   #   datum, čísla, DIČ, zalomení textu
+│   ├── FilingXmlValidator.php             #   co schéma neumí (field-level chyby)
+│   ├── EpoXsdValidator.php                #   validace proti xsd/ v repozitáři
+│   ├── FilingFilesService.php + Factory   #   soubory → přílohy, lifecycle
+│   ├── FilingPdfService.php + templates/  #   opis a obsah přes RenderClient
+│   └── EpoXmlDiff.php                     #   porovnání po větách (zlatý test)
 ├── Checks/DraftReportPeriodsCheck.php     # alert: koncepty instancí
 └── Reports/
     ├── VatReportSupport.php               # sdílené kusy builderů (kompozice)
@@ -355,15 +470,15 @@ v docblocích kalkulátorů a v zadání.
 
 Živé výstupy jsou **reporty** — vždy přepočtené, bez lifecycle. **Podání**
 je doména `filing`: snapshot s lifecyclem, druhy podání a zaokrouhlením
-(Fáze 2, hotová). XML (DPHDP3/DPHKH1/DPHSHV), PDF opis a editace hlavičky
-přijdou ve Fázi 3 nad strukturovanými poli se schématem (#74 — mechanismus
-je hotový, profil podatele viz výše); zámek instance, vynucení proti změnám
-dokladů a zaúčtování přiznání ve Fázi 4.
+(Fáze 2) plus soubory pro daňový portál (Fáze 3, viz níže). Zámek instance,
+vynucení proti změnám dokladů a zaúčtování přiznání jsou Fáze 4.
 
 ## Mimo scope
 
-XML a PDF opis (Fáze 3, po #74), vynucení zámku a zaúčtování přiznání
-(Fáze 4), import starých podání (`old_shipard` task 34), rozdíly mezi
+Odeslání na portál a do datové schránky (podává člověk), vynucení zámku
+a zaúčtování přiznání (Fáze 4), import starých podání (`old_shipard` task 34),
+storno řádky následného souhrnného hlášení (X14), odpověď na výzvu u KH,
+sekce A.3 (investiční zlato), rozdíly mezi
 dvěma libovolnými podáními (jen proti `previous_filing`), oprava dle § 44
 v A4, investiční zlato (A3), ř. 45/47/53/60, OSS a registrace jako
 samostatný parametr reportů (přijde s OSS / více DIČ).

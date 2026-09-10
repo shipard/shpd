@@ -17,20 +17,21 @@ Seznam se mění. Když něco nenajdeš ani tady, ani v dokumentaci, napiš na
 
 ## Výstupy pro daně
 
-**XML pro daňový portál Shipard nevytvoří.** Přiznání k DPH, kontrolní
-i souhrnné hlášení umí spočítat i **podat** — tedy uložit trvalý záznam
-toho, co jsi za období odevzdal, včetně opravného, dodatečného
-a následného podání (viz [Podání DPH](uctarna/dph-podani.md)). Soubor pro
-daňový portál z něj ale zatím nevznikne, stejně jako tiskový opis. Je to
-nejbližší velká věc na plánu.
+**Podání Shipard nikam neodešle.** Soubor pro daňový portál (XML)
+i tiskový opis vyrobí a uloží k podání, ale na portál nebo do datové
+schránky ho odesíláš ty — viz [Podání DPH](uctarna/dph-podani.md).
 
-Praktický důsledek: **Shipard zatím nemůže být jediné místo, kde tvoje
-účetnictví existuje.** Soubor pro portál za tebe musí sestavit tvůj dnešní
-program nebo účetní.
+**Následné souhrnné hlášení Shipard podává celé znovu**, ne přes storno
+řádky. Úřad počítá s oběma způsoby; jestli ti vyhovuje jen ten druhý,
+ozvi se.
 
-Co už připravené je: **podací údaje** (kdo podává, komu a kdo výstup
-sestavil) se vyplňují na registraci k DPH — viz
-[Podání DPH](uctarna/dph-podani.md).
+**Kontrolní hlášení neumí odpověď na výzvu** správce daně (rychlá
+odpověď „nemám povinnost / potvrzuji"), ani sekci A.3 (investiční zlato).
+
+**Zvláštní režimy Shipard nevykazuje.** Cestovní služba (§ 89), použité
+zboží (§ 90), oprava u nedobytné pohledávky (§ 46) a poměrný nárok na
+odpočet (§ 75) se v kontrolním hlášení vyplní jako „běžné plnění" bez
+příznaku. Když je používáš, soubor před odevzdáním zkontroluj.
 
 **Období DPH se nedá uzamknout.** Nic tě dnes nezastaví, když do už
 odevzdaného období dopíšeš doklad — uvidíš to pak jako rozdíl v dalším

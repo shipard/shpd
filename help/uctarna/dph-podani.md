@@ -1,7 +1,7 @@
 ---
 title: Podání DPH
-summary: Jak z živého výpočtu udělat podání — trvalý záznam toho, co jsi za období odevzdal, včetně opravného, dodatečného a následného podání.
-keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál]
+summary: Jak z živého výpočtu udělat podání, vyrobit soubor pro daňový portál a mít trvalý záznam toho, co jsi za období odevzdal.
+keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál, soubor pro EPO, vytvořit soubory, opis přiznání, obsah podání, hlavička podání, elektronické podání]
 related: [uctarna/dph-zive-vystupy.md, co-dnes-nejde.md]
 ---
 
@@ -82,13 +82,47 @@ nevyplňují u každého podání — zadáváš je jednou v **Nastavení → Ú
 - **Podepisující osoba** — jen když podání podepisuje zástupce
   (daňový poradce, zmocněnec); nechej prázdné, když podepisuješ sám.
 
-Vyplnit je můžeš kdykoli — registrace k DPH se uloží i bez nich. Vyplatí
-se to udělat dřív než později: **hodnoty se dají opsat z posledního
-přiznání**, které jsi podal ve svém dnešním programu, a až Shipard začne
-XML vytvářet, půjde podání odevzdat bez dohledávání.
+Vyplnit je můžeš kdykoli — registrace k DPH se uloží i bez nich. Bez nich
+ale **nevznikne soubor pro daňový portál**: Shipard řekne, co konkrétně
+chybí, a ukáže to u příslušného pole. Hodnoty se dají opsat z posledního
+přiznání, které jsi podal ve svém dnešním programu.
 
 Údaje se ukládají k té registraci, ke které patří — firma s víc
 registracemi (víc zemí) má každou zvlášť.
+
+## Soubory pro daňový portál
+
+Z podání Shipard vyrobí **soubor XML pro daňový portál** (EPO) a k němu
+dvě PDF: **opis** (co v podání je, čitelně) a **obsah** (ze kterých
+dokladů se čísla poskládala).
+
+Vzniknou samy, když podání **podáš** — a kdykoli předtím si je můžeš
+vyrobit akcí **Vytvořit soubory** v detailu podání, třeba ke kontrole.
+Najdeš je v záložce **Přílohy** u podání, odkud se stahují.
+
+Než soubor vznikne, Shipard zkontroluje, že v něm bude všechno, co úřad
+vyžaduje. Když něco chybí, **nevytvoří nic** a napíše, které pole
+doplnit — třeba obchodní jméno, finanční úřad nebo kód činnosti. Tatáž
+kontrola běží i při podání, takže se to nedozvíš až u portálu.
+
+Pořadí je tedy: sestavit → zkontrolovat čísla → (Vytvořit soubory) →
+Podat → odevzdat soubor na portálu nebo datovou schránkou. **Samotné
+odeslání dělá člověk** — Shipard soubor nikam neposílá.
+
+### Hlavička podání
+
+Údaje, které jdou do hlavičky souboru, má každé podání vlastní: záložka
+**Hlavička** ve formuláři podání. Předvyplní se z **Podacích údajů**
+registrace a z tvojí firmy, takže obvykle není co upravovat — hodí se to,
+když se pro jedno konkrétní podání něco liší (jiný kód činnosti,
+podepisující osoba, kód zdaňovacího období následujícího roku).
+
+Sada polí odpovídá formuláři: přiznání jich má víc než hlášení. Změny
+platí **jen pro to jedno podání**; trvale se údaje mění na registraci.
+
+Po podání se hlavička, stejně jako celý obsah, už nemění — a soubory
+podaného tvrzení nejde smazat ani přejmenovat. Přílohy k němu **přidat
+můžeš**: potvrzení o přijetí z portálu tam patří.
 
 ## Podané a přesné hodnoty
 
@@ -130,10 +164,11 @@ dodatečné přiznání vychází právě takhle.
   podaného období dopíšeš doklad — uvidíš to pak v Rozdílech dalšího
   podání. Zámek přijde později, viz
   [Co Shipard dnes neumí](../co-dnes-nejde.md).
-- **XML pro daňový portál Shipard zatím nevytvoří.** Podání je dnes
-  evidence: víš, co a kdy jsi podal, ale soubor pro portál sestavuje tvůj
-  dnešní program nebo účetní. Podací údaje (viz výše) se ale vyplňují už
-  teď — až XML přijde, budou připravené.
+- **Soubor Shipard nikam neodešle.** Vyrobí ho a uloží k podání; na
+  daňový portál nebo do datové schránky ho odesíláš ty.
+- **Soubor je snímek okamžiku sestavení.** Když se doklady později změní,
+  vygenerovaný soubor se nemění — proto z podaného tvrzení vyjde vždycky
+  totéž, co odešlo na úřad.
 
 ## Souvisí
 

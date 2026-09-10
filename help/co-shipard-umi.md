@@ -68,7 +68,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | **Kontrolní hlášení — živě** | Report ve skupině **Reporty**: sekce A1–B3 s doklady nad 10 000 Kč jednotlivě a menšími v souhrnu. Chybějící DIČ nebo číslo dokladu dodavatele ohlásí pod tabulkou | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
 | **Souhrnné hlášení — živě** | Report ve skupině **Reporty**: dodání zboží a služeb do EU sečtená po odběratelích s počtem plnění a hodnotou | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
 | **Daňová tvrzení** | Seznam v sekci **Účtárna**: období přiznání, kontrolního a souhrnného hlášení per registrace DPH, s rozsahem dat. Doklady se do nich zařazují při uložení, chybějící tvrzení vznikne jako Koncept | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
-| **Podání DPH** | Seznam v sekci **Účtárna**: trvalý záznam toho, co bylo za období odevzdáno — řádné, opravné, dodatečné i následné podání, podané hodnoty vedle přesných a rozdíly proti předchozímu podání po dokladech. XML pro daňový portál zatím nevytváří | [Podání DPH](uctarna/dph-podani.md) |
+| **Podání DPH** | Seznam v sekci **Účtárna**: trvalý záznam toho, co bylo za období odevzdáno — řádné, opravné, dodatečné i následné podání, podané hodnoty vedle přesných a rozdíly proti předchozímu podání po dokladech. Vyrobí i **soubor pro daňový portál** (XML) a PDF opis; odesíláš ho ty | [Podání DPH](uctarna/dph-podani.md) |
 
 ---
 

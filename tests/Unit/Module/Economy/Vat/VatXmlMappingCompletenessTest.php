@@ -333,6 +333,36 @@ class VatXmlMappingCompletenessTest extends TestCase
         $this->assertGreaterThan(0, $checked);
     }
 
+    /**
+     * Počet desetinných míst musí sedět s `fractionDigits` schématu:
+     * přiznání a souhrnné hlášení v celých Kč, kontrolní na haléře. XSD
+     * to samo nechytí (hodnota v korunách projde i tam, kde jsou povolené
+     * haléře), takže je to na tomhle testu.
+     */
+    public function testValueScaleMatchesTheSchema(): void
+    {
+        $fractionDigits = $this->xsdFractionDigits();
+
+        foreach (self::DOCUMENTS as $document) {
+            $config = $this->xmlConfig()[$document];
+            $this->assertArrayHasKey('valueScale', $config, "{$document}: chybí valueScale");
+
+            foreach ($this->valueAttributes($document) as $attribute) {
+                $this->assertArrayHasKey($attribute, $fractionDigits[$document], "{$document}/{$attribute}");
+                $this->assertSame(
+                    $fractionDigits[$document][$attribute],
+                    (int) $config['valueScale'],
+                    "{$document}: atribut '{$attribute}' má ve schématu jiný počet desetinných míst"
+                    . ' než valueScale configu',
+                );
+            }
+        }
+
+        // Koeficient je procento na dvě místa bez ohledu na měnu.
+        $this->assertSame(2, (int) $this->xmlConfig()['dp3']['percentScale']);
+        $this->assertSame(2, $fractionDigits['dp3']['koef_p20_nov']);
+    }
+
     public function testVetaCReferencesMappedReturnRows(): void
     {
         $config = $this->xmlConfig()['kh1']['vetaC'];
@@ -578,5 +608,65 @@ class VatXmlMappingCompletenessTest extends TestCase
             $files[(string) $entry['id']] = (string) $entry['file'];
         }
         return $files;
+    }
+
+    /**
+     * Peněžní atributy, které config mapuje — bez koeficientů, počtů
+     * a identifikačních údajů.
+     *
+     * @return list<string>
+     */
+    private function valueAttributes(string $document): array
+    {
+        $config = $this->xmlConfig()[$document];
+        $out    = [];
+
+        foreach ($config['rows'] ?? [] as $row) {
+            foreach (['base', 'full', 'reduced'] as $slot) {
+                if (isset($row[$slot])) {
+                    $out[] = (string) $row[$slot];
+                }
+            }
+        }
+        foreach ($config['sections'] ?? [] as $section) {
+            foreach ($section['bands'] ?? [] as $attribute) {
+                $out[] = (string) $attribute;
+            }
+        }
+        foreach (array_keys($config['vetaC']['attributes'] ?? []) as $attribute) {
+            $out[] = (string) $attribute;
+        }
+        if (isset($config['row']['value'])) {
+            $out[] = (string) $config['row']['value'];
+        }
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * `fractionDigits` per atribut ze schématu.
+     *
+     * @return array<string, array<string, int>>
+     */
+    private function xsdFractionDigits(): array
+    {
+        $out = [];
+        foreach (self::DOCUMENTS as $document) {
+            $dom = new \DOMDocument();
+            $dom->load(self::MODULE . '/xsd/' . self::XSD_BY_DOCUMENT[$document]);
+            $xpath = new \DOMXPath($dom);
+            $xpath->registerNamespace('xs', 'http://www.w3.org/2001/XMLSchema');
+
+            $out[$document] = [];
+            foreach ($xpath->query('//xs:attribute[@name]') as $attribute) {
+                if (!$attribute instanceof \DOMElement) {
+                    continue;
+                }
+                $digits = $xpath->query('.//xs:fractionDigits/@value', $attribute);
+                if ($digits->length > 0) {
+                    $out[$document][$attribute->getAttribute('name')] = (int) $digits[0]->value;
+                }
+            }
+        }
+        return $out;
     }
 }

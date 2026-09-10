@@ -508,6 +508,12 @@ Hlavička detailu: partner · od: odesílatel · schránka · doručeno. Fulltex
 prohledává navíc `partner_name` i `full_name` Osoby. Smazaná Osoba řádek
 nefiltruje (LEFT JOIN), t2 padá na `partner_name`.
 
+**Dashboard a MCP:** návrhové karty (`MailSuggestionsSource`) berou
+`headline.partnerName` přednostně z Osoby zprávy (`partner_person`), pak
+z canonicalu, pak ze snapshotu `partner_name`; chybové a „Není faktura"
+karty mají v subtitle „partner · od: odesílatel". MCP `mail_list_pending`
+vrací u položky `partner {name, person}` odděleně od `sender`.
+
 **Dataset** (`MailExporter` / `MailSeeder`): `partnerPerson` je odkaz
 stejného tvaru jako `senderPerson` (jméno + identifikátory, na cílovém DS se
 páruje jen identifikátorem), `partnerName` řetězec. Backfill historických
@@ -557,8 +563,9 @@ sloupec `core_mail_incoming_messages.ai_title` (varchar 200):
   (`header_info`), `FileFromMessageService` (název registry dokumentu ze
   zprávy), `RegistryDocumentsViewer` (Zdrojová zpráva). Technická místa
   (pravidla předzpracování, název souboru renderu těla, payload analyzeru)
-  zůstávají na `subject`. Dashboardové karty (`MailSuggestionsSource`)
-  a MCP `MailListPendingTool` jsou follow-up.
+  zůstávají na `subject`. Dashboardové karty (`MailSuggestionsSource`,
+  pole `emailSubject`) a MCP `mail_list_pending` (`full_name` položky,
+  navíc holé `ai_title`) pravidlo používají také.
 - **Dataset:** `aiTitle` (řetězec) v exporteru / seederu / schématu.
 
 ## Deterministický ISDOC import

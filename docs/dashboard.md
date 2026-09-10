@@ -182,9 +182,11 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 - `confidencePct` — **volitelné**, int 0–100; jen návrhové karty se známou
   jistotou (frontend kreslí donut). `context.confidence` je zdrojově
   specifický — frontend se váže na toto top-level pole.
-- `emailSubject` — **volitelné**, holý předmět zprávy (bez obalu
-  „e-mail „…""); posílají ho všechny tři druhy mail karet. Frontend přidává
-  ikonu obálky a uvozovky.
+- `emailSubject` — **volitelné**, lidský titulek zprávy bez obalu
+  „e-mail „…"": předmět, u generického / prázdného předmětu a ručních
+  zpráv titulek z AI (`ai_title`, pravidlo D3 `IncomingMessageTitle` —
+  tasks/mail-message-title-partner.md); posílají ho všechny tři druhy mail
+  karet. Frontend přidává ikonu obálky a uvozovky.
 - `receivedDateText` — **volitelné**, lokalizované datum doručení zprávy
   (server-formátované, cs `j. n. Y` / en `Y-m-d`); posílají ho všechny tři
   druhy mail karet. Frontend ho zobrazuje za typem dokladu / subtitle
@@ -299,9 +301,11 @@ registry `party.name`). Feed je stropovaný, takže N `json_decode` je
 
 **Strukturovaná pole per druh karty** (viz §4):
 
-- **Návrhová karta (docs target)**: `headline.partnerName` =
-  `counterpartyName()` (bez partnera se `headline` neposílá →
-  title/subtitle fallback), `headline.typeLabel` = `docTypeLabel()`,
+- **Návrhová karta (docs target)**: `headline.partnerName` = Osoba zprávy
+  (`partner_person` — ruční volba / Použít mají přednost) → jinak
+  `counterpartyName()` z canonicalu → jinak snapshot `partner_name` zprávy
+  (bez partnera se `headline` neposílá → title/subtitle fallback),
+  `headline.typeLabel` = `docTypeLabel()`,
   `headline.amountText` = `formatAmount()`; `confidencePct`; `emailSubject`;
   `details` v pořadí číslo dokladu (`docNumber`), splatnost (`dates.dueDate`,
   formát cs `j. n. Y` / en `Y-m-d`, nevalidní datum → řádek vynechat),
@@ -311,7 +315,9 @@ registry `party.name`). Feed je stropovaný, takže N `json_decode` je
   z `registryValidTo()` (bez něj se `details` neposílá).
 - **Chybová karta / „Není faktura"**: bez `headline`/`details`/
   `confidencePct`; `emailSubject` ano. Subtitle nedupluje předmět —
-  chybová karta nese `sender_name`, „Není faktura" jen odesílatele.
+  nese odesílatele (`sender_name`, „Není faktura" s fallbackem na
+  `sender_email`); má-li zpráva partnera (Osoba nebo `partner_name`),
+  subtitle je „partner · od: odesílatel" (D7).
 - **Návrhová karta s neprázdnými `secondary_findings`** běhu navíc nese
   `secondaryFindings` (viz §4) — hint dalších nálezů, D7.
 

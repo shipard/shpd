@@ -1,6 +1,6 @@
 # Task: Došlá pošta — partner dokladu a titulek zprávy z AI analýzy (Issue #43)
 
-**Stav:** hotovo — fáze 1 (partner) i fáze 2 (titulek) 2026-09-10; follow-up (MCP `MailListPendingTool`, dashboardové karty) mimo tento task
+**Stav:** hotovo — fáze 1 (partner), fáze 2 (titulek) i follow-up (MCP `mail_list_pending`, dashboardové karty) 2026-09-10
 
 ## Status / cíl
 
@@ -309,6 +309,22 @@ Viewer / formulář / fulltext
   follow-up dle Scope.
 - Otevřený bod „title u `other`" rozhodnut: ano, stručný popis obsahu —
   prompt to vyžaduje; kvalita se ladí na alfě.
+
+### Follow-up — partner a titulek v MCP a na dashboardu (2026-09-10)
+
+Původně mimo rozsah, dokončeno ve třetím commitu na žádost Anny:
+
+- **`MailSuggestionsSource`** (dashboardové karty): `emailSubject` všech tří
+  druhů mail karet = lidský titulek dle D3 (`IncomingMessageTitle::display`),
+  ne holý předmět; `headline.partnerName` návrhových karet přednostně Osoba
+  zprávy (`partner_person`, JOIN přes korelovaný subselect), pak protistrana
+  z canonicalu, pak snapshot `partner_name`; subtitle chybové a „Není
+  faktura" karty „partner · od: odesílatel", bez partnera jen odesílatel
+  (D7). Frontend beze změny — kontrakt karet se nemění, jen obsah polí.
+- **MCP `mail_list_pending`**: `full_name` položky = titulek dle D3, nové
+  `ai_title` (holé) a `partner {name, person}` odděleně od `sender`;
+  description nástroje rozlišuje partnera dokumentu od odesílatele.
+- Přehled v `docs/dashboard.md` §4 a `ai-analysis.md`.
 
 ## Akceptační kritéria (Hotovo když)
 

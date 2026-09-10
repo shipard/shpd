@@ -126,6 +126,108 @@ final class MailSuggestionsSourceTest extends TestCase
         ];
     }
 
+    // ── Partner a titulek zprávy (tasks/mail-message-title-partner.md follow-up) ──
+
+    public function testEmailSubjectUsesAiTitleForManualMessage(): void
+    {
+        // Ruční nahrání má v předmětu název souboru → emailSubject nese
+        // titulek z AI (D3). Bez configu vzorů se pravidlo uplatní jen u
+        // ručních zpráv a prázdného předmětu.
+        $row = $this->suggestionRow();
+        $row['subject'] = 'faktura_final_v2.pdf';
+        $row['source_type'] = 1;
+        $row['ai_title'] = 'Faktura 2026000123 — ČEZ a.s., 12 500 Kč';
+
+        $cards = (new MailSuggestionsSource())->collectCards($this->context([$row], config: $this->primaryTypesConfig()));
+
+        $this->assertSame('Faktura 2026000123 — ČEZ a.s., 12 500 Kč', $cards[0]['emailSubject']);
+    }
+
+    public function testEmailSubjectKeepsSubjectForEmailWithAiTitle(): void
+    {
+        $row = $this->suggestionRow();
+        $row['source_type'] = 2;
+        $row['ai_title'] = 'Faktura 2026000123 — ČEZ a.s., 12 500 Kč';
+
+        $cards = (new MailSuggestionsSource())->collectCards($this->context([$row], config: $this->primaryTypesConfig()));
+
+        $this->assertSame('Faktura 2026000123', $cards[0]['emailSubject']);
+    }
+
+    public function testHeadlinePartnerPrefersMessagePersonOverCanonical(): void
+    {
+        // Ručně vybraná / Použít nastavená Osoba (D8) má přednost před
+        // jménem z canonicalu.
+        $row = $this->suggestionRow();
+        $row['partner_full_name'] = 'ČEZ, a. s. (Osoba)';
+        $row['partner_name'] = 'ČEZ a.s.';
+
+        $cards = (new MailSuggestionsSource())->collectCards($this->context([$row], config: $this->primaryTypesConfig()));
+
+        $this->assertSame('ČEZ, a. s. (Osoba)', $cards[0]['headline']['partnerName']);
+        $this->assertArrayNotHasKey('subtitle', $cards[0]);
+    }
+
+    public function testHeadlineFallsBackToPartnerNameSnapshotWithoutCanonicalParty(): void
+    {
+        $row = $this->suggestionRow();
+        $row['canonical_json'] = json_encode([
+            'selfParty' => 'customer',
+            'currency'  => 'CZK',
+            'totals'    => ['totalAmount' => 12500.00],
+        ]);
+        $row['partner_name'] = 'Dodavatel s.r.o.';
+
+        $cards = (new MailSuggestionsSource())->collectCards($this->context([$row], config: $this->primaryTypesConfig()));
+
+        $this->assertSame('Dodavatel s.r.o.', $cards[0]['headline']['partnerName']);
+    }
+
+    public function testNotInvoiceSubtitleShowsPartnerAndSender(): void
+    {
+        $row = [
+            'message_ndx'           => 501,
+            'subject'               => 'scan_0007.pdf',
+            'source_type'           => 1,
+            'ai_title'              => 'Dopis od úřadu bez dokladu',
+            'sender_name'           => 'Kancelářský skener',
+            'sender_email'          => 'scanner@example.test',
+            'partner_name'          => 'Úřad práce',
+            'partner_full_name'     => null,
+            'received_at'           => '2026-06-28 10:00:00',
+            'primary_type'          => 'other',
+            'raw_source_attachment' => null,
+        ];
+
+        $cards = (new MailSuggestionsSource())->collectCards($this->context([], notInvoiceRows: [$row]));
+
+        $this->assertCount(1, $cards);
+        $this->assertSame('Úřad práce · od: Kancelářský skener', $cards[0]['subtitle']);
+        $this->assertSame('Dopis od úřadu bez dokladu', $cards[0]['emailSubject']);
+
+        $en = (new MailSuggestionsSource())->collectCards($this->context([], lang: 'en', notInvoiceRows: [$row]));
+        $this->assertSame('Úřad práce · from: Kancelářský skener', $en[0]['subtitle']);
+    }
+
+    public function testErrorCardSubtitlePrefersPersonOverSnapshot(): void
+    {
+        $row = [
+            'message_ndx'           => 777,
+            'subject'               => 'Nečitelná faktura',
+            'sender_name'           => 'Dodavatel s.r.o.',
+            'partner_name'          => 'Dodavatel sro',
+            'partner_full_name'     => 'Dodavatel s.r.o. (Osoba)',
+            'received_at'           => '2026-06-28 10:00:00',
+            'primary_type'          => 'invoiceReceived',
+            'raw_source_attachment' => null,
+        ];
+
+        $cards = (new MailSuggestionsSource())->collectCards($this->context([], [$row]));
+
+        $this->assertSame('Dodavatel s.r.o. (Osoba) · od: Dodavatel s.r.o.', $cards[0]['subtitle']);
+        $this->assertSame('Nečitelná faktura', $cards[0]['emailSubject']);
+    }
+
     // ── Confidence pásma → kind + akce ───────────────────────────────────
 
     public function testReadyBandProducesApplyReviewReject(): void

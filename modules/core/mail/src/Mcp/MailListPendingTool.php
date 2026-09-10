@@ -6,6 +6,7 @@ namespace Shipard\Module\Core\Mail\Mcp;
 use Shipard\Api\Mcp\McpInvocationContext;
 use Shipard\Api\Mcp\McpTool;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Module\Core\Mail\IncomingMessageTitle;
 
 /**
  * Čtecí MCP nástroj: došlá pošta čekající na pozornost (`docState != 40`,
@@ -13,6 +14,12 @@ use Shipard\Core\Document\DocStateConfig;
  * z „current" běhu a flag otevřeného dokumentového návrhu
  * (`canonical_json` bez verdiktu). `only_actionable` zúží na zprávy
  * s otevřeným návrhem.
+ *
+ * `full_name` položky = lidský titulek zprávy (předmět; u generického /
+ * prázdného předmětu a ručních zpráv `ai_title` — pravidlo D3
+ * `IncomingMessageTitle`), `partner` = protistrana dokumentu (Osoba zprávy,
+ * jinak snapshot jména z canonicalu) odděleně od `sender`
+ * (tasks/mail-message-title-partner.md D4/D7).
  */
 final class MailListPendingTool implements McpTool
 {
@@ -32,8 +39,11 @@ final class MailListPendingTool implements McpTool
 	public function description(): string
 	{
 		return 'Vrátí došlou poštu, která ještě čeká na pozornost (není '
-			. 'zpracovaná). U každé zprávy uvádí stav AI analýzy a zda má '
-			. 'otevřený dokumentový návrh čekající na akci (potvrzení/zamítnutí). '
+			. 'zpracovaná). U každé zprávy uvádí titulek (u skenů a nahraných '
+			. 'souborů odvozený z obsahu, ne generický předmět), partnera '
+			. 'dokumentu (dodavatele / protistranu — ne odesílatele e-mailu), '
+			. 'odesílatele, stav AI analýzy a zda má otevřený dokumentový návrh '
+			. 'čekající na akci (potvrzení/zamítnutí). '
 			. '`only_actionable=true` zúží na zprávy s otevřeným návrhem — '
 			. 'typicky to, co má agent vyřešit.';
 	}
@@ -60,8 +70,11 @@ final class MailListPendingTool implements McpTool
 		// otevřený návrh = poslední úspěšný běh s canonical_json bez verdiktu.
 		// only_actionable filtruje nad derived tabulkou, ať LIMIT/OFFSET
 		// (a has_more) sedí.
-		$inner = 'SELECT `m`.`id`, `m`.`subject`, `m`.`sender_name`, `m`.`sender_email`,'
-			. ' `m`.`sender_person`, `m`.`received_at`, `m`.`mailbox`, `mb`.`name` AS `mailbox_name`,'
+		$inner = 'SELECT `m`.`id`, `m`.`subject`, `m`.`ai_title`, `m`.`source_type`,'
+			. ' `m`.`sender_name`, `m`.`sender_email`,'
+			. ' `m`.`sender_person`, `m`.`partner_person`, `m`.`partner_name`,'
+			. ' (SELECT `p`.`full_name` FROM `base_persons_persons` `p` WHERE `p`.`id` = `m`.`partner_person`) AS `partner_full_name`,'
+			. ' `m`.`received_at`, `m`.`mailbox`, `mb`.`name` AS `mailbox_name`,'
 			. ' `m`.`docState`,'
 			. ' (SELECT `a`.`status` FROM `core_mail_message_analyses` `a`'
 			. '    WHERE `a`.`message` = `m`.`id` ORDER BY `a`.`analyzed_at` DESC LIMIT 1) AS `analysis_status_raw`,'
@@ -86,19 +99,37 @@ final class MailListPendingTool implements McpTool
 		}
 
 		$stateCfg = DocStateConfig::fromCfgItem($ctx->config?->cfgItem('core.mail.docStatesIncoming'));
+		$patterns = IncomingMessageTitle::patternsFrom($ctx->config);
 
 		$actionableMsgs = 0;
-		$items = array_map(function (array $r) use ($stateCfg, &$actionableMsgs): array {
+		$items = array_map(function (array $r) use ($stateCfg, $patterns, &$actionableMsgs): array {
 			$docState = (int) ($r['docState'] ?? 0);
 			$hasProposal = (bool) ($r['has_open_proposal'] ?? false);
 			if ($hasProposal) {
 				$actionableMsgs++;
 			}
 
+			$partnerName = trim((string) ($r['partner_full_name'] ?? ''));
+			if ($partnerName === '') {
+				$partnerName = trim((string) ($r['partner_name'] ?? ''));
+			}
+
 			return [
 				'ref'               => ['type' => 'mail_message', 'id' => (int) $r['id']],
-				'full_name'         => (string) ($r['subject'] ?? ''),
+				'full_name'         => IncomingMessageTitle::display(
+					(string) ($r['subject'] ?? ''),
+					isset($r['ai_title']) ? (string) $r['ai_title'] : null,
+					(int) ($r['source_type'] ?? 0),
+					$patterns,
+				),
 				'subject'           => $r['subject'] ?: null,
+				'ai_title'          => !empty($r['ai_title']) ? (string) $r['ai_title'] : null,
+				'partner'           => $partnerName !== '' || !empty($r['partner_person'])
+					? [
+						'name'   => $partnerName !== '' ? $partnerName : null,
+						'person' => !empty($r['partner_person']) ? ['id' => (int) $r['partner_person']] : null,
+					]
+					: null,
 				'sender'            => [
 					'name'   => $r['sender_name'] ?: null,
 					'email'  => $r['sender_email'] ?: null,

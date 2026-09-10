@@ -8,6 +8,7 @@ use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
 use Shipard\Module\Core\Mail\AnalysisConfidenceResolver;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
+use Shipard\Module\Core\Mail\IncomingMessageTitle;
 use Shipard\Module\Core\Mail\PrimaryTypes;
 
 /**
@@ -38,8 +39,14 @@ use Shipard\Module\Core\Mail\PrimaryTypes;
  * (int 0–100) a `details` ({label, value} — číslo dokladu / splatnost /
  * variabilní symbol; u registry „Platí do"); `subtitle` se u nich neposílá.
  * Bez partnera karta padá na složený `title`/`subtitle` fallback.
- * Všechny tři druhy mail karet nesou `emailSubject` (holý předmět zprávy)
- * a volitelné `receivedDateText`. Neprázdné `secondary_findings` běhu →
+ * `headline.partnerName` preferuje partnera zprávy jako Osobu
+ * (`partner_person` — ruční volba / Použít mají přednost, D8), pak
+ * protistranu z canonicalu, pak snapshot `partner_name`.
+ * Všechny tři druhy mail karet nesou `emailSubject` — lidský titulek zprávy
+ * (předmět; u generického / prázdného předmětu a ručních zpráv `ai_title`,
+ * pravidlo D3 `IncomingMessageTitle`) — a volitelné `receivedDateText`.
+ * Subtitle chybové a „Není faktura" karty: partner zprávy · od: odesílatel,
+ * bez partnera jen odesílatel (D7). Neprázdné `secondary_findings` běhu →
  * pole `secondaryFindings` ({type, type_label, note}) — hint na kartě (D7).
  * Data jdou z `canonical_json` (kanonický doklad) — feed je stropovaný
  * (maxCards), takže N `json_decode` je únosné.
@@ -73,6 +80,14 @@ final class MailSuggestionsSource implements FeedSource
     private const MAX_CARD_ATTACHMENTS = 3;
 
     private const PRIMARY_TYPES_CFG_ITEM = 'core.mail.primaryTypes';
+
+    /**
+     * Jméno Osoby partnera zprávy jako korelovaný subselect (ne JOIN —
+     * smazaná Osoba řádek nefiltruje a tvar dotazů zůstává rozlišitelný
+     * podle klíčových slov). Vyžaduje alias `m` na messages.
+     */
+    private const PARTNER_FULL_NAME_SQL = ' (SELECT `p`.`full_name` FROM `base_persons_persons` `p`'
+        . ' WHERE `p`.`id` = `m`.`partner_person`) AS `partner_full_name`';
 
     private const DOC_KINDS_CFG_ITEM = 'base.registry.docKinds';
 
@@ -142,7 +157,8 @@ final class MailSuggestionsSource implements FeedSource
     private function fetchSuggestionRows(FeedContext $ctx): array
     {
         return $ctx->db->fetchAll(
-            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`sender_name`,'
+            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`ai_title`, `m`.`source_type`,'
+            . ' `m`.`sender_name`, `m`.`partner_name`,' . self::PARTNER_FULL_NAME_SQL . ','
             . ' `m`.`received_at`, `m`.`raw_source_attachment`,'
             . ' `a`.`id` AS `analysis_ndx`, `a`.`proposed_type`, `a`.`canonical_json`,'
             . ' `a`.`analysis_json`, `a`.`confidence`, `a`.`profile`'
@@ -176,7 +192,7 @@ final class MailSuggestionsSource implements FeedSource
         $analysisNdx = (int) $row['analysis_ndx'];
         $confidence  = isset($row['confidence']) ? (float) $row['confidence'] : null;
         $docType     = (string) ($row['proposed_type'] ?? '');
-        $subject     = trim((string) ($row['subject'] ?? ''));
+        $subject     = $this->messageTitle($ctx, $row);
 
         // Target typu řídí prezentaci karty (titulek/podtitulek) — action
         // kinds i endpointy jsou pro oba targety shodné.
@@ -227,10 +243,12 @@ final class MailSuggestionsSource implements FeedSource
 
         // Strukturovaná hlavička jen když známe partnera — bez něj karta
         // padá na složený title/subtitle fallback (bez headline se subtitle
-        // posílá dál, u headline karet už ne — data jsou v ní).
-        $partnerName = $isRegistry
-            ? $this->registryPartyName($canonical)
-            : $this->counterpartyName($canonical);
+        // posílá dál, u headline karet už ne — data jsou v ní). Priorita:
+        // Osoba zprávy (ruční volba / Použít, D8) > protistrana canonicalu
+        // > snapshot partner_name zprávy.
+        $partnerName = $this->messagePersonName($row)
+            ?? ($isRegistry ? $this->registryPartyName($canonical) : $this->counterpartyName($canonical))
+            ?? $this->messagePartnerSnapshot($row);
         if ($partnerName !== null) {
             $headline = [
                 'partnerName' => $partnerName,
@@ -296,7 +314,7 @@ final class MailSuggestionsSource implements FeedSource
     private function buildInvalidOutputCard(FeedContext $ctx, array $row): array
     {
         $messageNdx = (int) $row['message_ndx'];
-        $subject    = trim((string) ($row['subject'] ?? ''));
+        $subject    = $this->messageTitle($ctx, $row);
         $card = [
             'id'         => 'mail_invalid:' . $messageNdx,
             'source'     => 'mail',
@@ -306,7 +324,7 @@ final class MailSuggestionsSource implements FeedSource
             'category'   => FeedSource::CATEGORY_OTHER,
             'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
-            'subtitle'   => trim((string) ($row['sender_name'] ?? '')),
+            'subtitle'   => $this->senderSubtitle($ctx, $row, trim((string) ($row['sender_name'] ?? ''))),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => ['messageNdx' => $messageNdx],
             'actions'    => [
@@ -333,11 +351,12 @@ final class MailSuggestionsSource implements FeedSource
     private function fetchErrorRows(FeedContext $ctx): array
     {
         return $ctx->db->fetchAll(
-            'SELECT `id` AS `message_ndx`, `subject`, `sender_name`, `received_at`, `primary_type`,'
-            . ' `raw_source_attachment`'
-            . ' FROM `' . self::MESSAGES_TABLE . '`'
-            . ' WHERE `analysis_state` = %i AND `docState` NOT IN %in'
-            . ' ORDER BY `received_at` DESC, `id` DESC'
+            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`ai_title`, `m`.`source_type`,'
+            . ' `m`.`sender_name`, `m`.`partner_name`,' . self::PARTNER_FULL_NAME_SQL . ','
+            . ' `m`.`received_at`, `m`.`primary_type`, `m`.`raw_source_attachment`'
+            . ' FROM `' . self::MESSAGES_TABLE . '` `m`'
+            . ' WHERE `m`.`analysis_state` = %i AND `m`.`docState` NOT IN %in'
+            . ' ORDER BY `m`.`received_at` DESC, `m`.`id` DESC'
             . ' LIMIT %i',
             IncomingMessageDocument::ANALYSIS_FAILED,
             [IncomingMessageDocument::DOC_STATE_ARCHIVED, IncomingMessageDocument::DOC_STATE_TRASH],
@@ -355,7 +374,7 @@ final class MailSuggestionsSource implements FeedSource
     private function buildErrorCard(FeedContext $ctx, array $row): array
     {
         $messageNdx = (int) $row['message_ndx'];
-        $subject    = trim((string) ($row['subject'] ?? ''));
+        $subject    = $this->messageTitle($ctx, $row);
         $isOther    = (string) ($row['primary_type'] ?? '') === 'other';
         $card = [
             'id'         => 'mail_message:' . $messageNdx,
@@ -366,7 +385,7 @@ final class MailSuggestionsSource implements FeedSource
             'category'   => FeedSource::CATEGORY_OTHER,
             'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
-            'subtitle'   => trim((string) ($row['sender_name'] ?? '')),
+            'subtitle'   => $this->senderSubtitle($ctx, $row, trim((string) ($row['sender_name'] ?? ''))),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => ['messageNdx' => $messageNdx],
             'actions'    => [
@@ -393,7 +412,8 @@ final class MailSuggestionsSource implements FeedSource
     private function fetchNotInvoiceRows(FeedContext $ctx): array
     {
         return $ctx->db->fetchAll(
-            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`sender_name`,'
+            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`ai_title`, `m`.`source_type`,'
+            . ' `m`.`sender_name`, `m`.`partner_name`,' . self::PARTNER_FULL_NAME_SQL . ','
             . ' `m`.`sender_email`, `m`.`received_at`, `m`.`primary_type`, `m`.`raw_source_attachment`'
             . ' FROM `' . self::MESSAGES_TABLE . '` `m`'
             . ' WHERE `m`.`analysis_state` = %i'
@@ -425,7 +445,7 @@ final class MailSuggestionsSource implements FeedSource
         $messageNdx = (int) $row['message_ndx'];
         $target = ['messageNdx' => $messageNdx];
 
-        $subject = trim((string) ($row['subject'] ?? ''));
+        $subject = $this->messageTitle($ctx, $row);
         $sender = trim((string) ($row['sender_name'] ?? '')) !== ''
             ? trim((string) $row['sender_name'])
             : trim((string) ($row['sender_email'] ?? ''));
@@ -440,7 +460,7 @@ final class MailSuggestionsSource implements FeedSource
             'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
                 . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
-            'subtitle'   => $sender,
+            'subtitle'   => $this->senderSubtitle($ctx, $row, $sender),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => ['messageNdx' => $messageNdx],
             'actions'    => [
@@ -795,6 +815,66 @@ final class MailSuggestionsSource implements FeedSource
             return $cfg[$docType]['name'];
         }
         return $docType;
+    }
+
+    /**
+     * Lidský titulek zprávy pro `emailSubject` — předmět, u generického /
+     * prázdného předmětu a ručních zpráv `ai_title` (pravidlo D3,
+     * tasks/mail-message-title-partner.md). Prázdný řetězec = bez titulku.
+     *
+     * @param array<string,mixed> $row
+     */
+    private function messageTitle(FeedContext $ctx, array $row): string
+    {
+        return IncomingMessageTitle::display(
+            (string) ($row['subject'] ?? ''),
+            isset($row['ai_title']) ? (string) $row['ai_title'] : null,
+            (int) ($row['source_type'] ?? 0),
+            IncomingMessageTitle::patternsFrom($ctx->config),
+        );
+    }
+
+    /**
+     * Jméno Osoby partnera zprávy (`partner_person` → `partner_full_name`
+     * ze subselectu); null bez Osoby. Má přednost před canonicalem — ruční
+     * volba i Použít jsou autoritativní (D8).
+     *
+     * @param array<string,mixed> $row
+     */
+    private function messagePersonName(array $row): ?string
+    {
+        $name = trim((string) ($row['partner_full_name'] ?? ''));
+        return $name !== '' ? $name : null;
+    }
+
+    /**
+     * Snapshot jména protistrany na zprávě (`partner_name`); null bez něj.
+     *
+     * @param array<string,mixed> $row
+     */
+    private function messagePartnerSnapshot(array $row): ?string
+    {
+        $name = trim((string) ($row['partner_name'] ?? ''));
+        return $name !== '' ? $name : null;
+    }
+
+    /**
+     * Subtitle chybové / „Není faktura" karty: „partner · od: odesílatel"
+     * když zpráva partnera má (Osoba, jinak snapshot), jinak jen odesílatel
+     * (D7 — zrcadlí t2/t3 vieweru).
+     *
+     * @param array<string,mixed> $row
+     */
+    private function senderSubtitle(FeedContext $ctx, array $row, string $sender): string
+    {
+        $partner = $this->messagePersonName($row) ?? $this->messagePartnerSnapshot($row);
+        if ($partner === null) {
+            return $sender;
+        }
+        if ($sender === '') {
+            return $partner;
+        }
+        return $partner . ' · ' . ($ctx->language === 'cs' ? 'od: ' : 'from: ') . $sender;
     }
 
     /**

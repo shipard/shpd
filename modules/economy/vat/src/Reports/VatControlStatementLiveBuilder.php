@@ -24,7 +24,11 @@ use Shipard\Module\Economy\Vat\ControlStatementCalculator;
 final class VatControlStatementLiveBuilder implements ReportBuilder
 {
     /** Pořadí a titulky sekcí. */
-    private const SECTION_TITLES = [
+    /**
+     * Názvy sekcí hlášení — sdílené s tiskovým opisem podání (#55 X7),
+     * ať se v UI a v PDF jmenují stejně.
+     */
+    public const SECTION_TITLES = [
         'A1' => [
             'cs' => 'A1 — Uskutečněná plnění v režimu přenesení daňové povinnosti',
             'en' => 'A1 — Supplies under the domestic reverse charge (supplier)',

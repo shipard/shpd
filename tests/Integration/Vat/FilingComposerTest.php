@@ -25,6 +25,13 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  */
 class FilingComposerTest extends IntegrationTestCase
 {
+    /** Minimum podacích údajů, bez kterých by podání neprošlo validací. */
+    private const BASE_PROFILE = [
+        'typ_ds' => 'P',
+        'c_ufo'  => '464',
+        'c_okec' => '620200',
+    ];
+
     /** Izolovaný rozsah — instance tvrzení tam běžný provoz negeneruje. */
     private const DATE_BEGIN = '2029-01-01';
     private const DATE_END   = '2029-01-31';
@@ -74,6 +81,11 @@ class FilingComposerTest extends IntegrationTestCase
         if ($collision > 0) {
             $this->markTestSkipped('DS už má instanci tvrzení v testovacím rozsahu 01/2029');
         }
+
+        // Podat lze jen podání, ze kterého jde vyrobit soubor pro portál
+        // (#55 X5) — testy, které podávají kvůli navázání dodatečného,
+        // potřebují registraci s vyplněnými podacími údaji.
+        $this->setRegistrationProfile(self::BASE_PROFILE);
     }
 
     protected function onTearDown(): void

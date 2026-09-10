@@ -12,7 +12,10 @@ use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Economy\Vat\FilingAttachmentGuard;
 use Shipard\Module\Economy\Vat\FilingDocument;
+use Shipard\Core\Config\ServerConfig;
+use Shipard\Core\Render\RenderClient;
 use Shipard\Module\Economy\Vat\Xml\FilingFilesService;
+use Shipard\Module\Economy\Vat\Xml\FilingPdfService;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
 /**
@@ -201,6 +204,54 @@ class FilingFilesServiceTest extends IntegrationTestCase
         $this->assertCount(1, $this->service()->ownAttachments($filingId));
     }
 
+    // ── Tiskové výstupy (#55 X7) ────────────────────────────────────────────
+
+    public function testPreviewAndContentPdfsAreGeneratedAndStored(): void
+    {
+        $render = $this->renderClient();
+        if (!$render->isConfigured() || !$render->health()) {
+            $this->markTestSkipped('Render služba není dostupná (docs/operations/render-service.md)');
+        }
+
+        $filingId = $this->composedFiling();
+        $service  = new FilingFilesService(
+            $this->db->getDibiConnection(),
+            $this->config,
+            $this->attachments(),
+            new FilingPdfService($this->db->getDibiConnection(), $render, $this->config),
+        );
+        $result = $service->generate($filingId);
+
+        $this->assertSame([], $result->warnings);
+        $this->assertSame(
+            [FilingFilesService::KIND_XML, FilingFilesService::KIND_PREVIEW, FilingFilesService::KIND_CONTENT],
+            array_map(static fn ($file): string => $file->kind, $result->files),
+        );
+        foreach (array_slice($result->files, 1) as $pdf) {
+            $this->assertStringEndsWith('.pdf', $pdf->name);
+            $this->assertStringStartsWith('%PDF-', $pdf->content);
+            $this->assertGreaterThan(1000, strlen($pdf->content));
+        }
+        $this->assertCount(3, $this->service()->ownAttachments($filingId));
+    }
+
+    /** Nedostupná tisková služba podání neshodí — XML je povinné, PDF ne. */
+    public function testUnavailableRenderServiceOnlyWarns(): void
+    {
+        $filingId = $this->composedFiling();
+        $service  = new FilingFilesService(
+            $this->db->getDibiConnection(),
+            $this->config,
+            $this->attachments(),
+            new FilingPdfService($this->db->getDibiConnection(), new RenderClient(null), $this->config),
+        );
+        $result = $service->generate($filingId);
+
+        $this->assertCount(1, $result->files);
+        $this->assertNotSame([], $result->warnings);
+        $this->assertTrue($this->service()->hasXml($filingId));
+    }
+
     // ── Determinismus ───────────────────────────────────────────────────────
 
     public function testRepeatedBuildIsByteIdentical(): void
@@ -223,6 +274,17 @@ class FilingFilesServiceTest extends IntegrationTestCase
             $this->config,
             $this->attachments(),
         );
+    }
+
+    private function renderClient(): RenderClient
+    {
+        try {
+            $serverConfig = new ServerConfig();
+            $serverConfig->load();
+            return RenderClient::fromServerConfig($serverConfig);
+        } catch (\Throwable) {
+            return new RenderClient(null);
+        }
     }
 
     private function attachments(): AttachmentService

@@ -86,7 +86,7 @@ final class FilingFilesService
         $warnings = [];
 
         if (!$xmlOnly && $this->pdf !== null) {
-            foreach ($this->pdf->render($input, $baseName) as $file) {
+            foreach ($this->pdf->render($filingId, $input, $baseName) as $file) {
                 $files[] = $file;
             }
             $warnings = $this->pdf->warnings();

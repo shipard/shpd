@@ -1,6 +1,6 @@
 # Task: Podání DPH — snapshot tvrzení, druhy podání, lifecycle (M1 Fáze 2) — #55 D14–D22
 
-**Stav:** částečně — implementace kompletní (5 commitů 2026-09-08: config druhů a zaokrouhlení, tabulky + FilingDocument + guardy instance, FilingRounding + FilingComposer + CLI, viewer Podání DPH s rozdíly + formulář + akce + hlavička reportů, dokumentace). E2E na 4l3j prošlo (CLI sestavení, podání, dodatečné s ř. 66, rozdíly po dokladech, guardy instance, immutabilita). Zbývá ruční proklik UI a ověření podaných ř. 64 na btpg-p po reimportu zdroje.
+**Stav:** hotovo (2026-09-10) — všechna kritéria splněna po #75 a reimportu; zlatý test DP3 01–04/2026 přesně
 **Issue:** #55 — komentář „Fáze 2 — Podání: rozhodnutí D14–D22 (2026-09-08)"
 **Návaznost:** staví na `economy.vat` Fáze 1 (živé reporty, kalkulátory,
 `VatDocumentSelection`) a instancích tvrzení (`economy_vat_report_periods`,
@@ -244,7 +244,7 @@ ne editace rozsahu).
 - [x] `ds-upgrade` na dev DS 4l3j projde (5 tabulek); viewer Podání DPH,
       formulář, akce Sestavit podání / Přepočítat a přechod Podat ověřeny
       přes HTTP.
-- [ ] Dev DS `btpg-p` (zdroj 689089): řádné podání DP3 za instance 01–04/2026 dává
+- [x] Dev DS `btpg-p` (zdroj 689089): řádné podání DP3 za instance 01–04/2026 dává
       **podané** ř. 64 = 260 864 / 135 796 / 120 203 / 143 583 Kč — přesně hodnoty
       z podaných XML (živý report dává 260 865,94 / 135 796,54 / 120 202,50 / 143 584,20).
       **Čeká na reimport zdroje** (ops).

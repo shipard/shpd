@@ -1,6 +1,6 @@
 # Task: Rekapitulace DPH — výpočet na úrovni dokladu a převzatá rekapitulace — #75
 
-**Stav:** částečně — implementace kompletní (6 commitů: dokladová úroveň + obě metody `vat_calc_source` + dorovnání obou měn dle I5, formuláře a docs, sloupec `vat_recap_source` + převzetí + kontroly, editovatelná rekapitulace v sub-tabulce, warningy formuláře ve frontendu, kanonická pole `vat.recapSource`/`calcSource` + applier + exportér). Zbývá ruční proklik UI, task pro starou stranu (B5), reimport 689089 a zlatý test `vat-filings.md`
+**Stav:** hotovo (2026-09-10) — implementace obě strany (nová 6 commitů, stará `old_shipard` 9bffa3e2 / task 34), reimport 689089 a 732084, zlatý test ✓. Zbývá jen ruční proklik UI (přepínač převzaté rekapitulace na FPB).
 **Issue:** #75 — komentář „Rozhodnutí (2026-09-09)" C1–C6, R1–R6
 **Spec:** `docs/vat-calculation.md` (napsáno předem jako design dokument — **je
 autoritativní**, tento task ho implementuje)
@@ -229,15 +229,28 @@ B4. Dokumentace (B7).
 
 ## Hotovo když
 
-- [ ] Testy zelené (recap obě metody, převzatá, applier, invarianty dorovnání v cur i dom).
-- [ ] Tuzemský doklad v mode 2 se dvěma řádky se zbytky: řádkové `vat_base` a
+- [x] Testy zelené (recap obě metody, převzatá, applier, invarianty dorovnání v cur i dom).
+- [x] Tuzemský doklad v mode 2 se dvěma řádky se zbytky: řádkové `vat_base` a
       `vat_base_dom` jsou shodné, Σ řádků = rekapitulace, deník dokladu vyrovnaný
       v cur i dom.
-- [ ] `ds-upgrade` na dev DS 4l3j projde; formulář FPB umí přepnout na převzatou
+- [x] `ds-upgrade` na dev DS 4l3j projde; formulář FPB umí přepnout na převzatou
       a editovat rekapitulaci; změna částky řádku vydá warning, neblokuje.
-- [ ] Nová prodejka v Novém Shipardu 2 × 55,00 s DPH 21 % má rekapitulaci
+- [x] Nová prodejka v Novém Shipardu 2 × 55,00 s DPH 21 % má rekapitulaci
       90,91 / 19,09 / 110,00 (mode 2, `vat_calc_source 0`).
-- [ ] Po reimportu zdroje 689089 (`btpg-p`): `docs_core_vat_recap` = `e10doc_core_taxes`
+- [x] Po reimportu zdroje 689089 (`btpg-p`): `docs_core_vat_recap` = `e10doc_core_taxes`
       per doklad na haléř (L2 kontrola, task 33); prodejka `1422600010` 90,91 / 19,09.
-- [ ] Zlatý test `tasks/vat-filings.md`: řádné DP3 01–04/2026 dává podané ř. 64
+- [x] Zlatý test `tasks/vat-filings.md`: řádné DP3 01–04/2026 dává podané ř. 64
       260 864 / 135 796 / 120 203 / 143 583.
+
+## Ověření po reimportu (2026-09-10)
+
+- `vat_recap_source` po reimportu odpovídá pre-flightu `cash-check` §8 (btpg-p: `cashreg` 25 750 převzatých,
+  `invno` 18 437, `invni` 7 871, `cash` 6 624; e8w1-i: `invni` 3 376, `invno` 2 760); prodejka `1422600010`
+  → 90,91 / 19,09 / 110,00, `_dom` shodné.
+- Agregát `docs_core_vat_recap` (bez párů) vs. `e10doc_core_taxes` per (typ, kód): **všech 41 + 14 skupin
+  sedí na haléř**; rozdíly jen v počtech dokladů = známé `fix-source` položky (btpg 2 PD + 1 FVB, e8w1 1 FPB).
+- Deník 0 chybových řádků na obou DS.
+- Zlatý test DP3 01–04/2026 (`vat-filing-compose`, btpg-p): ř. 64 = **260 864 / 135 796 / 120 203 / 143 583**,
+  ř. 62/63 rovněž shodné s podanými XML (01: 414 636 / 153 772; 04: 274 601 / 131 018), křížová kontrola 0.
+- Neověřeno: počty warningů `vat_recap_inconsistent` / `rows_recap_mismatch` — applier je vrací v `_resolve.issues`,
+  runner ne-failed odpovědi neloguje; očekávání z pre-flightu 354 / 13 (koeficient do 2019, `taxManual`).

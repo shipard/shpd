@@ -68,6 +68,24 @@ abstract class TableForm
     }
 
     /**
+     * Schéma strukturovaného pole (#74) pro **editaci** tímto formulářem —
+     * zrcadlo `Document::structuredSchemaFor()`. `null` = statický atribut
+     * `schema` z definice sloupce, což platí pro všechny dnešní konzumenty.
+     *
+     * Kdo override potřebuje (schéma podle typu záznamu — hlavička podání
+     * DPH ve Fázi 3 #55), musí ho držet **v souladu s dokumentovým hookem**:
+     * formulář podle něj vykreslí pole a `TableGateway` podle dokumentového
+     * hooku validuje a ukládá. Nejjednodušší je delegovat obojí na jednu
+     * statickou metodu domény.
+     *
+     * @param array<string, mixed> $data data záznamu (s plochými virtuálními sloupci)
+     */
+    public function structuredSchemaFor(string $column, array $data): ?string
+    {
+        return null;
+    }
+
+    /**
      * Volitelná strukturovaná hlavička formuláře pro existující záznam.
      *
      * Default: žádná hlavička (modal zobrazí jen `title` z FormDefinition).

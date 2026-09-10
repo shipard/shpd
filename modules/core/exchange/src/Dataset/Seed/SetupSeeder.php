@@ -65,7 +65,7 @@ final class SetupSeeder implements SectionSeeder
             }
             $gateway = new TableGateway(
                 $spec['table'], $ctx->db, $ctx->registry, $def->childTables, $ctx->config, $ctx->dsConfig,
-                docStates: $def->docStates,
+                docStates: $def->docStates, tableDef: $def,
             );
 
             // Jednotka počítání = soubor (tabulka), stejně jako v dumpu;

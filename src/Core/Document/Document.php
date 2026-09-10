@@ -73,6 +73,28 @@ abstract class Document
     }
 
     /**
+     * Schéma strukturovaného pole (#74) pro **zápis a editaci** tohoto
+     * záznamu — hook I2. `null` = použij statický atribut `schema` z definice
+     * sloupce (to je případ všech dnešních konzumentů, např. profil podatele).
+     *
+     * Override má smysl tam, kde se schéma vybírá podle záznamu: hlavička
+     * podání DPH nese jinou sadu polí pro přiznání, kontrolní a souhrnné
+     * hlášení, a jednou uložený snapshot si musí verzi **připnout**, aby
+     * zůstal doslovně interpretovatelný (`$data['_schema']` hodnoty, ne
+     * aktuální soubor). Čtení a zobrazení jde vždycky podle `_schema`
+     * v datech, hook do něj nemluví — viz `StructuredFieldResolver`.
+     *
+     * Vrací cfgItem klíč se schématem (bez verze).
+     *
+     * @param array<string, mixed> $data zapisovaná data (už s dekódovanými
+     *        strukturovanými sloupci, virtuální sloupce z formuláře jsou slité)
+     */
+    public function structuredSchemaFor(string $column, array $data): ?string
+    {
+        return null;
+    }
+
+    /**
      * Per-dokumentové filtrování nabídky stavových přechodů pro UI
      * (doc-state-options, form load/recalculate). Vrací podmnožinu
      * $transitions; slouží jen ke skrytí slepých cest v nabídce —

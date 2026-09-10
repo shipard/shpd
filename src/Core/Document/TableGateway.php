@@ -7,14 +7,36 @@ namespace Shipard\Core\Document;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Settings\SettingsStore;
+use Shipard\Core\StructuredFields\StructuredFieldResolver;
+use Shipard\Core\StructuredFields\StructuredFieldValidator;
+use Shipard\Core\StructuredFields\StructuredFieldValues;
+use Shipard\Core\StructuredFields\StructuredSchema;
 
 class TableGateway
 {
     /** Lazy, sdílený všemi dokumenty gatewaye — viz injectDocServices(). */
     private ?SettingsStore $settings = null;
 
+    /**
+     * Schémata strukturovaných sloupců rozhodnutá v tomto save (sloupec =>
+     * schéma). Krok před `beforeSave` je naplní, serializace po hooku z nich
+     * bere `_schema` — aby se schéma nerozhodovalo dvakrát a jinak.
+     *
+     * @var array<string, StructuredSchema>
+     */
+    private array $structuredSchemas = [];
+
+    /**
+     * `$tableDef` je volitelná jen kvůli zpětné kompatibilitě volajících,
+     * kteří definici po ruce nemají. **Tabulka se strukturovaným sloupcem
+     * (#74) ji vyžaduje** — bez ní gateway neví, které sloupce mají schéma.
+     * Chybějící definice ale nezpůsobí tiché uložení bez validace: virtuální
+     * sloupec `<sloupec>.<pole>` skončí jako neznámý SQL sloupec a pole
+     * v hodnotě rozbije dibi insert, takže zápis selže hlasitě.
+     */
     public function __construct(
         private string $tableId,
         private \Dibi\Connection $db,
@@ -24,6 +46,7 @@ class TableGateway
         private ?DataSourceConfig $dsConfig = null,
         private ?DocumentEventDispatcher $eventDispatcher = null,
         private ?DocStatesDefinition $docStates = null,
+        private ?TableDefinition $tableDef = null,
     ) {}
 
     private function injectDocServices(Document $doc): void
@@ -97,12 +120,40 @@ class TableGateway
             }
         }
 
+        // Strukturovaná pole (#74, I3): unflatten virtuálních sloupců →
+        // validace → normalizovaná hodnota jako POLE v $data. Běží před
+        // Document::validate, aby dokument viděl dekódovanou hodnotu a mohl
+        // nad ní validovat dál; serializace do JSONu je až po beforeSave.
+        //
+        // Nedostupné schéma je konfigurační chyba (nezkompilovaná konfigurace,
+        // neaktivní modul) — zápis se nekoná, protože bez schématu nejde
+        // hodnotu zvalidovat.
+        try {
+            $structuredErrors = $this->applyStructuredFields($doc, $data, $originalData);
+        } catch (\RuntimeException $e) {
+            ErrorLogger::logException($e, 'TableGateway::saveDocument structured fields for table ' . $this->tableId);
+            return DocumentResult::error($e->getMessage());
+        }
+
         $validation = $doc->validate($data);
+        foreach ($structuredErrors as $error) {
+            $validation->addError($error->column, $error->message, $error->code);
+        }
         if (!$validation->isValid()) {
             return DocumentResult::validationFailed($validation);
         }
 
         $doc->beforeSave($data, $originalData);
+
+        // Hook dostal pole, DB chce string — a `_schema` stampuje jedině
+        // gateway, nikdy klient. Nedekódovatelná hodnota v tuhle chvíli může
+        // vzniknout jen v beforeSave, tedy chybou v kódu dokumentu.
+        try {
+            $this->serializeStructuredFields($data);
+        } catch (\InvalidArgumentException $e) {
+            ErrorLogger::logException($e, 'TableGateway::saveDocument structured fields for table ' . $this->tableId);
+            return DocumentResult::error($e->getMessage());
+        }
 
         // Odvození docStateMain z cfgItemu — jediné místo pravdy pro všechny
         // zápisové cesty přes Document/Gateway (import Applier i FormController).
@@ -232,6 +283,123 @@ class TableGateway
 
         $doc->afterDelete($data);
         return DocumentResult::ok($data);
+    }
+
+    // ── Strukturovaná pole (#74) ─────────────────────────────────────────────
+
+    /**
+     * Krok „structured fields" před `Document::validate`/`beforeSave` (I3):
+     * pro každý sloupec se `schema`, kterého se zápis dotýká, složí hodnotu
+     * z virtuálních sloupců nad uloženým základem, zvaliduje ji a nechá
+     * v `$data` jako **pole**. Virtuální sloupce z `$data` zmizí, aby se
+     * nedostaly do SQL.
+     *
+     * Sloupec, kterého se zápis nedotýká (není v payloadu ani jako
+     * `<sloupec>`, ani jako `<sloupec>.<pole>`), zůstává na disku nedotčený —
+     * stejná zásada jako u child setů.
+     *
+     * @param array<string, mixed>      $data
+     * @param array<string, mixed>|null $originalData
+     * @return list<ValidationError>
+     */
+    private function applyStructuredFields(Document $doc, array &$data, ?array $originalData): array
+    {
+        $this->structuredSchemas = [];
+        $structuredColumns = $this->tableDef?->getStructuredColumns() ?? [];
+        if ($structuredColumns === []) {
+            return [];
+        }
+
+        $resolver = new StructuredFieldResolver($this->config);
+        $errors = [];
+
+        foreach ($structuredColumns as $column => $staticKey) {
+            $hasColumn = array_key_exists($column, $data);
+            if (!$hasColumn && !$this->hasVirtualKeys($column, $data)) {
+                continue;
+            }
+
+            $schema = $resolver->requireForWrite(
+                $this->tableId . '.' . $column,
+                $doc->structuredSchemaFor($column, $data),
+                $staticKey,
+            );
+            $this->structuredSchemas[$column] = $schema;
+
+            // Poslaný celý sloupec hodnotu NAHRAZUJE (import, applier);
+            // jinak je základem to, co je uložené, a virtuální sloupce ho
+            // jen přepisují po polích.
+            try {
+                $base = StructuredFieldValues::decodeStrict(
+                    $hasColumn ? $data[$column] : ($originalData[$column] ?? null),
+                );
+            } catch (\InvalidArgumentException $e) {
+                $errors[] = new ValidationError($column, $e->getMessage(), 'invalid_value');
+                $data = $this->stripVirtualKeys($column, $data);
+                unset($data[$column]);
+                continue;
+            }
+
+            $value = StructuredFieldValues::unflatten($column, $data, $base, $schema);
+            $data = $this->stripVirtualKeys($column, $data);
+
+            $result = StructuredFieldValidator::validate($column, $value, $schema, $this->config);
+            foreach ($result['errors'] as $error) {
+                $errors[] = $error;
+            }
+            $data[$column] = $result['value'];
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Strukturované sloupce z pole na JSON string (nebo NULL u prázdné
+     * hodnoty — nikdy `{}`). Volá se po `Document::beforeSave`, takže
+     * respektuje i hodnotu, kterou hook dopočítal; `_schema` doplní gateway.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function serializeStructuredFields(array &$data): void
+    {
+        foreach ($this->structuredSchemas as $column => $schema) {
+            if (!array_key_exists($column, $data)) {
+                continue;
+            }
+            $value = StructuredFieldValues::decodeStrict($data[$column]);
+            $data[$column] = $value === null ? null : StructuredFieldValues::encode($value, $schema);
+        }
+    }
+
+    /**
+     * Nese payload virtuální sloupec `<sloupec>.<cokoli>`? Prefixem, ne přes
+     * schéma — na tuhle otázku se odpovídá dřív, než je jasné, které schéma
+     * platí.
+     */
+    private function hasVirtualKeys(string $column, array $data): bool
+    {
+        $prefix = $column . StructuredSchema::PATH_SEPARATOR;
+        foreach (array_keys($data) as $key) {
+            if (is_string($key) && str_starts_with($key, $prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Odstraní všechny `<sloupec>.*` klíče — i ty, které schéma nezná.
+     * Do SQL nesmí projít nic s tečkou (byl by to neznámý sloupec).
+     */
+    private function stripVirtualKeys(string $column, array $data): array
+    {
+        $prefix = $column . StructuredSchema::PATH_SEPARATOR;
+        foreach (array_keys($data) as $key) {
+            if (is_string($key) && str_starts_with($key, $prefix)) {
+                unset($data[$key]);
+            }
+        }
+        return $data;
     }
 
     private function syncChildren(string $table, string $foreignKey, int $parentId, array $inputRows): void

@@ -26,6 +26,9 @@ use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
+use Shipard\Core\StructuredFields\StructuredFieldResolver;
+use Shipard\Core\StructuredFields\StructuredFieldValues;
+use Shipard\Core\StructuredFields\StructuredSchema;
 
 class FormController
 {
@@ -107,6 +110,12 @@ class FormController
                 $tableForm->applyNewRecordDefaults($data);
             }
         }
+
+        // Strukturovaná pole (#74) — klient je edituje jako virtuální sloupce
+        // `<sloupec>.<pole>`. Až po defaultech, aby se do nich propsaly.
+        $structuredForm = $formRegistry->createForm($table, $data, $db, $config);
+        $structuredForm?->setTableDef($def);
+        $data = $this->flattenStructuredColumns($data, $def, $config, $structuredForm, $isNew);
 
         $formDefinition = $this->resolveFormDefinition(
             $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulePathResolver, $language,
@@ -254,6 +263,7 @@ class FormController
             $dsConfig,
             $eventDispatcher,
             $def->docStates,
+            $def,
         );
         $result   = $gateway->saveDocument($inputData);
 
@@ -281,6 +291,14 @@ class FormController
         $record  = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $savedId);
         if ($record !== null) {
             $record = TableAccessGuard::stripSensitive($record, $def);
+            // Stejný tvar jako v meta — strukturované sloupce ploché (#74).
+            $record = $this->flattenStructuredColumns(
+                $record,
+                $def,
+                $config,
+                $formRegistry->createForm($table, $record, $db, $config),
+                false,
+            );
         }
 
         $httpStatus = ($id === null) ? 201 : 200;
@@ -718,13 +736,17 @@ class FormController
             );
         }
 
+        // Strukturovaná pole: klient posílá ploché klíče a dostane je zpátky.
+        // Sáhne se jen na sloupec, který form dopočítal jako celek (#74).
+        $outData = $this->flattenStructuredColumns($result->data, $def, $config, $tableForm, $isNew);
+
         $dataResolved = $this->buildDataResolved(
-            $formDefinition, $result->data, $lookupRegistry, $db, $config, $tables,
+            $formDefinition, $outData, $lookupRegistry, $db, $config, $tables,
         );
 
         return Response::success([
             'formDefinition' => $formDefinition->toArray(),
-            'data'           => $result->data,
+            'data'           => $outData,
             'dataResolved'   => $dataResolved,
         ]);
     }
@@ -831,9 +853,17 @@ class FormController
     {
         $excluded = ['id', 'created', 'modified'];
         $colMap = [];
+        // Prefixy virtuálních sloupců strukturovaných polí (#74, S4) —
+        // `filing_profile.typ_ds` není sloupec tabulky, ale je to legitimní
+        // vstup formuláře. Neznámá pole schématu zahodí gateway.
+        $structuredPrefixes = [];
         foreach ($def->columns as $col) {
-            if (!in_array($col->id, $excluded, true) && !$col->system) {
-                $colMap[$col->id] = true;
+            if (in_array($col->id, $excluded, true) || $col->system) {
+                continue;
+            }
+            $colMap[$col->id] = true;
+            if ($col->schema !== null) {
+                $structuredPrefixes[] = $col->id . StructuredSchema::PATH_SEPARATOR;
             }
         }
 
@@ -842,6 +872,13 @@ class FormController
             $k = (string) $k;
             if (isset($colMap[$k])) {
                 $result[$k] = $v;
+                continue;
+            }
+            foreach ($structuredPrefixes as $prefix) {
+                if (str_starts_with($k, $prefix)) {
+                    $result[$k] = $v;
+                    break;
+                }
             }
         }
         return $result;
@@ -951,6 +988,7 @@ class FormController
             $dsConfig,
             $eventDispatcher,
             $def->docStates,
+            $def,
         );
 
         $existing = $gateway->loadDocument($id);
@@ -1201,6 +1239,70 @@ class FormController
                 : (bool) $value,
             default => $value,
         };
+    }
+
+    /**
+     * Strukturované sloupce (#74) → virtuální sloupce `<sloupec>.<pole>` (S4):
+     * klient dostane `filing_profile.c_ufo` a edituje je běžnými elementy
+     * formuláře, o JSONu neví. Zpátky je skládá `TableGateway` (I3), ne
+     * controller.
+     *
+     * Pravidla:
+     *  - surový sloupec v datech (načtený záznam, hodnota dopočtená formem)
+     *    je autoritativní — rozpadne se na pole schématu a z dat zmizí;
+     *  - bez surového sloupce se plochých klíčů od klienta nikdo nedotýká
+     *    (recalculate posílá jen je), u nového záznamu se chybějící doplní
+     *    z `default` schématu;
+     *  - `sensitive` sloupec se přeskakuje — `stripSensitive` ho z dat
+     *    odstranil, takže bychom klientovi poslali samá null a uložení by
+     *    hodnotu smazalo;
+     *  - schéma, které se nepodařilo načíst (nezkompilovaná konfigurace),
+     *    nechává sloupec být.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function flattenStructuredColumns(
+        array $data,
+        TableDefinition $def,
+        ?ConfigRuntime $config,
+        ?TableForm $form,
+        bool $isNew,
+    ): array {
+        $columns = $def->getStructuredColumns();
+        if ($columns === []) {
+            return $data;
+        }
+
+        $resolver = new StructuredFieldResolver($config);
+        $sensitive = $def->getSensitiveColumns();
+
+        foreach ($columns as $column => $staticKey) {
+            if (in_array($column, $sensitive, true)) {
+                continue;
+            }
+            $hasColumn = array_key_exists($column, $data);
+            if (!$hasColumn && !$isNew) {
+                continue;
+            }
+            $schema = $resolver->forWrite($form?->structuredSchemaFor($column, $data), $staticKey);
+            if ($schema === null) {
+                continue;
+            }
+
+            $value = $hasColumn ? StructuredFieldValues::decode($data[$column]) : null;
+            unset($data[$column]);
+
+            foreach ($schema->fields as $fieldId => $field) {
+                $key = StructuredSchema::virtualColumn($column, $fieldId);
+                if ($hasColumn) {
+                    $data[$key] = $value[$fieldId] ?? null;
+                } elseif (!array_key_exists($key, $data)) {
+                    $data[$key] = $field->default;
+                }
+            }
+        }
+
+        return $data;
     }
 
     /**

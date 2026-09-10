@@ -54,6 +54,11 @@
         // Součtové řádky se vypisují i nulové — úřad je čeká vždy.
         "alwaysEmit": [46, 62, 63],
 
+        // Desetinná místa hodnot (XSD `fractionDigits`): přiznání se podává
+        // v celých Kč, koeficient v procentech na dvě místa.
+        "valueScale": 0,
+        "percentScale": 2,
+
         "rows": {
             // Věta 1 — zdanitelná plnění (základ + daň na výstupu)
             "1":  { "veta": "Veta1", "base": "obrat23",     "full": "dan23" },
@@ -162,6 +167,9 @@
         "element": "DPHKH1",
         "verzePis": "01.02",
         "constants": { "dokument": "KH1", "k_uladis": "DPH" },
+
+        // Kontrolní hlášení se podává na haléře.
+        "valueScale": 2,
 
         "formaAttr": "khdph_forma",
         "forma": {
@@ -316,6 +324,9 @@
         "element": "DPHSHV",
         "verzePis": "01.02",
         "constants": { "dokument": "SHV", "k_uladis": "DPH" },
+
+        // Hodnota plnění se zaokrouhluje nahoru na celé Kč.
+        "valueScale": 0,
 
         "formaAttr": "shvies_forma",
         // Souhrnné hlášení opravné nezná — po lhůtě se podává následné

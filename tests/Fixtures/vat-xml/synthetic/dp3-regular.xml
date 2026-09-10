@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Pisemnost nazevSW="Shipard" verzeSW="@version@">
+  <DPHDP3 verzePis="01.02">
+    <VetaD dokument="DP3" k_uladis="DPH" dapdph_forma="B" d_poddp="04.05.2026" rok="2026" mesic="4" typ_platce="P" c_okec="620200" trans="A"/>
+    <VetaP typ_ds="P" dic="12345678" zkrobchjm="Ukázka s.r.o." c_ufo="464" c_pracufo="3305" ulice="Dlouhá" c_pop="12" naz_obce="Ukázkov" psc="76001" stat="CZ" c_telef="571000000" email="ucto@example.com" sest_prijmeni="Nováková" sest_jmeno="Jana" sest_telef="571000001"/>
+    <Veta1 obrat23="1000" dan23="210"/>
+    <Veta4 pln23="501" odp_tuz23_nar="105" odp_sum_nar="105" odp_sum_kr="0"/>
+    <Veta6 dan_zocelk="210" odp_zocelk="105" dano_da="105"/>
+  </DPHDP3>
+</Pisemnost>

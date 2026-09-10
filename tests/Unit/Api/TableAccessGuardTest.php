@@ -168,4 +168,58 @@ class TableAccessGuardTest extends TestCase
 		$this->assertSame(400, $this->getStatus($resp));
 		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
 	}
+
+	// ── Strukturovaná pole (#74) ─────────────────────────────────────────────
+
+	private function structuredDef(): TableDefinition
+	{
+		return TableDefinition::fromArray([
+			'tableId' => 12,
+			'name'    => 'registrations',
+			'columns' => [
+				['id' => 'id',   'name' => 'ID',   'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+				['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100],
+				['id' => 'snapshot', 'name' => 'Snapshot', 'type' => 'json', 'nullable' => true],
+				['id' => 'filing_profile', 'name' => 'Profile', 'type' => 'json',
+					'nullable' => true, 'schema' => 'economy.vat.filingProfileCz'],
+			],
+		]);
+	}
+
+	public function testRejectStructuredInputCatchesWholeColumn(): void
+	{
+		$resp = TableAccessGuard::rejectStructuredInput(
+			['name' => 'A', 'filing_profile' => '{"typ_ds":"P"}'],
+			$this->structuredDef(),
+		);
+
+		$this->assertInstanceOf(Response::class, $resp);
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('STRUCTURED_COLUMN', $resp->getPayload()['error']['code']);
+	}
+
+	public function testRejectStructuredInputCatchesVirtualColumn(): void
+	{
+		$resp = TableAccessGuard::rejectStructuredInput(
+			['filing_profile.typ_ds' => 'P'],
+			$this->structuredDef(),
+		);
+
+		$this->assertInstanceOf(Response::class, $resp);
+		$this->assertSame('STRUCTURED_COLUMN', $resp->getPayload()['error']['code']);
+	}
+
+	public function testRejectStructuredInputIgnoresOtherColumns(): void
+	{
+		// `snapshot` je json BEZ schématu — obyčejný sloupec, ten guard nezajímá.
+		$this->assertNull(TableAccessGuard::rejectStructuredInput(
+			['name' => 'A', 'snapshot' => '{"a":1}'],
+			$this->structuredDef(),
+		));
+	}
+
+	public function testRejectStructuredInputPassesTableWithoutSchemaColumns(): void
+	{
+		$this->assertNull(TableAccessGuard::rejectStructuredInput(['name' => 'A'], $this->secretsDef()));
+	}
 }

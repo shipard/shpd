@@ -130,6 +130,12 @@ class CrudController
 			return $sensitiveErr;
 		}
 
+		// Strukturovaná pole (#74) jdou jen přes gateway — viz guard.
+		$structuredErr = TableAccessGuard::rejectStructuredInput($body, $def);
+		if ($structuredErr !== null) {
+			return $structuredErr;
+		}
+
 		$errors = $this->validator->validate($body, $def, 'create', $this->config);
 		if ($errors !== []) {
 			return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
@@ -179,6 +185,12 @@ class CrudController
 			return $sensitiveErr;
 		}
 
+		// Strukturovaná pole (#74) jdou jen přes gateway — viz guard.
+		$structuredErr = TableAccessGuard::rejectStructuredInput($body, $def);
+		if ($structuredErr !== null) {
+			return $structuredErr;
+		}
+
 		$errors = $this->validator->validate($body, $def, 'create', $this->config);
 		if ($errors !== []) {
 			return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
@@ -222,6 +234,12 @@ class CrudController
 		$sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def);
 		if ($sensitiveErr !== null) {
 			return $sensitiveErr;
+		}
+
+		// Strukturovaná pole (#74) jdou jen přes gateway — viz guard.
+		$structuredErr = TableAccessGuard::rejectStructuredInput($body, $def);
+		if ($structuredErr !== null) {
+			return $structuredErr;
 		}
 
 		$errors = $this->validator->validate($body, $def, 'patch', $this->config);

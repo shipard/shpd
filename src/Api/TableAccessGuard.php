@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Shipard\Api;
 
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\StructuredFields\StructuredSchema;
 
 /**
  * Plošná ochrana systémových tabulek a citlivých sloupců, sdílená všemi
@@ -71,6 +72,38 @@ final class TableAccessGuard
 					"Column '{$col}' cannot be written through the generic API",
 					400,
 				);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 400 pokud vstup zapisuje strukturované pole (#74) — ani celý sloupec,
+	 * ani virtuální `<sloupec>.<pole>`.
+	 *
+	 * Hodnotu strukturovaného pole validuje a `_schema` do ní stampuje jedině
+	 * `TableGateway` (rozhodnutí I3); generické CRUD dokumentovou vrstvu
+	 * záměrně obchází a zapisuje přímo do tabulky, takže by uložilo
+	 * nevalidovaný obsah bez verze schématu — a ten by pak šel do XML podání.
+	 * Zápis patří form endpointu (`POST /_ui/form/{table}/save`) nebo kódu,
+	 * který jde přes gateway (applier, seeder, CLI).
+	 *
+	 * Fail-closed: radši odmítnutý zápis než tiše zahozený virtuální sloupec.
+	 */
+	public static function rejectStructuredInput(array $body, TableDefinition $def): ?Response
+	{
+		foreach (array_keys($def->getStructuredColumns()) as $col) {
+			$prefix = $col . StructuredSchema::PATH_SEPARATOR;
+			foreach (array_keys($body) as $key) {
+				$key = (string) $key;
+				if ($key === $col || str_starts_with($key, $prefix)) {
+					return Response::error(
+						'STRUCTURED_COLUMN',
+						"Column '{$col}' is a structured field and cannot be written through the generic API"
+						. ' — use the form endpoint (see docs/structured-fields.md)',
+						400,
+					);
+				}
 			}
 		}
 		return null;

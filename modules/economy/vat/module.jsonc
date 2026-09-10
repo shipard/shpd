@@ -67,6 +67,10 @@
 
     "config": [
         { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" },
+
+        // Mapování obsahu podání na atributy XML pro EPO (#55 Fáze 3, X4);
+        // schémata v modules/economy/vat/xsd/.
+        { "id": "economy.vat.xml.cz", "file": "config/vat-xml-cz.jsonc" },
         { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" },
         { "id": "economy.vat.filingKinds", "file": "config/filingKinds.jsonc" },
         { "id": "economy.vat.docStatesFilings", "file": "config/docStatesFilings.jsonc" },

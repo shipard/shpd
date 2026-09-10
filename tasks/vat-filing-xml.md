@@ -1,6 +1,7 @@
 # Task: Podání DPH — XML pro EPO (DPHDP3 / DPHKH1 / DPHSHV), hlavička, PDF opis (M1 Fáze 3) — #55
 
-**Stav:** naplánováno — PRD hotové 2026-09-10, čeká na implementaci (prerekvizita #74 hotová)
+**Stav:** částečně — PRD hotové 2026-09-10, implementace běží: hotový commit 1
+(XSD v repozitáři + `vat-xml-cz.jsonc` + test úplnosti proti schématům)
 **Issue:** #55 (Fáze 3), návaznost D19 (#74 hotovo), D20 (přílohy na podání), D17 (zaokrouhlení)
 **Návaznost:** staví na Fázi 2 (`tasks/vat-filings.md` — snapshot `economy_vat_filings`
 + výstupní řádky `_return_rows` / `_cs_rows` / `_rs_rows`), na strukturovaných polích
@@ -102,6 +103,61 @@ Před implementací **přečti**:
   01–04/2026 (DP3) a 01/2026 (KH) dodá David do `tests/Fixtures/vat-xml/689089/`
   (bez osobních dat nad rámec toho, co je v XML nutné; DIČ firmy je veřejný údaj).
   Canonical porovnávač (`EpoXmlDiff`) je součástí tasku, ne ad-hoc skript.
+
+## Rozhodnutí z rozboru XSD (X10–X16)
+
+Doplněno 2026-09-10 po rozboru stažených schémat — popis struktury v § Reference
+sedí na `dphdp3_epo2.xsd` doslova (79 atributů vět 1–6 = bijekce s mapováním),
+u kontrolního a souhrnného hlášení ale schéma žádá víc, než snapshot Fáze 2 nese.
+
+- **X10 — Povinné atributy KH, které snapshot nemá, jsou konstanty z configu.**
+  `VetaA4` vyžaduje `kod_rezim_pl` + `zdph_44`, `VetaB2` `pomer` + `zdph_44`.
+  Zvláštní režimy (§ 89, § 90), oprava u nedobytné pohledávky (§ 46) a poměrný
+  nárok (§ 75) jsou mimo M1, takže se vypisují `"0"` / `"N"` / `"N"` ze sekce
+  `constants` v `vat-xml-cz.jsonc`; až agenda vznikne, nahradí konstantu sloupec
+  ve snapshotu. Naopak `kod_pred_pl` (povinný v A1 i B1) ve snapshotu **je** —
+  chybějící hodnota je blokující chyba validace, ne tichá nula.
+- **X11 — Věta C se počítá při sestavení, ne ve writeru.** Není to součet řádků
+  hlášení, ale kontrolní hodnoty proti přiznání (`obrat23`, `obrat5`, `pln23`,
+  `pln5`, `pln_rez_pren`, `rez_pren23`, `rez_pren5` = ř. 1, 2, 40, 41, 25, 10, 11;
+  `celk_zd_a2` = Σ ř. 3, 4, 5, 6, 9, 12, 13). Composer je spočítá z
+  `economy_vat_filing_items` (mají materializovaný `dp3_row`) do
+  `result.cs.vetaC` — stejný vzor jako `result.return.coefficient` u ř. 52.
+  Writer čte snapshot, mapování řádek → atribut je v configu.
+- **X12 — A1/B1 vykazují DUZP, ostatní sekce DPPD.** Jména atributů v XSD
+  (`duzp` u A1/B1, `dppd` u A2/A4/B2) jsou samy tím rozhodnutím.
+  `ControlStatementCalculator` dnes plní `vat_dppd` s fallbackem na `vat_duzp`
+  pro všechny sekce — u A1/B1 se to obrací (DUZP, fallback DPPD). Je to oprava
+  věcné chyby z Fáze 2, platí i pro živý report; shodu konstanty kalkulátoru
+  s atributy configu hlídá test.
+- **X13 — SHV rozpadá DIČ na `k_stat` + `c_vat`.** Snapshot drží celé
+  `partner_vat_id`, schéma chce kód státu a číselnou část zvlášť. `k_pln_eu` je
+  přímo náš `kod` (0 zboží, 3 služby); hodnoty 1 (přemístění obchodního majetku)
+  a 2 (třístranný obchod) číselník zná, ale dnes na ně nemapuje žádný kód DPH —
+  ověřit na datech zdroje 689089 při zlatém testu.
+- **X14 — Následné SH se podává jako plný obsah, storno řádky ne.** Popis
+  struktury opravuje řádky souhrnného hlášení stornem (`k_storno`, `VetaS`);
+  Shipard podává následné SH jako celý obsah znovu (model `subsequent` z D16).
+  Omezení je vědomé, pojmenované v `docs/README.md`; storno logika je samostatný
+  task (potřebuje diff proti předchozímu podání, který u SH nemáme).
+- **X15 — Sloupec `header` musí přestat být `system`.** `FormController::
+  filterWritableFields()` systémové sloupce i jejich virtuální pole zahazuje
+  a `TableDefinition::getStructuredColumns()` vidí jen sloupce se statickým
+  `schema` — bez úpravy by se `header.*` tiše neuložilo. Definice dostane
+  `"schema": "economy.vat.filingHeaderCzDp3"` (statický default, hook ho per typ
+  přebije) a `system` zmizí. Immutabilitu po podání drží `FROZEN_COLUMNS`,
+  generické CRUD strukturovaný sloupec odmítá samo (400 `STRUCTURED_COLUMN`).
+- **X16 — Guard příloh se musí do `core.attachments` teprve přidat.**
+  `AttachmentController::delete` volá `softDelete()` bez jakéhokoli hooku, takže
+  varianta „ověřit, zda má hook" z X6 padla: součástí commitu 5 je rozhraní
+  guardu + jeho registrace v `module.jsonc` a implementace pro podání.
+
+Poznámky k X5: XSD **neenumeruje** hodnoty jednoznakových kódů (`dapdph_forma`,
+`typ_platce`, `khdph_forma`, `shvies_forma`, `zdph_44`, `pomer`, `kod_rezim_pl`
+jsou jen `maxLength=1`), takže XSD validace je tenká síť a skutečnou pojistkou
+jsou validace podání a číselníky. `dokument` a `k_uladis` jsou naopak `fixed`
+(`DP3`/`KH1`/`SHV`, `DPH`). `verzePis` je volný string — hodnota `01.02` žije
+v configu per písemnost.
 
 ## Scope
 
@@ -228,6 +284,9 @@ Věta C součty; SHV řádek per (stát, DIČ, kód plnění).
 - Odeslání do EPO / datové schránky (ručně; lifecycle „Podat" zůstává ruční).
 - Import starých podání (D21, `old_shipard` task 35).
 - Částečné zdaňovací období (`zdobd_*`) — pole se generuje, instance ho dnes nevytvoří.
+- Storno řádky následného souhrnného hlášení (`k_storno`, `VetaS`) — X14.
+- Odpověď na výzvu správce daně u KH (`c_jed_vyzvy`, `vyzva_odp`), sekce A.3
+  (investiční zlato), obecná příloha v base64 (`Prilohy`/`ObecnaPriloha`).
 - OSS, DPPO, jiné země.
 - Zámek instance, zaúčtování (F4).
 

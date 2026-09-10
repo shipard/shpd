@@ -1,0 +1,336 @@
+// Mapování obsahu podání DPH na atributy XML pro EPO (issue #55, Fáze 3,
+// rozhodnutí X4): řádky přiznání DPHDP3, sekce kontrolního hlášení DPHKH1
+// a řádky souhrnného hlášení DPHSHV → věty a atributy podle oficiální
+// struktury Finanční správy.
+//
+// **Zdroj pravdy je XSD v `modules/economy/vat/xsd/`** (viz jeho README:
+// verze, datum stažení, kontrolní součty). Writery (`src/Xml/*XmlWriter`)
+// neznají jediné číslo řádku ani jméno atributu — všechno je tady, aby
+// změna formuláře byla změnou configu, ne kódu.
+//
+// Hodnoty se berou **výhradně z persistovaného snapshotu podání**
+// (`economy_vat_filing_*`), nikdy z živých dokladů — proto je vygenerované
+// XML deterministické i po pozdější změně dokladů (X1).
+//
+// Tvary:
+//   rows.<řádek>  { veta, base?, full?, reduced?, percent? }
+//        Sloty `base` / `full` / `reduced` odpovídají sloupcům
+//        `economy_vat_filing_return_rows.{base_filed, tax_full_filed,
+//        tax_reduced_filed}`. Slot bez atributu = formulář ten sloupec
+//        na řádku nemá. `percent` je koeficient v procentech (2 des.),
+//        který nepochází z řádku, ale ze snapshotu `result.return`.
+//   alwaysEmit    řádky, jejichž atributy se vypíšou i s nulou (součtové);
+//                 u ostatních se nulový atribut vynechá (starý `addVItem`).
+//   forma         druh podání (`economy_vat_filings.filing_kind`) → kód
+//                 formy. Klíč `<druh>@<druh předchozího podání>` má
+//                 přednost před holým `<druh>` — tím vzniká „dodatečné/
+//                 opravné" (DP3 E) a „následné/opravné" (KH E).
+//   unmapped      atributy a věty, které záměrně negenerujeme, s důvodem.
+//                 Test úplnosti (`VatXmlMappingCompletenessTest`) vyžaduje
+//                 mapped ∪ unmapped = atributy v XSD, takže nový atribut
+//                 ve schématu se nedá přehlédnout.
+//
+// Věty D a P (hlavička) tady nejsou — jejich pole nese strukturované
+// schéma `economy.vat.filingHeaderCz{Dp3,Kh1,Shv}` na sloupci
+// `economy_vat_filings.header` (X2) a odvozená pole `FilingHeaderResolver`
+// (X3).
+{
+    // ── DPHDP3 — přiznání k DPH ─────────────────────────────────────────────
+    "dp3": {
+        "element": "DPHDP3",
+        "verzePis": "01.02",
+
+        // V XSD `fixed` — jiná hodnota schématem neprojde.
+        "constants": { "dokument": "DP3", "k_uladis": "DPH" },
+
+        "formaAttr": "dapdph_forma",
+        "forma": {
+            "regular": "B",                  // řádné
+            "corrective": "O",               // opravné (§ 138 DŘ)
+            "supplementary": "D",            // dodatečné (§ 141 DŘ)
+            "corrective@supplementary": "E"  // dodatečné/opravné
+        },
+
+        // Součtové řádky se vypisují i nulové — úřad je čeká vždy.
+        "alwaysEmit": [46, 62, 63],
+
+        "rows": {
+            // Věta 1 — zdanitelná plnění (základ + daň na výstupu)
+            "1":  { "veta": "Veta1", "base": "obrat23",     "full": "dan23" },
+            "2":  { "veta": "Veta1", "base": "obrat5",      "full": "dan5" },
+            "3":  { "veta": "Veta1", "base": "p_zb23",      "full": "dan_pzb23" },
+            "4":  { "veta": "Veta1", "base": "p_zb5",       "full": "dan_pzb5" },
+            "5":  { "veta": "Veta1", "base": "p_sl23_e",    "full": "dan_psl23_e" },
+            "6":  { "veta": "Veta1", "base": "p_sl5_e",     "full": "dan_psl5_e" },
+            "7":  { "veta": "Veta1", "base": "dov_zb23",    "full": "dan_dzb23" },
+            "8":  { "veta": "Veta1", "base": "dov_zb5",     "full": "dan_dzb5" },
+            "9":  { "veta": "Veta1", "base": "p_dop_nrg",   "full": "dan_pdop_nrg" },
+            "10": { "veta": "Veta1", "base": "rez_pren23",  "full": "dan_rpren23" },
+            "11": { "veta": "Veta1", "base": "rez_pren5",   "full": "dan_rpren5" },
+            "12": { "veta": "Veta1", "base": "p_sl23_z",    "full": "dan_psl23_z" },
+            "13": { "veta": "Veta1", "base": "p_sl5_z",     "full": "dan_psl5_z" },
+            "14": { "veta": "Veta1", "base": "opr_dane_zd", "full": "opr_dane_dan" },
+
+            // Věta 2 — plnění s nárokem na odpočet (jen hodnota)
+            "20": { "veta": "Veta2", "base": "dod_zb" },
+            "21": { "veta": "Veta2", "base": "pln_sluzby" },
+            "22": { "veta": "Veta2", "base": "pln_vyvoz" },
+            "23": { "veta": "Veta2", "base": "dod_dop_nrg" },
+            "24": { "veta": "Veta2", "base": "pln_zaslani" },
+            "25": { "veta": "Veta2", "base": "pln_rez_pren" },
+            "26": { "veta": "Veta2", "base": "pln_ost" },
+
+            // Věta 3 — ostatní plnění a opravy
+            "30": { "veta": "Veta3", "base": "tri_pozb" },
+            "31": { "veta": "Veta3", "base": "tri_dozb" },
+            "32": { "veta": "Veta3", "base": "dov_osv" },
+            "33": { "veta": "Veta3", "base": "opr_verit" },
+            "34": { "veta": "Veta3", "base": "opr_dluz" },
+
+            // Věta 4 — nárok na odpočet (základ / v plné výši / krácený)
+            "40": { "veta": "Veta4", "base": "pln23",      "full": "odp_tuz23_nar", "reduced": "odp_tuz23" },
+            "41": { "veta": "Veta4", "base": "pln5",       "full": "odp_tuz5_nar",  "reduced": "odp_tuz5" },
+            "42": { "veta": "Veta4", "base": "dov_cu",     "full": "odp_cu_nar",    "reduced": "odp_cu" },
+            "43": { "veta": "Veta4", "base": "nar_zdp23",  "full": "od_zdp23",      "reduced": "odkr_zdp23" },
+            "44": { "veta": "Veta4", "base": "nar_zdp5",   "full": "od_zdp5",       "reduced": "odkr_zdp5" },
+            "45": { "veta": "Veta4",                       "full": "odp_rez_nar",   "reduced": "odp_rezim" },
+            "46": { "veta": "Veta4",                       "full": "odp_sum_nar",   "reduced": "odp_sum_kr" },
+            "47": { "veta": "Veta4", "base": "nar_maj",    "full": "od_maj",        "reduced": "odkr_maj" },
+            "48": { "veta": "Veta4", "base": "kor_odp_zd", "full": "kor_odp_plne",  "reduced": "kor_odp_krac" },
+
+            // Věta 5 — krácení nároku na odpočet.
+            // ř. 51 má dva sloupce („S nárokem" / „Bez nároku na odpočet"),
+            // uložené ve slotech base / full; ř. 52 a 53 nesou vedle částky
+            // i koeficient v procentech ze snapshotu (`result.return`).
+            "50": { "veta": "Veta5", "base": "plnosv_kf" },
+            "51": { "veta": "Veta5", "base": "pln_nkf", "full": "plnosv_nkf" },
+            "52": { "veta": "Veta5", "full": "odp_uprav_kf",
+                    "percent": { "attr": "koef_p20_nov", "source": "coefficient" } },
+            "53": { "veta": "Veta5", "full": "vypor_odp",
+                    "percent": { "attr": "koef_p20_vypor", "source": "settlementCoefficient" } },
+
+            // Věta 6 — výpočet daňové povinnosti (jen daň)
+            "60": { "veta": "Veta6", "full": "uprav_odp" },
+            "61": { "veta": "Veta6", "full": "dan_vrac" },
+            "62": { "veta": "Veta6", "full": "dan_zocelk" },
+            "63": { "veta": "Veta6", "full": "odp_zocelk" },
+            "64": { "veta": "Veta6", "full": "dano_da" },
+            "65": { "veta": "Veta6", "full": "dano_no" },
+            "66": { "veta": "Veta6", "full": "dano" }
+        },
+
+        // Textová příloha „Důvody pro podání dodatečného daňového přiznání"
+        // — poznámka podání zalomená po 72 znacích, jedna věta na řádek.
+        "note": {
+            "veta": "VetaR",
+            "sectionAttr": "kod_sekce",
+            "section": "D",
+            "orderAttr": "poradi",
+            "textAttr": "t_prilohy",
+            "lineLength": 72,
+            "kinds": ["supplementary"]
+        },
+
+        "unmapped": {
+            // Hlavička — pole nese schéma `economy.vat.filingHeaderCzDp3`
+            // (X2) a odvozená pole `FilingHeaderResolver` (X3).
+            "VetaD": ["*header*"],
+            "VetaP": ["*header*"],
+            // Obecná příloha (naskenovaný dokument v base64) — podání
+            // v Shipardu ji nepoužívá, přílohy žijí v core.attachments.
+            "Prilohy": ["*"],
+            "ObecnaPriloha": ["*"],
+            // Kontrolní věta EPO — generuje ji až portál při načtení.
+            "Kontrola": ["*"]
+        }
+    },
+
+    // ── DPHKH1 — kontrolní hlášení ──────────────────────────────────────────
+    "kh1": {
+        "element": "DPHKH1",
+        "verzePis": "01.02",
+        "constants": { "dokument": "KH1", "k_uladis": "DPH" },
+
+        "formaAttr": "khdph_forma",
+        "forma": {
+            "regular": "B",                // řádné (§ 101e)
+            "corrective": "O",             // řádné/opravné (§ 101f odst. 1)
+            "subsequent": "N",             // následné (§ 101f odst. 2)
+            "corrective@subsequent": "E"   // následné/opravné
+        },
+
+        // Sekce snapshotu (`economy_vat_filing_cs_rows.section`) → věta.
+        //   vatId.format: "cz" = jen číselná část (XSD `[0-9]{1,10}`),
+        //                 "eu" = kód státu do `countryAttr`, zbytek do `attr`
+        //   date:         jméno atributu **je** určení, které datum se
+        //                 vykazuje — A1/B1 vykazují DUZP, ostatní DPPD
+        //                 (shodu s `ControlStatementCalculator` hlídá test)
+        //   constants:    povinné atributy, které snapshot nenese, protože
+        //                 odpovídající agendy jsou mimo M1 (zvláštní režimy
+        //                 § 89/§ 90, oprava u nedobytné pohledávky § 46,
+        //                 poměrný nárok § 75). Až agenda vznikne, nahradí
+        //                 konstantu sloupec ve snapshotu.
+        "sections": {
+            "A1": {
+                "veta": "VetaA1",
+                "vatId": { "attr": "dic_odb", "format": "cz" },
+                "evidNumber": "c_evid_dd",
+                "date": "duzp",
+                "kodPredPl": "kod_pred_pl",
+                "bands": { "base1": "zakl_dane1" }
+            },
+            "A2": {
+                "veta": "VetaA2",
+                "vatId": { "attr": "vatid_dod", "countryAttr": "k_stat", "format": "eu" },
+                "evidNumber": "c_evid_dd",
+                "date": "dppd",
+                "bands": {
+                    "base1": "zakl_dane1", "tax1": "dan1",
+                    "base2": "zakl_dane2", "tax2": "dan2",
+                    "base3": "zakl_dane3", "tax3": "dan3"
+                }
+            },
+            "A4": {
+                "veta": "VetaA4",
+                "vatId": { "attr": "dic_odb", "format": "cz" },
+                "evidNumber": "c_evid_dd",
+                "date": "dppd",
+                "constants": { "kod_rezim_pl": "0", "zdph_44": "N" },
+                "bands": {
+                    "base1": "zakl_dane1", "tax1": "dan1",
+                    "base2": "zakl_dane2", "tax2": "dan2",
+                    "base3": "zakl_dane3", "tax3": "dan3"
+                }
+            },
+            "A5": {
+                "veta": "VetaA5",
+                "bands": {
+                    "base1": "zakl_dane1", "tax1": "dan1",
+                    "base2": "zakl_dane2", "tax2": "dan2",
+                    "base3": "zakl_dane3", "tax3": "dan3"
+                }
+            },
+            "B1": {
+                "veta": "VetaB1",
+                "vatId": { "attr": "dic_dod", "format": "cz" },
+                "evidNumber": "c_evid_dd",
+                "date": "duzp",
+                "kodPredPl": "kod_pred_pl",
+                "bands": {
+                    "base1": "zakl_dane1", "tax1": "dan1",
+                    "base2": "zakl_dane2", "tax2": "dan2",
+                    "base3": "zakl_dane3", "tax3": "dan3"
+                }
+            },
+            "B2": {
+                "veta": "VetaB2",
+                "vatId": { "attr": "dic_dod", "format": "cz" },
+                "evidNumber": "c_evid_dd",
+                "date": "dppd",
+                "constants": { "pomer": "N", "zdph_44": "N" },
+                "bands": {
+                    "base1": "zakl_dane1", "tax1": "dan1",
+                    "base2": "zakl_dane2", "tax2": "dan2",
+                    "base3": "zakl_dane3", "tax3": "dan3"
+                }
+            },
+            "B3": {
+                "veta": "VetaB3",
+                "bands": {
+                    "base1": "zakl_dane1", "tax1": "dan1",
+                    "base2": "zakl_dane2", "tax2": "dan2",
+                    "base3": "zakl_dane3", "tax3": "dan3"
+                }
+            }
+        },
+
+        // Věta C není součtem řádků hlášení, ale kontrolními hodnotami
+        // proti přiznání — proto se bere z řádků DP3 spočtených nad TÝMŽ
+        // snapshotem (`economy_vat_filing_items.dp3_row`, slot `base`);
+        // `celk_zd_a2` je součet řádků A.2 vyjádřený řádky přiznání.
+        // Ukládá je composer do `result.cs.vetaC` (X4/R2), writer je jen
+        // vypisuje.
+        "vetaC": {
+            "veta": "VetaC",
+            "slot": "base",
+            "attributes": {
+                "obrat23":      { "rows": [1] },
+                "obrat5":       { "rows": [2] },
+                "pln23":        { "rows": [40] },
+                "pln5":         { "rows": [41] },
+                "pln_rez_pren": { "rows": [25] },
+                "rez_pren23":   { "rows": [10] },
+                "rez_pren5":    { "rows": [11] },
+                "celk_zd_a2":   { "rows": [3, 4, 5, 6, 9, 12, 13] }
+            }
+        },
+
+        "unmapped": {
+            "VetaD": ["*header*"],
+            "VetaP": ["*header*"],
+            // Sekce A.3 — zvláštní režim pro investiční zlato (§ 92).
+            // Shipard tuto agendu nevede, sekce nikdy nevznikne.
+            "VetaA3": ["*"],
+            "Kontrola": ["*"]
+        },
+
+        // Volitelné atributy, které negenerujeme (v XSD `use="optional"`),
+        // pojmenované kvůli testu úplnosti:
+        //   c_radku      pořadí řádků ve formuláři — řádky už řadí composer
+        //                podle ev. čísla, portál si je očísluje sám
+        //   c_jed_vyzvy  / vyzva_odp — odpověď na výzvu správce daně;
+        //                agenda výzev je mimo M1
+        "optionalUnmapped": {
+            "VetaD":  ["c_jed_vyzvy", "vyzva_odp"],
+            "VetaA1": ["c_radku"],
+            "VetaA2": ["c_radku"],
+            "VetaA4": ["c_radku"],
+            "VetaB1": ["c_radku"],
+            "VetaB2": ["c_radku"]
+        }
+    },
+
+    // ── DPHSHV — souhrnné hlášení ───────────────────────────────────────────
+    "shv": {
+        "element": "DPHSHV",
+        "verzePis": "01.02",
+        "constants": { "dokument": "SHV", "k_uladis": "DPH" },
+
+        "formaAttr": "shvies_forma",
+        // Souhrnné hlášení opravné nezná — po lhůtě se podává následné
+        // (shodné s `reportTypes.rs.filingKinds` v vat-reports-cz.jsonc).
+        "forma": {
+            "regular": "R",
+            "subsequent": "N"
+        },
+
+        // Řádek snapshotu (`economy_vat_filing_rs_rows`) → věta R.
+        // `kod` snapshotu je přímo `k_pln_eu` (0 zboží, 3 služby);
+        // číselník zná i 1 (přemístění obchodního majetku) a 2 (třístranný
+        // obchod, prostřední osoba) — dnes na ně nemapuje žádný kód DPH.
+        "row": {
+            "veta": "VetaR",
+            "vatId": { "attr": "c_vat", "countryAttr": "k_stat", "format": "eu" },
+            "code": "k_pln_eu",
+            "count": "pln_pocet",
+            "value": "pln_hodnota"
+        },
+
+        "unmapped": {
+            "VetaD": ["*header*"],
+            "VetaP": ["*header*"],
+            // Storno řádky následného hlášení — Shipard podává následné SH
+            // jako plný obsah znovu (viz docs/README § XML pro EPO).
+            "VetaS": ["*"],
+            "Kontrola": ["*"]
+        },
+
+        "optionalUnmapped": {
+            // poc_radku / poc_stran / pln_poc_celk / suma_pln jsou v popisu
+            // struktury označené „nevyplňuje se — nebude bráno v úvahu"
+            // (ponechané kvůli zpětné kompatibilitě vstupních souborů).
+            "VetaD": ["poc_radku", "poc_stran", "pln_poc_celk", "suma_pln"],
+            "VetaR": ["por_c_stran", "c_rad", "k_storno"]
+        }
+    }
+}

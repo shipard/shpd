@@ -1,6 +1,6 @@
 # Task: Strukturovaná pole se schématem (`json` + `schema`) — #74
 
-**Stav:** částečně — implementace kompletní (6 commitů 2026-09-10: jádro schématu, zápisová autorita v TableGateway, formulář + detail, profil podatele na registraci DPH, odmítnutí zápisu přes generické CRUD, dokumentace); E2E na dev DS 4l3j prošlo (ds-upgrade, uložení formulářem, field-level chyby, detail vieweru). Zbývá ruční proklik UI v prohlížeči a nasazení na alfu.
+**Stav:** částečně — implementace kompletní (6 commitů 2026-09-10: jádro schématu, zápisová autorita v TableGateway, formulář + detail, profil podatele na registraci DPH, odmítnutí zápisu přes generické CRUD, dokumentace); E2E i ruční proklik UI na dev DS 4l3j prošly (ds-upgrade, záložka Podací údaje včetně roletek FÚ/pracovišť, uložení, field-level chyby, detail vieweru). Zbývá jen nasazení na alfu (ds-upgrade).
 **Issue:** #74 (rozhodnutí S1–S7), motivace #55 D19 (hlavička podání, profil podatele)
 **Návaznost:** `src/Core` (Database, Form, Document, Viewer), `docs.core` jen jako
 konzument typu; první reálný konzument `economy.vat` — **profil podatele** na registraci

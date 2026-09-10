@@ -185,6 +185,12 @@
         //   date:         jméno atributu **je** určení, které datum se
         //                 vykazuje — A1/B1 vykazují DUZP, ostatní DPPD
         //                 (shodu s `ControlStatementCalculator` hlídá test)
+        //   required:     logické části řádku, bez kterých podání nemá smysl
+        //                 (a schéma je většinou vyžaduje) — kontroluje je
+        //                 `FilingXmlValidator`, aby chyba nespadla až na
+        //                 XSD validaci bez vazby na doklad
+        //   alwaysEmit:   atributy, které se vypíšou i s nulou (schéma je
+        //                 má jako povinné)
         //   constants:    povinné atributy, které snapshot nenese, protože
         //                 odpovídající agendy jsou mimo M1 (zvláštní režimy
         //                 § 89/§ 90, oprava u nedobytné pohledávky § 46,
@@ -193,6 +199,8 @@
         "sections": {
             "A1": {
                 "veta": "VetaA1",
+                "required": ["vatId", "evidNumber", "date", "kodPredPl", "base1"],
+                "alwaysEmit": ["zakl_dane1"],
                 "vatId": { "attr": "dic_odb", "format": "cz" },
                 "evidNumber": "c_evid_dd",
                 "date": "duzp",
@@ -201,6 +209,7 @@
             },
             "A2": {
                 "veta": "VetaA2",
+                "required": ["date"],
                 "vatId": { "attr": "vatid_dod", "countryAttr": "k_stat", "format": "eu" },
                 "evidNumber": "c_evid_dd",
                 "date": "dppd",
@@ -212,6 +221,7 @@
             },
             "A4": {
                 "veta": "VetaA4",
+                "required": ["vatId", "evidNumber", "date"],
                 "vatId": { "attr": "dic_odb", "format": "cz" },
                 "evidNumber": "c_evid_dd",
                 "date": "dppd",
@@ -232,6 +242,7 @@
             },
             "B1": {
                 "veta": "VetaB1",
+                "required": ["vatId", "evidNumber", "date", "kodPredPl"],
                 "vatId": { "attr": "dic_dod", "format": "cz" },
                 "evidNumber": "c_evid_dd",
                 "date": "duzp",
@@ -244,6 +255,7 @@
             },
             "B2": {
                 "veta": "VetaB2",
+                "required": ["vatId", "evidNumber", "date"],
                 "vatId": { "attr": "dic_dod", "format": "cz" },
                 "evidNumber": "c_evid_dd",
                 "date": "dppd",
@@ -342,6 +354,9 @@
         // obchod, prostřední osoba) — dnes na ně nemapuje žádný kód DPH.
         "row": {
             "veta": "VetaR",
+            // Kód státu a DIČ jsou povinné v každém nestorno řádku, počet
+            // a hodnota plnění dávají řádku smysl.
+            "required": ["country", "vatId", "code", "count", "value"],
             "vatId": { "attr": "c_vat", "countryAttr": "k_stat", "format": "eu" },
             "code": "k_pln_eu",
             "count": "pln_pocet",

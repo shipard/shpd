@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Pisemnost nazevSW="Shipard" verzeSW="@version@">
+  <DPHSHV verzePis="01.02">
+    <VetaD dokument="SHV" k_uladis="DPH" shvies_forma="R" d_poddp="04.05.2026" rok="2026" mesic="4"/>
+    <VetaP typ_ds="P" dic="12345678" zkrobchjm="Ukázka s.r.o." c_ufo="464" c_pracufo="3305"/>
+    <VetaR k_stat="SK" c_vat="2020123456" k_pln_eu="0" pln_pocet="3" pln_hodnota="12346"/>
+    <VetaR k_stat="DE" c_vat="123456789" k_pln_eu="3" pln_pocet="1" pln_hodnota="500"/>
+  </DPHSHV>
+</Pisemnost>

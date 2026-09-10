@@ -54,6 +54,8 @@ final class FilingXmlValidator
         $this->validateFilingDetails($input, $errors);
         $this->validatePeriod($input, $errors);
         $this->validateRowValues($input, $errors);
+        $this->validateControlRows($input, $errors);
+        $this->validateRecapRows($input, $errors);
 
         return $errors;
     }
@@ -216,7 +218,110 @@ final class FilingXmlValidator
         }
     }
 
+    // ── Řádky hlášení ───────────────────────────────────────────────────────
+
+    /**
+     * Řádky kontrolního hlášení: co sekce vyžaduje (`required` v configu),
+     * musí být vyplněné. Sázková pásma se nekontrolují — nula je legitimní
+     * hodnota a povinné atributy se vypisují i s ní (`alwaysEmit`).
+     *
+     * Chyba se váže na formulář, ne na pole hlavičky: opravit ji jde jen
+     * na dokladu, proto ho hláška jmenuje.
+     *
+     * @param list<ValidationError> $errors
+     */
+    private function validateControlRows(FilingXmlInput $input, array &$errors): void
+    {
+        $sections = $this->mapping->sections();
+
+        foreach ($input->controlRows as $row) {
+            $section    = (string) ($row['section'] ?? '');
+            $definition = $sections[$section] ?? null;
+            if ($definition === null) {
+                $errors[] = new ValidationError(
+                    ValidationError::FIELD_FORM,
+                    "Snapshot obsahuje řádek neznámé sekce '{$section}'.",
+                    'unknown_section',
+                );
+                continue;
+            }
+
+            foreach ($definition['required'] ?? [] as $key) {
+                $missing = match ((string) $key) {
+                    'vatId'      => self::isBlank($row['partner_vat_id'] ?? null),
+                    'evidNumber' => self::isBlank($row['doc_number'] ?? null),
+                    'date'       => self::isBlank($row['vat_dppd'] ?? null),
+                    'kodPredPl'  => self::isBlank($row['kod_pred_pl'] ?? null),
+                    default      => false, // pásma: nula je hodnota
+                };
+                if ($missing) {
+                    $errors[] = new ValidationError(
+                        ValidationError::FIELD_FORM,
+                        sprintf(
+                            'Kontrolní hlášení, sekce %s, doklad %s: chybí %s.',
+                            $section,
+                            (string) ($row['doc_number'] ?? '?'),
+                            self::LABELS[(string) $key] ?? (string) $key,
+                        ),
+                        'incomplete_row',
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Řádky souhrnného hlášení: bez kódu státu a DIČ pořizovatele je řádek
+     * nepodatelný (popis struktury je označuje za povinné mimo storno).
+     *
+     * @param list<ValidationError> $errors
+     */
+    private function validateRecapRows(FilingXmlInput $input, array &$errors): void
+    {
+        $required = $this->mapping->row()['required'] ?? [];
+        if ($required === []) {
+            return;
+        }
+
+        foreach ($input->recapRows as $row) {
+            [$country, $number] = EpoXmlFormat::euVatId($row['partner_vat_id'] ?? null);
+
+            foreach ($required as $key) {
+                $missing = match ((string) $key) {
+                    'country' => $country === null,
+                    'vatId'   => $number === null,
+                    default   => false, // kód plnění, počet a hodnota nese snapshot vždy
+                };
+                if ($missing) {
+                    $errors[] = new ValidationError(
+                        ValidationError::FIELD_FORM,
+                        sprintf(
+                            'Souhrnné hlášení: DIČ pořizovatele „%s" nejde rozdělit na kód státu'
+                            . ' a číslo registrace.',
+                            (string) ($row['partner_vat_id'] ?? ''),
+                        ),
+                        'incomplete_row',
+                    );
+                    break;
+                }
+            }
+        }
+    }
+
     // ── Pomocné ─────────────────────────────────────────────────────────────
+
+    /** Popisky chybějících částí řádku do hlášky. */
+    private const LABELS = [
+        'vatId'      => 'DIČ protistrany',
+        'evidNumber' => 'evidenční číslo dokladu',
+        'date'       => 'datum plnění',
+        'kodPredPl'  => 'kód předmětu plnění',
+    ];
+
+    private static function isBlank(mixed $value): bool
+    {
+        return $value === null || (is_scalar($value) && trim((string) $value) === '');
+    }
 
     /** Neprázdná hodnota pole hlavičky, jinak `null`. */
     private function value(FilingXmlInput $input, string $field): mixed

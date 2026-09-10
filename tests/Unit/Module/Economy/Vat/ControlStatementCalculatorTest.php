@@ -263,4 +263,43 @@ class ControlStatementCalculatorTest extends TestCase
         $result = $this->calculator()->calculate([$doc]);
         $this->assertSame('2026-01-10', $result['sections']['A4'][0]['dppd']);
     }
+
+    // ── Datum per sekce (#55 X12) ───────────────────────────────────────
+
+    /**
+     * Režim přenesení daňové povinnosti se vykazuje k DUZP, ne k DPPD —
+     * formulář i XML mají u sekcí A.1 a B.1 atribut `duzp`.
+     */
+    public function testReverseChargeSectionsReportDuzp(): void
+    {
+        $supplier = $this->doc([
+            'recap' => [['vat_code' => 'cz-150', 'base_dom' => 50000.0, 'tax_dom' => 0.0]],
+        ]);
+        $customer = $this->doc([
+            'id'    => 2,
+            'recap' => [['vat_code' => 'cz-115', 'base_dom' => 50000.0, 'tax_dom' => 10500.0]],
+        ]);
+
+        $result = $this->calculator()->calculate([$supplier, $customer]);
+
+        $this->assertSame('2026-01-10', $result['sections']['A1'][0]['dppd'], 'A1 vykazuje DUZP');
+        $this->assertSame('2026-01-10', $result['sections']['B1'][0]['dppd'], 'B1 vykazuje DUZP');
+    }
+
+    public function testOtherSectionsKeepReportingDppd(): void
+    {
+        $result = $this->calculator()->calculate([$this->doc()]);
+        $this->assertSame('2026-01-12', $result['sections']['A4'][0]['dppd']);
+    }
+
+    /** Chybějící DUZP u sekce A.1 spadne na DPPD — datum tam být musí. */
+    public function testDuzpFallsBackToDppd(): void
+    {
+        $doc = $this->doc([
+            'vat_duzp' => null,
+            'recap'    => [['vat_code' => 'cz-150', 'base_dom' => 50000.0, 'tax_dom' => 0.0]],
+        ]);
+        $result = $this->calculator()->calculate([$doc]);
+        $this->assertSame('2026-01-12', $result['sections']['A1'][0]['dppd']);
+    }
 }

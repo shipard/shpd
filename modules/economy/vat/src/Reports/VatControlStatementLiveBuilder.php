@@ -165,7 +165,7 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
             new ReportColumn('evidNumber', ReportColumn::TYPE_TEXT, $cs ? 'Ev. číslo dokladu' : 'Evidence number'),
             new ReportColumn('vatId', ReportColumn::TYPE_TEXT, $cs ? 'DIČ' : 'VAT ID'),
             new ReportColumn('kodPredPl', ReportColumn::TYPE_TEXT, $cs ? 'Kód' : 'Code'),
-            new ReportColumn('dppd', ReportColumn::TYPE_DATE, 'DPPD'),
+            new ReportColumn('dppd', ReportColumn::TYPE_DATE, 'DUZP / DPPD'),
             new ReportColumn('base1', ReportColumn::TYPE_MONEY, $cs ? 'Základ — základní' : 'Base — standard'),
             new ReportColumn('tax1', ReportColumn::TYPE_MONEY, $cs ? 'Daň — základní' : 'Tax — standard'),
             new ReportColumn('base2', ReportColumn::TYPE_MONEY, $cs ? 'Základ — snížená' : 'Base — reduced'),

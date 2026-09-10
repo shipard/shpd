@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Pisemnost nazevSW="Shipard" verzeSW="@version@">
+  <DPHKH1 verzePis="01.02">
+    <VetaD dokument="KH1" k_uladis="DPH" khdph_forma="B" d_poddp="04.05.2026" rok="2026" mesic="4"/>
+    <VetaP typ_ds="P" dic="12345678" zkrobchjm="Ukázka s.r.o." c_ufo="464" c_pracufo="3305" email="ucto@example.com"/>
+    <VetaA1 dic_odb="87654321" c_evid_dd="FV-1" duzp="10.04.2026" zakl_dane1="50000.00" kod_pred_pl="4"/>
+    <VetaA2 k_stat="DE" vatid_dod="123456789" c_evid_dd="DE-77" dppd="12.04.2026" zakl_dane1="1000.00" dan1="210.00"/>
+    <VetaA4 dic_odb="11111111" c_evid_dd="FV-2" dppd="15.04.2026" zakl_dane1="20000.00" dan1="4200.00" kod_rezim_pl="0" zdph_44="N"/>
+    <VetaA5 zakl_dane1="3000.00" dan1="630.00"/>
+    <VetaB2 dic_dod="22222222" c_evid_dd="DOD-9" dppd="18.04.2026" zakl_dane1="15000.00" dan1="3150.00" pomer="N" zdph_44="N"/>
+    <VetaB3 zakl_dane1="500.00" dan1="105.00"/>
+    <VetaC obrat23="23000.00" pln23="15500.00" pln_rez_pren="50000.00" celk_zd_a2="1300.00"/>
+  </DPHKH1>
+</Pisemnost>

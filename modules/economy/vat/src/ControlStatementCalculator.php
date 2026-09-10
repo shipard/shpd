@@ -16,7 +16,9 @@ namespace Shipard\Module\Economy\Vat;
  *   reduced + reduced1 → 2, reduced2 → 3; zero/exempt se neakumulují,
  * - ev. číslo: A1/A4 vlastní číslo dokladu, A2/B1/B2 číslo dodavatele
  *   (`partner_doc_number`), bez jakékoli normalizace,
- * - DPPD = `vat_dppd`, fallback `vat_duzp`,
+ * - datum per sekce (#55 X12): A1 a B1 vykazují **DUZP**, ostatní sekce
+ *   DPPD — tak to má formulář i XML (atributy `duzp` vs. `dppd`); druhé
+ *   datum slouží jako fallback, když chybí,
  * - doklad se dvěma PDP kódy (kodPredPl 4 i 5) = dva řádky A1/B1,
  * - A5/B3 = jeden agregátní součtový řádek (pásma ve sloupcích).
  *
@@ -42,6 +44,14 @@ final class ControlStatementCalculator
 
     /** Sekce se součtovým řádkem místo detailů (limit 10 000 Kč). */
     public const AGGREGATE_SECTIONS = ['A5', 'B3'];
+
+    /**
+     * Sekce, které vykazují **DUZP** místo DPPD (#55 X12) — režim přenesení
+     * daňové povinnosti u dodavatele (A1) i odběratele (B1). Zdrojem pravdy
+     * jsou jména atributů v `vat-xml-cz.jsonc` (`duzp` vs. `dppd`); shodu
+     * s nimi hlídá `VatXmlMappingCompletenessTest`.
+     */
+    public const DUZP_SECTIONS = ['A1', 'B1'];
 
     /**
      * @param array<string, array<string, mixed>> $vatCodes Definice kódů
@@ -221,18 +231,35 @@ final class ControlStatementCalculator
             ];
         }
 
-        $dppd = (string) ($doc['vat_dppd'] ?? '');
-        if ($dppd === '') {
-            $dppd = (string) ($doc['vat_duzp'] ?? '');
-        }
-
         return [
             'docId'      => (int) $doc['id'],
             'evidNumber' => $evidNumber,
             'vatId'      => $vatId,
             'kodPredPl'  => $group['kodPredPl'],
-            'dppd'       => $dppd !== '' ? $dppd : null,
+            'dppd'       => $this->reportedDate($section, $doc),
         ] + $this->roundBands($group['bands']);
+    }
+
+    /**
+     * Datum, které sekce vykazuje: A1 a B1 DUZP, ostatní DPPD (#55 X12).
+     * Druhé datum je fallback — doklad, kterému chybí to správné, je pořád
+     * lepší vykázat s tím druhým než bez data.
+     *
+     * @param array<string, mixed> $doc
+     */
+    private function reportedDate(string $section, array $doc): ?string
+    {
+        $order = in_array($section, self::DUZP_SECTIONS, true)
+            ? ['vat_duzp', 'vat_dppd']
+            : ['vat_dppd', 'vat_duzp'];
+
+        foreach ($order as $column) {
+            $value = (string) ($doc[$column] ?? '');
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return null;
     }
 
     /** @return array<string, float> */

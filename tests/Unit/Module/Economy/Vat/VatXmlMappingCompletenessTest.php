@@ -272,6 +272,67 @@ class VatXmlMappingCompletenessTest extends TestCase
         }
     }
 
+    /**
+     * Jméno atributu je určení, které datum sekce vykazuje (`duzp` vs.
+     * `dppd`, #55 X12) — kalkulátor s ním musí být v souladu, jinak by se
+     * do XML dostalo datum, které tam nepatří.
+     */
+    public function testDateAttributesAgreeWithTheCalculator(): void
+    {
+        foreach ($this->xmlConfig()['kh1']['sections'] as $section => $definition) {
+            if (!isset($definition['date'])) {
+                continue;
+            }
+            $usesDuzp = in_array($section, ControlStatementCalculator::DUZP_SECTIONS, true);
+            $this->assertSame(
+                $usesDuzp ? 'duzp' : 'dppd',
+                $definition['date'],
+                "Sekce {$section}: atribut data se rozešel s ControlStatementCalculator::DUZP_SECTIONS",
+            );
+        }
+    }
+
+    /**
+     * Každý povinný atribut věty sekce musí být pokrytý: buď ho nese
+     * konstanta (X10), nebo mapovaný údaj vedený v `required`, nebo se
+     * vypisuje i s nulou (`alwaysEmit`). Jinak by podání spadlo až na XSD
+     * validaci bez vazby na doklad.
+     */
+    public function testRequiredAttributesOfControlSectionsAreCovered(): void
+    {
+        $xsd      = $this->xsdAttributes('kh1', requiredOnly: true);
+        $sections = $this->xmlConfig()['kh1']['sections'];
+        $checked  = 0;
+
+        foreach ($sections as $section => $definition) {
+            $required = $definition['required'] ?? [];
+            $covered  = array_merge(
+                array_keys($definition['constants'] ?? []),
+                $definition['alwaysEmit'] ?? [],
+            );
+            foreach ($required as $key) {
+                $covered[] = match ((string) $key) {
+                    'vatId'      => (string) ($definition['vatId']['attr'] ?? ''),
+                    'evidNumber' => (string) ($definition['evidNumber'] ?? ''),
+                    'date'       => (string) ($definition['date'] ?? ''),
+                    'kodPredPl'  => (string) ($definition['kodPredPl'] ?? ''),
+                    default      => (string) ($definition['bands'][$key] ?? ''),
+                };
+            }
+
+            foreach ($xsd[$definition['veta']] ?? [] as $attribute) {
+                $checked++;
+                $this->assertContains(
+                    $attribute,
+                    $covered,
+                    "Sekce {$section}: povinný atribut '{$attribute}' není pokrytý"
+                    . ' (chybí v `required`, `alwaysEmit` ani mezi konstantami)',
+                );
+            }
+        }
+        $this->assertGreaterThan(0, $checked);
+    }
+
     public function testVetaCReferencesMappedReturnRows(): void
     {
         $config = $this->xmlConfig()['kh1']['vetaC'];

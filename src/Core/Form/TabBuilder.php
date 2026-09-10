@@ -349,6 +349,34 @@ final class TabBuilder
         return $this;
     }
 
+    /**
+     * Vloží hotové elementy do otevřeného sloupce — pro generátory, které
+     * elementy staví samy (`TableForm::structuredFieldElements()`, #74).
+     * Prázdný seznam nic nedělá, takže podmíněné cesty nemusí nic řešit.
+     *
+     * @param list<FormElement> $elements
+     */
+    public function addElements(array $elements): static
+    {
+        foreach ($elements as $i => $element) {
+            if (!$element instanceof FormElement) {
+                throw new \InvalidArgumentException(sprintf(
+                    'TabBuilder["%s"]: addElements[%d] must be FormElement, got %s',
+                    $this->id,
+                    $i,
+                    get_debug_type($element),
+                ));
+            }
+            if ($element->type === 'separator') {
+                // Separátor má vlastní pravidla (nesmí do inline, auto-hide).
+                $this->separator($element->label, $element->hidden);
+                continue;
+            }
+            $this->pushElement($element);
+        }
+        return $this;
+    }
+
     public function separator(?string $label = null, bool $hidden = false): static
     {
         $this->requireOpenColumn('separator()');

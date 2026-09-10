@@ -7,6 +7,8 @@ namespace Shipard\Core\Viewer;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\StructuredFields\StructuredFieldRenderer;
+use Shipard\Core\StructuredFields\StructuredFieldResolver;
 
 abstract class TableViewer
 {
@@ -257,6 +259,35 @@ abstract class TableViewer
     public function renderDetail(int $recordId): array
     {
         return ['tabs' => []];
+    }
+
+    /**
+     * Bloky strukturovaného pole (#74, I6) pro obsah typu `properties`
+     * v `renderDetail()`:
+     *
+     *     'content' => ['type' => 'properties',
+     *                   'groups' => $this->structuredFieldProperties($record, 'filing_profile',
+     *                                                                'economy.vat.filingProfileCz')]
+     *
+     * Schéma se vybírá podle `_schema` v uložené hodnotě (záznam se zobrazí
+     * podle verze, kterou nese), `$fallbackSchemaKey` platí jen když ho
+     * hodnota nemá. Prázdná hodnota / nedostupné schéma → `[]`, takže
+     * volající může blok podle prázdnosti vynechat.
+     *
+     * @param array<string, mixed> $row
+     * @return list<array{title: ?string, items: list<array{label: string, value: string}>}>
+     */
+    protected function structuredFieldProperties(
+        array $row,
+        string $column,
+        ?string $fallbackSchemaKey = null,
+    ): array {
+        $value = $row[$column] ?? null;
+        $schema = (new StructuredFieldResolver($this->config))->forValue($value, $fallbackSchemaKey);
+        if ($schema === null) {
+            return [];
+        }
+        return (new StructuredFieldRenderer($this->config))->properties($schema, $value);
     }
 
     /**

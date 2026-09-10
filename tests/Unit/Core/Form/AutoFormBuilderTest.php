@@ -272,6 +272,73 @@ class AutoFormBuilderTest extends TestCase
         $this->assertNull((new AutoFormBuilder())->build($def)->docStates);
     }
 
+    // ── Strukturovaná pole (#74) ─────────────────────────────────────────────
+
+    private function structuredConfig(): ConfigRuntime
+    {
+        $items = [
+            'test.profile' => [
+                'version' => '2026',
+                'groups'  => [['id' => 'office', 'name' => 'Finanční úřad']],
+                'fields'  => [
+                    ['id' => 'c_ufo', 'type' => 'enumString', 'length' => 5, 'cfgItem' => 'test.offices',
+                        'group' => 'office', 'name' => 'Finanční úřad'],
+                    ['id' => 'email', 'type' => 'varchar', 'length' => 255, 'name' => 'E-mail'],
+                ],
+            ],
+            'test.offices' => ['451' => ['name' => 'Praha']],
+        ];
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnCallback(fn(string $id) => $items[$id] ?? null);
+        return $config;
+    }
+
+    public function testStructuredColumnBecomesItsOwnSection(): void
+    {
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'filing_profile', 'name' => 'Podací údaje', 'type' => 'json',
+                'nullable' => true, 'schema' => 'test.profile'],
+        ]);
+
+        $tab = (new AutoFormBuilder())->build($def, $this->structuredConfig())->tabs[0];
+
+        $this->assertCount(2, $tab->sections);
+        $this->assertNull($tab->sections[0]->title);
+        $this->assertSame(['name'], array_map(
+            fn(FormElement $el) => $el->column,
+            $tab->sections[0]->columns[0]->elements,
+        ));
+
+        // Pole bez skupiny (email) jde první, pak separátor skupiny a její pole.
+        $this->assertSame('Podací údaje', $tab->sections[1]->title);
+        $structured = $tab->sections[1]->columns[0]->elements;
+        $this->assertSame(
+            ['input', 'separator', 'select'],
+            array_map(fn(FormElement $el) => $el->type, $structured),
+        );
+        $this->assertSame('filing_profile.email', $structured[0]->column);
+        $this->assertSame('Finanční úřad', $structured[1]->label);
+        $this->assertSame('filing_profile.c_ufo', $structured[2]->column);
+    }
+
+    public function testStructuredColumnWithoutCompiledSchemaIsSkipped(): void
+    {
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'filing_profile', 'name' => 'Podací údaje', 'type' => 'json',
+                'nullable' => true, 'schema' => 'test.profile'],
+        ]);
+
+        $tab = (new AutoFormBuilder())->build($def)->tabs[0];
+
+        $this->assertCount(1, $tab->sections);
+        $this->assertSame(['name'], array_map(
+            fn(FormElement $el) => $el->column,
+            $tab->sections[0]->columns[0]->elements,
+        ));
+    }
+
     public function testGeneralTabComesFirst(): void
     {
         $def = $this->makeTableDef(

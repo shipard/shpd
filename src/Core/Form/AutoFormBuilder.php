@@ -7,6 +7,8 @@ namespace Shipard\Core\Form;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\StructuredFields\StructuredFieldFormBuilder;
+use Shipard\Core\StructuredFields\StructuredSchema;
 
 /**
  * Generates a default FormDefinition for tables without an explicit form file.
@@ -75,16 +77,41 @@ class AutoFormBuilder
     private function buildTab(string $id, string $label, array $columns, ?ConfigRuntime $config): FormTab
     {
         $elements = [];
+        $structuredSections = [];
+        $structuredBuilder = new StructuredFieldFormBuilder($config);
+
         foreach ($columns as $col) {
+            // Strukturované pole (#74) dostane vlastní sekci s titulkem podle
+            // sloupce — do jednoho svislého seznamu s ostatními poli by se
+            // schéma se skupinami nevešlo čitelně.
+            if ($col->schema !== null) {
+                $schema = StructuredSchema::fromCfgItem($config, $col->schema);
+                $structured = $schema !== null
+                    ? $structuredBuilder->elements($schema, $col->id)
+                    : [];
+                if ($structured !== []) {
+                    $structuredSections[] = new FormSection(
+                        [new FormColumn($structured)],
+                        title: $col->formLabel ?? $col->name,
+                    );
+                }
+                continue;
+            }
             $elements[] = $this->buildElement($col, $config);
         }
 
-        $section = new FormSection([new FormColumn($elements)]);
+        $sections = [];
+        if ($elements !== []) {
+            $sections[] = new FormSection([new FormColumn($elements)]);
+        }
+        foreach ($structuredSections as $section) {
+            $sections[] = $section;
+        }
 
         return new FormTab(
             id: $id,
             label: $label,
-            sections: [$section],
+            sections: $sections,
         );
     }
 

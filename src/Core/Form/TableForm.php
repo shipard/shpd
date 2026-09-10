@@ -9,6 +9,9 @@ use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\StructuredFields\StructuredFieldFormBuilder;
+use Shipard\Core\StructuredFields\StructuredFieldResolver;
+use Shipard\Core\StructuredFields\StructuredSchema;
 
 abstract class TableForm
 {
@@ -99,6 +102,61 @@ abstract class TableForm
     public function buildHeaderInfo(array $data): ?FormHeaderInfo
     {
         return null;
+    }
+
+    /**
+     * Elementy pro strukturované pole (#74, I5) — `separator` per skupinu
+     * schématu a `input`/`select` per pole, s virtuálními sloupci
+     * `<sloupec>.<pole>`. Konzument je vloží do sekce/tabu:
+     *
+     *     $tab = $this->tab('filing', 'Podací údaje')->section()->col();
+     *     $tab->addElements($this->structuredFieldElements('filing_profile'));
+     *
+     * Prázdné pole (sloupec bez `schema`, nedostupná konfigurace) vrací `[]`,
+     * takže tab bez schématu prostě nic nevykreslí.
+     *
+     * @param array<string, mixed> $data data záznamu — jen pro hook
+     *        `structuredSchemaFor()`; hodnoty polí posílá server v `data`
+     * @return list<FormElement>
+     */
+    protected function structuredFieldElements(
+        string $column,
+        array $data = [],
+        bool $groupSeparators = true,
+    ): array {
+        $schema = $this->structuredSchema($column, $data);
+        if ($schema === null) {
+            return [];
+        }
+        return (new StructuredFieldFormBuilder($this->config))
+            ->elements($schema, $column, $groupSeparators);
+    }
+
+    /**
+     * Schéma strukturovaného sloupce podle definice tabulky a hooku
+     * `structuredSchemaFor()`; `null` = sloupec schéma nemá nebo není
+     * v definici (např. modul, který ho přináší extension, není aktivní —
+     * pak se tab jen nevykreslí).
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function structuredSchema(string $column, array $data = []): ?StructuredSchema
+    {
+        $staticKey = null;
+        foreach ($this->tableDef?->columns ?? [] as $col) {
+            if ($col->id === $column) {
+                $staticKey = $col->schema;
+                break;
+            }
+        }
+        return (new StructuredFieldResolver($this->config))
+            ->forWrite($this->structuredSchemaFor($column, $data), $staticKey);
+    }
+
+    /** Má tabulka tento strukturovaný sloupec (a je tedy proč kreslit tab)? */
+    protected function hasStructuredColumn(string $column): bool
+    {
+        return array_key_exists($column, $this->tableDef?->getStructuredColumns() ?? []);
     }
 
     /**

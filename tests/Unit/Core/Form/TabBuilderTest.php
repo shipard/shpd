@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Core\Form;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Database\ColumnDefinition;
+use Shipard\Core\Form\FormElement;
 use Shipard\Core\Form\TabBuilder;
 
 class TabBuilderTest extends TestCase
@@ -462,6 +463,51 @@ class TabBuilderTest extends TestCase
         $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
             ->section()->col()->multiselect('tags');
         $this->assertFalse($this->firstElement($b)->required);
+    }
+
+    // ── addElements (#74) ────────────────────────────────────────────────────
+
+    public function testAddElementsInsertsPreBuiltElements(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->section()->col()
+            ->input('name')
+            ->addElements([
+                new FormElement(type: 'separator', label: 'Finanční úřad'),
+                new FormElement(type: 'select', column: 'filing_profile.c_ufo', label: 'FÚ', options: []),
+                new FormElement(type: 'input', column: 'filing_profile.email', label: 'E-mail'),
+            ])
+            ->build();
+
+        $elements = $tab->sections[0]->columns[0]->elements;
+        $this->assertSame(
+            ['name', null, 'filing_profile.c_ufo', 'filing_profile.email'],
+            array_map(fn(FormElement $el) => $el->column, $elements),
+        );
+        $this->assertSame('separator', $elements[1]->type);
+        $this->assertSame('Finanční úřad', $elements[1]->label);
+    }
+
+    public function testAddElementsAcceptsEmptyList(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->section()->col()->input('name')->addElements([])->build();
+
+        $this->assertCount(1, $tab->sections[0]->columns[0]->elements);
+    }
+
+    public function testAddElementsRejectsNonElement(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new TabBuilder('t', 'T'))->section()->col()->addElements(['nope']);
+    }
+
+    public function testAddElementsOutsideColumnThrows(): void
+    {
+        $this->expectException(\LogicException::class);
+
+        (new TabBuilder('t', 'T'))->addElements([new FormElement(type: 'input', column: 'x')]);
     }
 
     public function testSelectPlaceholderPassthrough(): void

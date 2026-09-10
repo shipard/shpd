@@ -1,6 +1,6 @@
 # Task: Strukturovaná pole se schématem (`json` + `schema`) — #74
 
-**Stav:** PRD
+**Stav:** částečně — implementace kompletní (6 commitů 2026-09-10: jádro schématu, zápisová autorita v TableGateway, formulář + detail, profil podatele na registraci DPH, odmítnutí zápisu přes generické CRUD, dokumentace); E2E na dev DS 4l3j prošlo (ds-upgrade, uložení formulářem, field-level chyby, detail vieweru). Zbývá ruční proklik UI v prohlížeči a nasazení na alfu.
 **Issue:** #74 (rozhodnutí S1–S7), motivace #55 D19 (hlavička podání, profil podatele)
 **Návaznost:** `src/Core` (Database, Form, Document, Viewer), `docs.core` jen jako
 konzument typu; první reálný konzument `economy.vat` — **profil podatele** na registraci
@@ -210,12 +210,44 @@ Před implementací **přečti**:
 
 ## Hotovo když
 
-- [ ] Testy zelené (schéma, values, validátor, builder, renderer, gateway).
-- [ ] `ds-upgrade` na dev DS 4l3j přidá `filing_profile`; nekompilovatelné schéma
+- [x] Testy zelené (schéma, values, validátor, builder, renderer, gateway).
+- [x] `ds-upgrade` na dev DS 4l3j přidá `filing_profile`; nekompilovatelné schéma
       (neznámý klíč) upgrade zastaví s cestou k chybě.
-- [ ] Registrace k DPH: tab Podací údaje se edituje, `required` chyba u pole, uložení
+- [x] Registrace k DPH: tab Podací údaje se edituje, `required` chyba u pole, uložení
       zapíše JSON s `_schema: "economy.vat.filingProfileCz/2026"`, detail ve vieweru
       zobrazí skupiny; totéž přes API bez formuláře.
-- [ ] Záznam s ručně upravenou starší `_schema` se načte a zobrazí podle své verze.
-- [ ] `docs/structured-fields.md` existuje a F3 (`tasks/vat-filing-xml.md`) na ně může
+- [x] Záznam s ručně upravenou starší `_schema` se načte a zobrazí podle své verze
+      (ověřeno unit testy, ne ruční editací DB — viz Odchylky).
+- [x] `docs/structured-fields.md` existuje a F3 (`tasks/vat-filing-xml.md`) na ně může
       odkázat pro `economy_vat_filings.header`.
+
+## Odchylky od zadání (implementace 2026-09-10)
+
+- **Sloupec přináší extension z `economy.vat`**, ne tabulka v `economy.codebooks`:
+  schéma je cfgItem modulu `economy.vat` a `ds-upgrade` na sloupec s nedostupným
+  schématem zastaví, takže na DS bez toho modulu nesmí sloupec existovat. Formulář
+  i viewer proto záložku gatují přítomností sloupce (`hasStructuredColumn()`).
+- **`c_ufo` / `c_pracufo` jsou `enumString`**, ne `int` z ilustrativního příkladu I1 —
+  `cfgItem` je povolený jen u enum typů a hodnoty jsou kódy (u `zast_kod` i nečíselné).
+- **`required` platí jen v neprázdné hodnotě**, jinak by povinné `typ_ds` znemožnilo
+  uložit registraci k DPH bez podacích údajů. Prázdný profil = NULL.
+- **Schéma pro zápis a editaci** vybírá resolver (hook → statický atribut = aktuální
+  verze souboru), **pro zobrazení** `_schema` uložené hodnoty. Profil se tedy při
+  dalším uložení přeznačí na aktuální verzi; snapshot, který to nesmí, si verzi připne
+  hookem (F3). Klientské `_schema` se při zápisu ignoruje.
+- **Zápis slučuje nad uloženou hodnotou** (částečný zápis přes applier/API nesmaže
+  zbytek profilu); poslaný celý sloupec hodnotu nahrazuje.
+- **`TableGateway` dostal parametr `?TableDefinition $tableDef`** — bez ní neví, které
+  sloupce mají schéma. Vynechaný call-site selže hlasitě (tečkový klíč = neznámý SQL
+  sloupec, pole = rozbitý dibi insert).
+- **Generické CRUD `/api/v1/{table}` strukturovaná pole odmítá** (400 `STRUCTURED_COLUMN`,
+  6. commit) — píše přímo do tabulky a dokumentovou vrstvu obchází, takže by uložilo
+  nevalidovanou hodnotu bez `_schema`. Nad rámec zadání, ale bez toho by I3 neplatilo.
+- **Přidána skupina „oprávněná osoba"** (`opr_jmeno`, `opr_prijmeni`, `opr_postaveni`) —
+  věta P je nese a staré properties je plnily; seznam v zadání je neměl.
+- **E2E místo Playwrightu**: v repozitáři žádná Playwright infrastruktura není, ověřeno
+  HTTP smoke proti dev DS 4l3j (meta → save → DB → detail → validační chyby) a unit testy;
+  záznam se starší `_schema` pokrývají testy (na DS nemám zápisový přístup do DB).
+- **Nový modul `world.cz`** pro číselníky finančních úřadů (zadání ty klíče jmenuje).
+- **`help/`** dostalo sekci Podací údaje v `uctarna/dph-podani.md` (nad rámec sekce 7
+  zadání — CLAUDE.md žádá nápovědu ve stejném commitu jako uživatelsky viditelnou změnu).

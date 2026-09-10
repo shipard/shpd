@@ -28,6 +28,10 @@ Praktický důsledek: **Shipard zatím nemůže být jediné místo, kde tvoje
 účetnictví existuje.** Soubor pro portál za tebe musí sestavit tvůj dnešní
 program nebo účetní.
 
+Co už připravené je: **podací údaje** (kdo podává, komu a kdo výstup
+sestavil) se vyplňují na registraci k DPH — viz
+[Podání DPH](uctarna/dph-podani.md).
+
 **Období DPH se nedá uzamknout.** Nic tě dnes nezastaví, když do už
 odevzdaného období dopíšeš doklad — uvidíš to pak jako rozdíl v dalším
 podání, ale zabráněno tomu není.

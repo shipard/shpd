@@ -270,6 +270,36 @@ Uložení může být částečné (API pošle jen to, co mění), takže Docume
 hodnoty, které payload neposlal, bere z uloženého řádku — jinak by
 částečná aktualizace podaného podání vypadala jako koncept.
 
+### Profil podatele (D19, #74)
+
+Údaje **věty P** podání (kdo podává, komu a kdo výstup sestavil) se nedají
+odvodit z dokladů ani z registrace — zadává je uživatel jednou na
+**registraci k DPH**, ne u každého podání. Nejsou to relační data (sada polí
+je dána formulářem finanční správy a bude se měnit), takže jde
+o **strukturované pole se schématem** (issue #74,
+[docs/structured-fields.md](../../../../docs/structured-fields.md)):
+
+| | |
+|---|---|
+| Sloupec | `economy_codebooks_vat_registrations.filing_profile` — přináší ho [extension](../extensions/economy_codebooks_vat_registrations.jsonc) tohoto modulu, protože `economy.codebooks` na `economy.vat` nezávisí |
+| Schéma | [`config/filingProfileCz.jsonc`](../config/filingProfileCz.jsonc), verze `2026` |
+| Skupiny | daňový subjekt · finanční úřad · adresa · kontakt · oprávněná osoba · sestavil · podepisující osoba |
+| Číselníky | `filingSubjectTypes`, `filingSignatoryTypes`, `filingSignatoryCodes` (tento modul) + `world.cz.taxOffices`, `world.cz.taxOfficeBranches`, `world.base.countries` |
+| UI | Registrace DPH → záložka **Podací údaje**; stejná záložka v detailu vieweru |
+
+Sada polí a délky jsou přenesené ze starých properties
+(`e10doc/taxes` → `VatReturnProperties::loadProperties`) a **Fáze 3 je ověří
+proti aktuálnímu XSD** daňového portálu; do té doby profil jen sbírá data.
+Povinný je jen typ subjektu, a to teprve v neprázdném profilu — registraci
+k DPH jde uložit bez podacích údajů.
+
+**Co doplní Fáze 3:** hlavička podání `economy_vat_filings.header` dostane
+schéma **per typ tvrzení** (DP3 / KH / SH mají jinou sadu polí) přes hook
+`Document::structuredSchemaFor()`. Snapshot hlavičky si tím připne verzi
+schématu, aby zůstal doslovně interpretovatelný i po změně formuláře úřadu.
+Generátor XML pak skládá větu P z profilu podatele a větu D z hlavičky
+a instance.
+
 ### UI (D20)
 
 Viewer **Podání DPH** (Účtárna, za Daňovými tvrzeními): řádek nese podaný
@@ -326,8 +356,9 @@ v docblocích kalkulátorů a v zadání.
 Živé výstupy jsou **reporty** — vždy přepočtené, bez lifecycle. **Podání**
 je doména `filing`: snapshot s lifecyclem, druhy podání a zaokrouhlením
 (Fáze 2, hotová). XML (DPHDP3/DPHKH1/DPHSHV), PDF opis a editace hlavičky
-přijdou ve Fázi 3 nad strukturovanými poli se schématem (#74); zámek
-instance, vynucení proti změnám dokladů a zaúčtování přiznání ve Fázi 4.
+přijdou ve Fázi 3 nad strukturovanými poli se schématem (#74 — mechanismus
+je hotový, profil podatele viz výše); zámek instance, vynucení proti změnám
+dokladů a zaúčtování přiznání ve Fázi 4.
 
 ## Mimo scope
 

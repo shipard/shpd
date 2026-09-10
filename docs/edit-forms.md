@@ -580,6 +580,7 @@ DPH proti řádkům dokladu (`rows_recap_mismatch`) a její vnitřní konzistenc
 | Hodnota `field` | Význam | UI chování |
 |-----------------|--------|------------|
 | Konkrétní `column` formuláře | Field-level chyba | error vedle inputu, tabová tečka, řádek v banneru s prefixem labelu pole |
+| Virtuální sloupec strukturovaného pole (`filing_profile.typ_ds`, kap. 25) | Field-level chyba | dtto — pro klienta je to obyčejný `column` |
 | `field` = id nějakého tabu (typicky subtable, např. `rows` → tab „Řádky") | Tab-level chyba | banner + tabová tečka na tom tabu + `switchToErrorTab` na něj přeskočí |
 | `_form` (konstanta `ValidationError::FIELD_FORM`) | Form-level chyba | jen banner, holá hláška |
 | Cokoli jiného (neznámý sloupec, prázdný string) | Fallback na form-level | jako `_form` — jen banner |
@@ -2223,3 +2224,54 @@ Konvence pro takové pole (viz CLAUDE.md → Citlivá data):
 
 První uživatel: `mail_token` v `DataSourcesForm` (hosting, ruční backfill
 mail tokenů — `tasks/hosting-04-mail-router.md`).
+
+---
+
+## 25. Strukturovaná pole — virtuální sloupce
+
+Sloupec typu `json` s atributem `schema` (issue #74,
+[structured-fields.md](structured-fields.md)) se needituje jako JSON: server
+ho **zploští na virtuální sloupce** `<sloupec>.<pole>` a formulář nad nimi
+staví běžné elementy.
+
+**Kontrakt.** Pro klienta je `filing_profile.typ_ds` obyčejný `column`:
+
+- `data` v odpovědích `meta`, `save` i `recalculate` nese ploché klíče,
+  surový sloupec v nich **není**;
+- `formData[column]` funguje bez úprav — tečka v klíči je jen znak
+  (`FormElement.svelte` klíčuje bracket přístupem, `sanitizeFormData` jde
+  přes plochý `Object.entries`);
+- validační chyba přijde s `field = "filing_profile.typ_ds"` a klient ji
+  přiřadí k inputu přes `buildElementMap()` jako každou jinou (kap. 8);
+- `triggers: reload` na virtuálním sloupci funguje také bez úprav.
+
+Oddělovač je **tečka** — stejná notace jako u chyb v řádcích
+(`rows.0.unit_price`). Rozhodnutí a jeho ověření napříč klientem jsou
+v docblocku `StructuredSchema::PATH_SEPARATOR`; `id` polí schématu proto
+tečku nesmí obsahovat.
+
+**Serverová strana.** `FormController` plošťuje na výstupu, zpět je skládá
+`TableGateway` — controller do hodnoty nemluví. `filterWritableFields()`
+propouští virtuální sloupce jen u sloupců se schématem (a ne u `system`
+sloupců); neznámá pole schématu gateway zahodí.
+
+**Kde se elementy berou.** PHP form si je vyžádá helperem, který emituje
+`separator` per skupinu schématu a `input`/`select` per pole:
+
+```php
+if ($this->hasStructuredColumn('filing_profile')) {
+    $tabs[] = $this->tab('filing', 'Podací údaje')
+        ->section()->col()
+        ->addElements($this->structuredFieldElements('filing_profile', $data))
+        ->build();
+}
+```
+
+`hasStructuredColumn()` je gate pro sloupce, které do tabulky přináší
+extension jiného modulu — bez toho modulu se záložka nekreslí.
+`TabBuilder::addElements()` vloží hotové `FormElement[]` do otevřeného
+sloupce (separátory respektují auto-hide, kap. 11). Tabulky bez form třídy
+dostanou sekci automaticky z `AutoFormBuilder`; **deklarativní JSONC formy
+strukturovaná pole neumí**.
+
+Vzor: `VatRegistrationsForm` (záložka Podací údaje na registraci k DPH).

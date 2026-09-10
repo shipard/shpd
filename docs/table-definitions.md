@@ -302,6 +302,7 @@ rozhodnutí D9 a `docs/auth.md` §Admin model.
 | `collation` | string | Ne | Ne | Collation pro tento sloupec (přetíží globální nastavení DB) |
 | `reference` | string | Ne | Ne | ID cílové tabulky pro referenční vazbu (jen pro UI, žádná DB constraint) |
 | `sensitive` | bool | Ne | Ne | Citlivý sloupec — nikdy neopustí server (viz níže). Výchozí: `false` |
+| `schema` | string | Ne | Ne | Jen pro typ `json`: cfgItem se schématem strukturovaného pole (viz § 6 a [structured-fields.md](structured-fields.md)) |
 
 ### Speciální pole pro primární klíč
 
@@ -422,6 +423,26 @@ Speciální pole: žádná.
 |-------------|-------------------|-------|
 | `json` | JSON | Nativní JSON typ |
 
+Speciální pole:
+
+| Pole | Typ | Povinné | Popis |
+|------|-----|---------|-------|
+| `schema` | string | Ne | cfgItem se schématem **strukturovaného pole** — viz níže |
+
+**Strukturované pole (`schema`).** Atribut `schema` říká, že obsah sloupce
+popisuje schéma v cfgItem (`"schema": "economy.vat.filingProfileCz"`): pole,
+jejich typy a skupiny ve stejném formátu jako sloupce tabulky. Takový
+sloupec se pak edituje běžným formulářem, validuje se na serveru
+a zobrazuje v detailu vieweru. Na jiném typu než `json` je `schema` chyba
+definice; `ds-upgrade` navíc vynutí, že cfgItem existuje a projde
+validátorem schématu.
+
+Použij ho pro data, jejichž **sada polí se mění podle typu záznamu, země
+nebo formuláře úřadu** a která se nevyhledávají ani nejoinují (hlavičky
+daňových podání, profil podatele). Snapshoty dokladů a payloady alertů
+schéma mít nemají. Celý mechanismus, formát schématu a verzování:
+[structured-fields.md](structured-fields.md).
+
 **Pozor — manuální serializace v Document class.** Dibi pro `json` sloupce neumí automatickou konverzi PHP pole → JSON řetězec. Pokud `Document::beforeSave` zapíše do `$data['some_json_col']` PHP pole, dibi ho při `INSERT`/`UPDATE` interpretuje jako multi-row insert payload a vyprodukuje broken SQL.
 
 Praxe je jednoduchá:
@@ -430,6 +451,10 @@ Praxe je jednoduchá:
 - **Při čtení** — dibi vrátí obsah jako `string`. Form/viewer si ho podle potřeby `json_decode(...)`. Vzor je `DocsHeadsForm::decodeSnapshot`, který elegantně zvládá oba případy (string z DB i pole z server-side computed výstupu).
 
 Vzor implementace pro ukládání v `DocDocument::encodeSnapshot()` — helper, který Document classes používají pro snapshot sloupce.
+
+U sloupců se `schema` **tohle neplatí**: hodnotu serializuje `TableGateway`,
+`Document::beforeSave` dostane dekódované pole a nesmí do sloupce zapisovat
+JSON string sám (viz [structured-fields.md](structured-fields.md) § 6).
 
 ### Enum typy
 

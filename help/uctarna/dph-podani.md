@@ -1,7 +1,7 @@
 ---
 title: Podání DPH
 summary: Jak z živého výpočtu udělat podání — trvalý záznam toho, co jsi za období odevzdal, včetně opravného, dodatečného a následného podání.
-keywords: [podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál]
+keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál]
 related: [uctarna/dph-zive-vystupy.md, co-dnes-nejde.md]
 ---
 
@@ -66,6 +66,30 @@ Které druhy jde použít, plyne ze zákona a liší se podle výstupu:
 nabízí se řádné, potom už jen navazující druhy. Rozpracované podání může
 být za jedno tvrzení nejvýš jedno — nejdřív ho podej, nebo zruš.
 
+## Podací údaje na registraci k DPH
+
+Aby z podání mohl jednou vzniknout soubor pro daňový portál, potřebuje
+Shipard vědět **kdo podává, komu a kdo výstup sestavil**. Tyhle údaje se
+nevyplňují u každého podání — zadáváš je jednou v **Nastavení → Účetnictví
+→ Registrace DPH**, kde má registrace záložku **Podací údaje**:
+
+- **Daňový subjekt** — právnická nebo fyzická osoba, kód hlavní činnosti
+  (NACE).
+- **Finanční úřad** a **územní pracoviště**, kam podání patří.
+- **Adresa** a **kontakt** (telefon, e-mail, ID datové schránky).
+- **Oprávněná osoba** — kdo za firmu jedná, a jaký k ní má vztah.
+- **Sestavil** — kdo výstup připravil (jméno a telefon na dotazy úřadu).
+- **Podepisující osoba** — jen když podání podepisuje zástupce
+  (daňový poradce, zmocněnec); nechej prázdné, když podepisuješ sám.
+
+Vyplnit je můžeš kdykoli — registrace k DPH se uloží i bez nich. Vyplatí
+se to udělat dřív než později: **hodnoty se dají opsat z posledního
+přiznání**, které jsi podal ve svém dnešním programu, a až Shipard začne
+XML vytvářet, půjde podání odevzdat bez dohledávání.
+
+Údaje se ukládají k té registraci, ke které patří — firma s víc
+registracemi (víc zemí) má každou zvlášť.
+
 ## Podané a přesné hodnoty
 
 Přiznání se odevzdává v celých korunách, a to po řádcích: **každý řádek
@@ -108,7 +132,8 @@ dodatečné přiznání vychází právě takhle.
   [Co Shipard dnes neumí](../co-dnes-nejde.md).
 - **XML pro daňový portál Shipard zatím nevytvoří.** Podání je dnes
   evidence: víš, co a kdy jsi podal, ale soubor pro portál sestavuje tvůj
-  dnešní program nebo účetní.
+  dnešní program nebo účetní. Podací údaje (viz výše) se ale vyplňují už
+  teď — až XML přijde, budou připravené.
 
 ## Souvisí
 

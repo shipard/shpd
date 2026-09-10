@@ -45,7 +45,36 @@ final class IncomingMessagesViewerTest extends TestCase
             'partner_person'    => null,
             'partner_name'      => null,
             'partner_full_name' => null,
+            'ai_title'          => null,
+            'source_type'       => 2,
         ], $overrides);
+    }
+
+    // ── t1: titulek (D3) — bez configu jen prázdný předmět a ruční zprávy ──
+
+    public function testT1KeepsSubjectForEmailWithAiTitle(): void
+    {
+        $rendered = $this->viewer()->renderRow($this->row(['ai_title' => 'Faktura 2026-0042 — Dodavatel s.r.o.']));
+        $this->assertSame('Message from scanner', $rendered['t1']);
+    }
+
+    public function testT1UsesAiTitleForManualMessage(): void
+    {
+        $rendered = $this->viewer()->renderRow($this->row([
+            'subject'     => 'faktura_final_v2.pdf',
+            'source_type' => 1,
+            'ai_title'    => 'Faktura 2026-0042 — Dodavatel s.r.o.',
+        ]));
+        $this->assertSame('Faktura 2026-0042 — Dodavatel s.r.o.', $rendered['t1']);
+    }
+
+    public function testT1UsesAiTitleForEmptySubject(): void
+    {
+        $rendered = $this->viewer()->renderRow($this->row(['subject' => '', 'ai_title' => 'Dopis od úřadu']));
+        $this->assertSame('Dopis od úřadu', $rendered['t1']);
+
+        $withoutTitle = $this->viewer()->renderRow($this->row(['subject' => '', 'ai_title' => null]));
+        $this->assertSame('', $withoutTitle['t1']);
     }
 
     /** @return list<string> */

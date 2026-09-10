@@ -13,6 +13,7 @@ use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\IsdocImportService;
 use Shipard\Module\Core\Mail\MessagePartnerWriter;
+use Shipard\Module\Core\Mail\MessageTitleComposer;
 
 /**
  * Deterministický ISDOC import (tasks/mail-isdoc-import.md, krok 3;
@@ -118,15 +119,19 @@ class IsdocImportServiceTest extends TestCase
         );
     }
 
-    /** Service s injektovaným zápisem partnera (vrstva 1, mail-message-title-partner.md). */
-    private function serviceWithPartnerWriter(DataSourceConnection $db, MessagePartnerWriter $writer): IsdocImportService
-    {
+    /** Service s injektovaným zápisem partnera / titulku (mail-message-title-partner.md). */
+    private function serviceWithPartnerWriter(
+        DataSourceConnection $db,
+        ?MessagePartnerWriter $writer,
+        ?MessageTitleComposer $composer = null,
+    ): IsdocImportService {
         return new IsdocImportService(
             $db,
             new SchemaValidator(SchemaLoader::default()),
             null,
             $this->tmpDir,
             partnerWriter: $writer,
+            titleComposer: $composer,
         );
     }
 
@@ -273,6 +278,26 @@ class IsdocImportServiceTest extends TestCase
         $this->assertSame(['partner_person' => 77], $this->updates[4][1]);
         $this->assertSame('12345678', $captured[0]['companyId']);
         $this->assertTrue($captured[1], 'jen deterministická shoda identifikátorem');
+    }
+
+    public function testImportWritesTitleFromComposer(): void
+    {
+        // ISDOC nemá AI → titulek je serverový composer (D2), primární zdroj.
+        $files = [
+            $this->storedAttachment(501, 'faktura.isdoc', $this->fixture('invoice_min.isdoc'), 'application/xml'),
+        ];
+        $dibi = $this->makeDibi($this->messageRow());
+
+        $result = $this->serviceWithPartnerWriter($this->makeDb($dibi), null, new MessageTitleComposer(null))
+            ->tryImport(self::MESSAGE_NDX, $files);
+
+        $this->assertTrue($result);
+        // analysis_state, primary_type, docState + ai_title
+        $this->assertCount(4, $this->updates);
+        $this->assertSame('core_mail_incoming_messages', $this->updates[3][0]);
+        $this->assertArrayHasKey('ai_title', $this->updates[3][1]);
+        $this->assertStringStartsWith('FV-2026-0042 — Testovací dodavatel s.r.o.', (string) $this->updates[3][1]['ai_title']);
+        $this->assertStringEndsWith('CZK', (string) $this->updates[3][1]['ai_title']);
     }
 
     public function testPartnerWriterFailureDoesNotAbortImport(): void

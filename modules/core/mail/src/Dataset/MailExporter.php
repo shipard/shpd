@@ -133,6 +133,7 @@ final class MailExporter implements RecordExporter
             'aiAnalysisEnabled' => V::bool($m['ai_analysis_enabled'] ?? null),
             'needsReanalysis'   => ((int) ($m['needs_reanalysis'] ?? 0)) === 1 ? true : null,
             'profileOverride'   => V::str($m['profile_override_code'] ?? null),
+            'aiTitle'           => V::str($m['ai_title'] ?? null),
             'created'           => V::dateTime($m['created'] ?? null),
             'target'            => $this->target($m, $messageId),
             'attachments'       => $attachments,

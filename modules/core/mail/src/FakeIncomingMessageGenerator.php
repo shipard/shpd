@@ -144,6 +144,7 @@ class FakeIncomingMessageGenerator
             // zároveň dodavatelem; Osoba se u fake dat nepáruje.
             'partner_person'        => null,
             'partner_name'          => $isInvoiceTemplate ? $company : null,
+            'ai_title'              => null,
             'received_at'           => $receivedAt,
             'external_message_id'   => null,
             'in_reply_to'           => null,

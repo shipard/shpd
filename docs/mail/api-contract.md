@@ -332,7 +332,8 @@ návrh. Headers: `X-Claim-Token`. Request body:
   "analysis_json": { },
   "message_classification": {
     "primary_type": "invoiceReceived",
-    "confidence": 0.97
+    "confidence": 0.97,
+    "title": "Faktura 2026-0042 — Dodavatel s.r.o., 13 105 Kč"
   },
   "document": {
     "doc_type": "invoiceReceived",
@@ -347,7 +348,9 @@ návrh. Headers: `X-Claim-Token`. Request body:
 
 - `message_classification` je **povinná** (422 při absenci; prompt v4 ji
   vždy generuje). Fallback čtení z `analysis_json.message_classification`
-  zůstává pro robustnost, top-level pole má přednost.
+  zůstává pro robustnost, top-level pole má přednost. `title` (volitelný,
+  ≤ 120 znaků, od promptu v4.3.0) je lidský titulek zprávy → sloupec
+  `ai_title`; bez něj server složí fallback z canonicalu.
 - `document` je volitelný (0..1) — primární dokument zprávy. Pole
   `doc_type` se ukládá do sloupce `proposed_type`.
 - `secondary_findings` je volitelný informativní seznam dalších nálezů
@@ -387,6 +390,10 @@ Server transakčně:
    `partner_person` ← Osoba při shodě IČO / DIČ / VAT ID (jen do NULL a jen
    dokud `target_row IS NULL`; nikdy shoda jménem). Best-effort — selhání
    nevrací chybu.
+7. Titulek zprávy: UPDATE `ai_title` ← `message_classification.title`
+   (trim, 200 znaků), jinak fallback `MessageTitleComposer` z validního
+   canonicalu, jinak NULL — zapisuje se **vždy** (AI-vlastněný sloupec,
+   bez guardů; re-analýza bez dokumentu titulek smaže). Best-effort.
 
 Response 201: `{ analysis_ndx }`.
 

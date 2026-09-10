@@ -12,7 +12,8 @@ use Shipard\Module\Core\Mail\Preprocess\PreprocessRunner;
  * Viewer došlých zpráv (core_mail_incoming_messages).
  *
  * Layout řádku podle spec §5.1:
- *   t1 — subject (orientováno vlevo, bold)
+ *   t1 — titulek: subject, u generického / prázdného předmětu a ručních
+ *        zpráv ai_title (IncomingMessageTitle, D3)
  *   i1 — received_at relativní („před 2 h", „včera 14:32", „12. 3.")
  *   t2 — partner dokumentu (Osoba ?? partner_name), fallback odesílatel
  *        (tasks/mail-message-title-partner.md D7)
@@ -40,6 +41,9 @@ class IncomingMessagesViewer extends TableViewer
         'cancelled' => 'danger',
     ];
 
+    /** Vzory generických předmětů z cfgItem — memoizované per instance. */
+    private ?array $genericPatterns = null;
+
     /** Barevné hinty pro badge primárního typu — klíč = cfgItem key. */
     private const PRIMARY_TYPE_SPAN_CLASS = [
         'invoiceReceived' => 'primary',
@@ -55,7 +59,8 @@ class IncomingMessagesViewer extends TableViewer
     {
         // LEFT JOIN Osoby — smazaná/archivovaná Osoba nesmí řádek vyfiltrovat
         // (t2 pak padá na partner_name, P9).
-        $sql = 'SELECT m.`id`, m.`message_id`, m.`subject`, m.`sender_email`, m.`sender_name`,'
+        $sql = 'SELECT m.`id`, m.`message_id`, m.`subject`, m.`ai_title`, m.`source_type`,'
+            . ' m.`sender_email`, m.`sender_name`,'
             . ' m.`primary_type`, m.`received_at`, m.`body_plain`, m.`docState`, m.`docStateMain`,'
             . ' m.`analysis_state`, m.`is_bulk`, m.`partner_person`, m.`partner_name`,'
             . ' p.`full_name` AS partner_full_name,'
@@ -88,14 +93,14 @@ class IncomingMessagesViewer extends TableViewer
             }
         }
 
-        // Fulltext search — subject, sender_email, sender_name, partner
-        // (snapshot z canonicalu i jméno Osoby), body_plain
+        // Fulltext search — subject i ai_title (vždy oba, D3), sender_email,
+        // sender_name, partner (snapshot z canonicalu i jméno Osoby), body_plain
         if ($search !== null && $search !== '') {
             $term = '%' . $search . '%';
-            $conditions[] = '(m.`subject` LIKE %s OR m.`sender_email` LIKE %s'
+            $conditions[] = '(m.`subject` LIKE %s OR m.`ai_title` LIKE %s OR m.`sender_email` LIKE %s'
                 . ' OR m.`sender_name` LIKE %s OR m.`partner_name` LIKE %s'
                 . ' OR p.`full_name` LIKE %s OR m.`body_plain` LIKE %s)';
-            $params = array_merge($params, array_fill(0, 6, $term));
+            $params = array_merge($params, array_fill(0, 7, $term));
         }
 
         if ($conditions !== []) {
@@ -118,7 +123,7 @@ class IncomingMessagesViewer extends TableViewer
 
         $row = [
             'id'         => (int) $rowData['id'],
-            't1'         => (string) ($rowData['subject'] ?? ''),
+            't1'         => $this->displayTitle($rowData),
             'i1'         => $this->formatRelativeDate($rowData['received_at'] ?? null),
             'stateStyle' => $stateStyle,
         ];
@@ -314,7 +319,7 @@ class IncomingMessagesViewer extends TableViewer
      */
     private function buildDetailHeader(array $record): array
     {
-        $subject = trim((string) ($record['subject'] ?? ''));
+        $subject = $this->displayTitle($record);
 
         $senderName  = trim((string) ($record['sender_name'] ?? ''));
         $senderEmail = trim((string) ($record['sender_email'] ?? ''));
@@ -442,6 +447,11 @@ class IncomingMessagesViewer extends TableViewer
         // detailu nad taby (buildDetailHeader). Tady zůstávají jen technické
         // identifikátory zprávy.
         $techItems = [];
+        // Když hlavička ukazuje titulek z AI místo generického předmětu,
+        // původní předmět zůstává dohledatelný tady (D3).
+        if ($this->usesAiTitle($record)) {
+            $this->addItem($techItems, $this->viewerLabel('subject', 'Subject'), $record['subject'] ?? null);
+        }
         $this->addItem($techItems, 'Kód zprávy', $record['message_id'] ?? null);
         if (!empty($record['external_message_id'])) {
             $this->addItem($techItems, 'Message-ID', (string) $record['external_message_id']);
@@ -935,8 +945,47 @@ class IncomingMessagesViewer extends TableViewer
      */
     private function fromLabel(): string
     {
+        return $this->viewerLabel('from', 'from');
+    }
+
+    /** Drobný popisek z `core.mail.viewerDetailLabels.labels.*`, bez configu anglický fallback. */
+    private function viewerLabel(string $key, string $englishFallback): string
+    {
         $labels = ($this->config?->cfgItem('core.mail.viewerDetailLabels') ?? [])['labels'] ?? [];
-        return (string) ($labels['from']['name'] ?? 'from');
+        return (string) ($labels[$key]['name'] ?? $englishFallback);
+    }
+
+    /**
+     * Titulek řádku / detailu — předmět, nebo `ai_title` u generického /
+     * prázdného předmětu a ručních zpráv (pravidlo D3).
+     *
+     * @param array<string, mixed> $row
+     */
+    private function displayTitle(array $row): string
+    {
+        return IncomingMessageTitle::display(
+            (string) ($row['subject'] ?? ''),
+            isset($row['ai_title']) ? (string) $row['ai_title'] : null,
+            (int) ($row['source_type'] ?? 0),
+            $this->genericPatterns(),
+        );
+    }
+
+    /** @param array<string, mixed> $row */
+    private function usesAiTitle(array $row): bool
+    {
+        return IncomingMessageTitle::usesAiTitle(
+            (string) ($row['subject'] ?? ''),
+            isset($row['ai_title']) ? (string) $row['ai_title'] : null,
+            (int) ($row['source_type'] ?? 0),
+            $this->genericPatterns(),
+        );
+    }
+
+    /** @return list<string> */
+    private function genericPatterns(): array
+    {
+        return $this->genericPatterns ??= IncomingMessageTitle::patternsFrom($this->config);
     }
 
     private function formatMailbox(array $record): string

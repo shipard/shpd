@@ -35,10 +35,11 @@ use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
  *     + DIČ/IČ výstavce + datum vystavení); shodná identita = jeden doklad
  *     (preference samostatná příloha > embedded), více odlišných identit →
  *     větev se celá vzdá, AI vybere primární dokument,
- *   - partner zprávy (`partner_name` / `partner_person`) si plní sám přes
- *     {@see MessagePartnerWriter} — ISDOC obchází `/result`
- *     (tasks/mail-message-title-partner.md P6); bez injektovaného writeru
- *     se partner nezapisuje (unit testy).
+ *   - partner zprávy (`partner_name` / `partner_person`) a titulek
+ *     `ai_title` si plní sám přes {@see MessagePartnerWriter}
+ *     a {@see MessageTitleComposer} — ISDOC obchází `/result`
+ *     (tasks/mail-message-title-partner.md P6); bez injektovaných
+ *     závislostí se partner ani titulek nezapisují (unit testy).
  *
  * Embedded ISDOC v PDF (PDF/A-3 /EmbeddedFiles) se extrahuje přes
  * `pdfdetach` (poppler-utils) — binárka chybí → embedded detekce vypnuta
@@ -79,6 +80,7 @@ class IsdocImportService
         private readonly string $dsPath,
         ?IsdocReader $reader = null,
         private readonly ?MessagePartnerWriter $partnerWriter = null,
+        private readonly ?MessageTitleComposer $titleComposer = null,
     ) {
         $this->reader = $reader ?? new IsdocReader();
     }
@@ -329,6 +331,21 @@ class IsdocImportService
                     );
                 } catch (\Throwable $e) {
                     ErrorLogger::warn('ISDOC import: partner write failed', [
+                        'message' => $messageNdx,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Titulek zprávy z canonicalu (D2) — u ISDOC je composer primární
+            // zdroj (žádná AI). Best-effort jako partner.
+            if ($this->titleComposer !== null) {
+                try {
+                    $dibi->update(self::MESSAGES_TABLE, [
+                        'ai_title' => $this->titleComposer->compose($document['canonical'], $document['docType']),
+                    ])->where('id = %i', $messageNdx)->execute();
+                } catch (\Throwable $e) {
+                    ErrorLogger::warn('ISDOC import: title write failed', [
                         'message' => $messageNdx,
                         'error' => $e->getMessage(),
                     ]);

@@ -9,6 +9,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Module\Core\Attachments\AttachmentService;
+use Shipard\Module\Core\Mail\IncomingMessageTitle;
 
 /**
  * Ruční zařazení došlé zprávy do Spisovny (design §6.4).
@@ -131,7 +132,14 @@ class FileFromMessageService
      */
     private function insertRegistryDocument(array $message, ?int $partner, ?int $userId): int
     {
-        $subject = trim((string) ($message['subject'] ?? ''));
+        // Lidský název zprávy — u skenů / ručních zpráv titulek z AI místo
+        // generického předmětu (IncomingMessageTitle, D3).
+        $subject = IncomingMessageTitle::display(
+            (string) ($message['subject'] ?? ''),
+            isset($message['ai_title']) ? (string) $message['ai_title'] : null,
+            (int) ($message['source_type'] ?? 0),
+            IncomingMessageTitle::patternsFrom($this->config),
+        );
 
         $data = [
             'title'          => $subject !== '' ? $subject : '(bez předmětu)',

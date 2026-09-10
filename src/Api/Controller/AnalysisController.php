@@ -30,6 +30,7 @@ use Shipard\Module\Core\Ai\AIBackendDocument;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MessagePartnerWriter;
 use Shipard\Module\Core\Mail\MessageProposalApplier;
+use Shipard\Module\Core\Mail\MessageTitleComposer;
 use Shipard\Module\Core\Mail\PrimaryTypes;
 use Shipard\Module\Core\Mail\ProposalApplyOutcome;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
@@ -93,6 +94,14 @@ class AnalysisController
 
     /** Lazy zápis partnera zprávy z canonicalu (viz partnerWriter()). */
     private ?MessagePartnerWriter $partnerWriter = null;
+
+    /**
+     * Lazy fallback titulku zprávy z canonicalu per AI profil běhu
+     * (klíč 0 = výchozí profil DS) — viz titleComposer().
+     *
+     * @var array<int, MessageTitleComposer>
+     */
+    private array $titleComposers = [];
 
     /**
      * SchemaValidator + DocumentApplier are intentionally nullable for
@@ -769,7 +778,9 @@ class AnalysisController
      * nevaliduje — žije jen v analysis_json.
      *
      * Z validního canonicalu se navíc zapíše partner zprávy
-     * (`partner_name` / `partner_person`, vrstva 1 — {@see MessagePartnerWriter}).
+     * (`partner_name` / `partner_person`, vrstva 1 — {@see MessagePartnerWriter})
+     * a titulek zprávy `ai_title` (`message_classification.title`, fallback
+     * {@see MessageTitleComposer}).
      */
     public function result(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -932,6 +943,20 @@ class AnalysisController
                 }
             }
 
+            // 8) Titulek zprávy (ai_title) — AI-vlastněný, zapisuje se každý
+            //    běh (i NULL). Best-effort ze stejného důvodu jako partner.
+            try {
+                $this->applyMessageTitle(
+                    $dibi, $messageNdx, $body,
+                    is_array($canonical) ? $canonical : null, $proposedType, $profileNdx,
+                );
+            } catch (\Throwable $e) {
+                ErrorLogger::warn('AnalysisController::result title write failed', [
+                    'messageNdx' => $messageNdx,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             $dibi->commit();
         } catch (\Throwable $e) {
             $dibi->rollback();
@@ -990,6 +1015,53 @@ class AnalysisController
         ->where('id = %i', $messageNdx)
         ->where('primary_type_source != %s', 'user')
         ->execute();
+    }
+
+    /**
+     * Titulek zprávy `ai_title` (tasks/mail-message-title-partner.md D1/D2):
+     * `message_classification.title` (trim, sjednocení whitespace, 200 znaků;
+     * fallback čtení z `analysis_json` jako u klasifikace), když chybí →
+     * deterministický fallback z validního canonicalu
+     * ({@see MessageTitleComposer}), jinak NULL.
+     *
+     * Zapisuje se **vždy**, i NULL — sloupec vlastní AI, re-analýza bez
+     * dokumentu titulek smaže. Bez guardu na `primary_type_source` (uživatel
+     * titulek needituje) i na `target_row` (záměr, P2). Starší analyzer bez
+     * `title` projde — pole není v kontraktu povinné (P8).
+     *
+     * Fallback skládá labely typů v jazyce AI profilu běhu (`$profileNdx`,
+     * jinak výchozí profil DS) — stejně jako titulek od AI (D2), ne v jazyce
+     * requestu analyzeru.
+     *
+     * @param array<string, mixed>      $body
+     * @param array<string, mixed>|null $canonical validní canonical návrhu (bez wrapperu), nebo null
+     */
+    private function applyMessageTitle(
+        \Dibi\Connection $dibi,
+        int $messageNdx,
+        array $body,
+        ?array $canonical,
+        ?string $proposedType,
+        ?int $profileNdx = null,
+    ): void {
+        $classification = $body['message_classification'] ?? null;
+        if (!is_array($classification)) {
+            $analysisJson = $body['analysis_json'] ?? null;
+            $classification = is_array($analysisJson)
+                ? ($analysisJson['message_classification'] ?? null)
+                : null;
+        }
+
+        $title = is_array($classification)
+            ? MessageTitleComposer::clean($classification['title'] ?? null)
+            : null;
+        if ($title === null && $canonical !== null && $proposedType !== null) {
+            $title = $this->titleComposer($profileNdx)->compose($canonical, $proposedType);
+        }
+
+        $dibi->update(self::MESSAGES_TABLE, ['ai_title' => $title])
+            ->where('id = %i', $messageNdx)
+            ->execute();
     }
 
     /**
@@ -1516,6 +1588,16 @@ class AnalysisController
             $this->db->getDibiConnection(),
             $this->configRuntime,
         );
+    }
+
+    /**
+     * Fallback titulku z canonicalu — labely typů z compiled configu
+     * v jazyce AI profilu běhu (lazy, cache per profil).
+     */
+    private function titleComposer(?int $profileNdx): MessageTitleComposer
+    {
+        $key = $profileNdx ?? 0;
+        return $this->titleComposers[$key] ??= MessageTitleComposer::forDataSource($this->db, $this->config, $profileNdx);
     }
 
     /**

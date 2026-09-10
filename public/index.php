@@ -967,6 +967,9 @@ function dispatchMail(
 				: null,
 			$dsPath,
 			partnerWriter: \Shipard\Module\Core\Mail\MessagePartnerWriter::create($db->getDibiConnection(), $configRuntime),
+			// Labely typů v jazyce AI profilu DS, ne requestu (mail-router
+			// Accept-Language neposílá).
+			titleComposer: \Shipard\Module\Core\Mail\MessageTitleComposer::forDataSource($db, $resolved->config),
 		);
 
 	$ctrl = new MailController(

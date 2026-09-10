@@ -208,6 +208,12 @@
                 "null"
             ]
         },
+        "aiTitle": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
         "created": {
             "$ref": "#/$defs/LocalDateTimeOrNull"
         },

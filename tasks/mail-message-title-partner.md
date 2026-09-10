@@ -1,6 +1,6 @@
 # Task: Došlá pošta — partner dokladu a titulek zprávy z AI analýzy (Issue #43)
 
-**Stav:** částečně — fáze 1 (partner) hotovo 2026-09-10, fáze 2 (titulek) naplánována
+**Stav:** hotovo — fáze 1 (partner) i fáze 2 (titulek) 2026-09-10; follow-up (MCP `MailListPendingTool`, dashboardové karty) mimo tento task
 
 ## Status / cíl
 
@@ -285,6 +285,30 @@ Viewer / formulář / fulltext
    title i fallback, ISDOC nastaví titulek.
 9. Aktualizovat `ai-analysis.md`, `ai-prompts.md` (v4.3.0),
    `tasks/README.md`; hlavička `**Stav:** hotovo`.
+
+**Poznámky k implementaci fáze 2 (2026-09-10):**
+
+- `ai_title` zapisuje samostatná metoda `AnalysisController::applyMessageTitle`
+  (ne `applyMessageClassification`), aby se titulek zapsal i při neznámém
+  `primary_type` a aby existující testy klasifikace zůstaly beze změny.
+- `MessageTitleComposer` bere `?ConfigRuntime`; label typu se vynechá, když
+  compiled config není (titulek zůstane smysluplný: `{docNumber} —
+  {dodavatel}, {částka} {měna}`). Produkční wiring jde přes
+  `MessageTitleComposer::forDataSource()`: compiled config **v jazyce AI
+  profilu** (profil běhu v `/result`, u ISDOC výchozí aktivní profil DS;
+  fallback výchozí jazyk DS). Nález z alfy 2026-09-10: ISDOC titulek vyšel
+  „Received invoice", protože intake od mail-routeru nenese
+  `Accept-Language` a DS bez `defaultLanguage` padá na `en`; titulek je
+  DS-wide data v jazyce profilu, stejně jako titulek od AI (D2).
+  `IsdocImportService` dostává composer injektovaný.
+- Seznam `genericSubjectPatterns` je oproti PRD širší o `Attached …`,
+  samotné `Fwd:`/`Re:` a `(no subject)` / `bez předmětu`; vzory hlídá
+  `IncomingMessageTitleTest::testShippedPatterns`.
+- Pravidlo D3 používá i `RegistryDocumentsViewer` (položka Zdrojová
+  zpráva). `MailSuggestionsSource` a MCP `MailListPendingTool` zůstávají
+  follow-up dle Scope.
+- Otevřený bod „title u `other`" rozhodnut: ano, stručný popis obsahu —
+  prompt to vyžaduje; kvalita se ladí na alfě.
 
 ## Akceptační kritéria (Hotovo když)
 

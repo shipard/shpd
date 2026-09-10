@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Mail\Preprocess;
 
 use Shipard\Api\TableLoader;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DataSourceConnection;
@@ -17,6 +18,7 @@ use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\IsdocImportService;
 use Shipard\Module\Core\Mail\MessagePartnerWriter;
+use Shipard\Module\Core\Mail\MessageTitleComposer;
 use Shipard\Module\Core\Mail\Preprocess\Action\FetchLinkedDocumentAction;
 use Shipard\Module\Core\Mail\Preprocess\Action\RenderBodyToPdfAction;
 use Shipard\Module\Core\Mail\Preprocess\Http\CurlHttpFetcher;
@@ -45,19 +47,31 @@ final class PreprocessRunnerFactory
         $dibi = $db->getDibiConnection();
         $render = $serverConfig !== null ? RenderClient::fromServerConfig($serverConfig) : new RenderClient(null);
 
-        $isdocImportFactory = static function () use ($db, $dibi, $dsDir): IsdocImportService {
+        $isdocImportFactory = static function () use ($db, $dibi, $dsDir, $dsConfig): IsdocImportService {
             try {
                 $enricher = RowHistoryEnricher::create($dibi);
             } catch (\Throwable $e) {
                 ErrorLogger::logException($e, 'PreprocessRunnerFactory: RowHistoryEnricher unavailable — ISDOC import runs without enrichment');
                 $enricher = null;
             }
+            // Compiled config pro partnera ISDOC importu (target typu je
+            // jazykově nezávislý) — bez něj target vždy docs. Titulek si
+            // config načítá sám v jazyce AI profilu DS (forDataSource).
+            try {
+                $configRuntime = ConfigRuntime::load($dsDir, $dsConfig->getDefaultLanguage());
+            } catch (\Throwable $e) {
+                ErrorLogger::warn('PreprocessRunnerFactory: compiled config unavailable — ISDOC partner target falls back to docs', [
+                    'error' => $e->getMessage(),
+                ]);
+                $configRuntime = null;
+            }
             return new IsdocImportService(
                 $db,
                 new SchemaValidator(SchemaLoader::default()),
                 $enricher,
                 $dsDir,
-                partnerWriter: MessagePartnerWriter::create($dibi),
+                partnerWriter: MessagePartnerWriter::create($dibi, $configRuntime),
+                titleComposer: MessageTitleComposer::forDataSource($db, $dsConfig),
             );
         };
 

@@ -35,6 +35,42 @@ class IncomingMessagesFormHeaderInfoTest extends TestCase
         ]));
     }
 
+    public function testManualMessageShowsAiTitleInsteadOfFileName(): void
+    {
+        // D3: ruční nahrání má v předmětu název souboru → titulek z AI.
+        $info = $this->createForm()->buildHeaderInfo([
+            'subject'     => 'faktura_final_v2.pdf',
+            'source_type' => 1,
+            'ai_title'    => 'Faktura 2026-0042 — Dodavatel s.r.o., 13 105 Kč',
+        ]);
+
+        $this->assertNotNull($info);
+        $this->assertSame('Faktura 2026-0042 — Dodavatel s.r.o., 13 105 Kč', $info->title);
+    }
+
+    public function testEmailKeepsSubjectEvenWithAiTitle(): void
+    {
+        $info = $this->createForm()->buildHeaderInfo([
+            'subject'     => 'Faktura za září',
+            'source_type' => 2,
+            'ai_title'    => 'Faktura 2026-0042 — Dodavatel s.r.o.',
+        ]);
+
+        $this->assertNotNull($info);
+        $this->assertSame('Faktura za září', $info->title);
+    }
+
+    public function testEmptySubjectWithAiTitleGivesHeader(): void
+    {
+        $info = $this->createForm()->buildHeaderInfo([
+            'subject'  => '',
+            'ai_title' => 'Dopis od úřadu',
+        ]);
+
+        $this->assertNotNull($info);
+        $this->assertSame('Dopis od úřadu', $info->title);
+    }
+
     public function testMinimalRecordOnlySubject(): void
     {
         $form = $this->createForm();

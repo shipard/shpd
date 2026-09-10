@@ -1,7 +1,7 @@
 ---
 title: Příjem pošty
 summary: Jak dostat fakturu do Shipardu, co se s ní pak děje a jak si poradit s poštou, která faktura není.
-keywords: [příjem pošty, přeposlat fakturu, adresa pro poštu, kam poslat fakturu, nahrát soubor, nahrání z dashboardu, přetáhnout soubor, nedorazilo, reklama, newsletter, hromadná pošta, pravidlo odesílatele, ISDOC]
+keywords: [příjem pošty, přeposlat fakturu, adresa pro poštu, kam poslat fakturu, nahrát soubor, nahrání z dashboardu, přetáhnout soubor, nedorazilo, reklama, newsletter, hromadná pošta, pravidlo odesílatele, ISDOC, sken, skener, předmět zprávy, titulek zprávy, hledání v poště, dodavatel u zprávy]
 related: [posta/kontrola-vytezeni.md, slovnicek.md, co-dnes-nejde.md]
 ---
 
@@ -50,6 +50,19 @@ samostatná zpráva s vlastní analýzou). Najednou lze nahrát nejvýše
 20 souborů. Nahraná zpráva se tváří jako běžná pošta: najdeš ji v **Došlé
 poště** (jako odesílatel jsi uveden ty), AI ji přečte a výsledek si
 vyzvedneš na Dashboardu úplně stejně.
+
+**Skeny a nahrané soubory v seznamu.** Zpráva ze skeneru má v předmětu
+jen něco jako „Message from …" a nahraný soubor název souboru — podle toho
+bys nic nenašel. Proto u takových zpráv Shipard v **Došlé poště** ukáže
+místo předmětu titulek, který AI odvodila z obsahu (například „Faktura
+2026-0042 — Dodavatel s.r.o., 13 105 Kč"), a pod ním dodavatele; technický
+odesílatel (skener, kolega) je až ve třetím řádku za názvem schránky.
+U běžných e-mailů zůstává předmět tak, jak ho znáš ze své pošty. Hledat
+můžeš podle předmětu, titulku i dodavatele. Původní předmět najdeš
+v detailu zprávy v **Technických údajích**. Dodavatele u zprávy můžeš
+změnit ručně ve formuláři (**Upravit** → sekce **Partner**) — ruční volbu
+už analýza nepřepíše; po **Použít** se dodavatel převezme z vytvořeného
+dokladu.
 
 **Co posílat.** Ověřené je **PDF**. Nejlepší je **ISDOC** — strojově
 čitelnou fakturu Shipard převezme přímo, bez AI, takže nemá co přečíst

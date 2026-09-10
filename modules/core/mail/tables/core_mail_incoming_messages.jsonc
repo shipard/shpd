@@ -354,6 +354,21 @@
             "reference": "core_mail_ai_profiles",
             "group": "ai"
         },
+        {
+            // Titulek zprávy z AI (message_classification.title) nebo serverový
+            // fallback z canonicalu (MessageTitleComposer). AI-vlastněný:
+            // přepisuje každý úspěšný běh analýzy (i na NULL), uživatel ho
+            // needituje. Zobrazuje se místo `subject` jen u generického nebo
+            // prázdného předmětu a u ručních zpráv (IncomingMessageTitle, D3).
+            "id": "ai_title",
+            "name": "AI title",
+            "name:cs": "Titulek (AI)",
+            "name:en": "AI title",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "ai"
+        },
 
         // --- technické předzpracování (tasks/mail-preprocess.md) ---
 

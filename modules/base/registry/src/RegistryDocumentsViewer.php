@@ -6,6 +6,7 @@ namespace Shipard\Module\Base\Registry;
 
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Viewer\TableViewer;
+use Shipard\Module\Core\Mail\IncomingMessageTitle;
 
 /**
  * Viewer dokumentů Spisovny (base_registry_documents).
@@ -393,7 +394,7 @@ class RegistryDocumentsViewer extends TableViewer
 
         if (!empty($record['source_message'])) {
             $message = $this->db->fetchRow(
-                'SELECT `subject`, `sender_email`, `sender_name`, `received_at`'
+                'SELECT `subject`, `ai_title`, `source_type`, `sender_email`, `sender_name`, `received_at`'
                 . ' FROM `core_mail_incoming_messages` WHERE `id` = %i',
                 (int) $record['source_message'],
             );
@@ -402,7 +403,13 @@ class RegistryDocumentsViewer extends TableViewer
                 if ($sender === '') {
                     $sender = trim((string) ($message['sender_email'] ?? ''));
                 }
-                $this->addItem($items, 'Zdrojová zpráva', $message['subject'] ?? null);
+                // Lidský název zprávy (titulek z AI u skenů, jinak předmět — D3).
+                $this->addItem($items, 'Zdrojová zpráva', IncomingMessageTitle::display(
+                    (string) ($message['subject'] ?? ''),
+                    isset($message['ai_title']) ? (string) $message['ai_title'] : null,
+                    (int) ($message['source_type'] ?? 0),
+                    IncomingMessageTitle::patternsFrom($this->config),
+                ));
                 $this->addItem($items, 'Odesílatel', $sender);
                 $this->addItem($items, 'Doručeno', $this->formatDateTime($message['received_at'] ?? null));
             }

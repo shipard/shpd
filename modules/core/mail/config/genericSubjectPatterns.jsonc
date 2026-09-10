@@ -1,0 +1,24 @@
+// core.mail.genericSubjectPatterns
+//
+// Vzory předmětů, které nenesou žádnou informaci — skenery a multifunkční
+// zařízení, automatické názvy souborů, prázdné přeposlání. PCRE bez
+// delimiterů, porovnává se case-insensitive a unicode
+// (IncomingMessageTitle::isGeneric).
+//
+// Když předmět zprávy odpovídá některému vzoru, nebo je prázdný, nebo jde
+// o ruční nahrání (source_type = 1), UI ukáže místo předmětu titulek z AI
+// analýzy (`ai_title`) — tasks/mail-message-title-partner.md D3. Fulltext
+// hledá v předmětu i titulku vždy. Detekce nikdy nejde přes source_type
+// e-mailu (skener posílá běžný e-mail, P1).
+//
+// Vzory jsou obecné — žádné konkrétní modely zařízení ani názvy firem.
+[
+    "^Message from ",
+    "^Scan(ned)?( from| by|:)?\\b",
+    "^Skenov",
+    "^Scan_?\\d",
+    "^(image|img|doc|dsc)[_-]?\\d+",
+    "^Attached (image|file|document)",
+    "^(Fwd?|FW|Re):?\\s*$",
+    "^\\(?(no subject|bez předmětu)\\)?$"
+]

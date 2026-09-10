@@ -86,12 +86,31 @@ class ProfileSchemaDriftTest extends TestCase
         [$profile] = $this->loadProfile();
 
         $this->assertSame('czech_general', $profile['profile_id']);
-        $this->assertSame('v4.2.0', $profile['prompt_version']);
+        $this->assertSame('v4.3.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
         foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $registryType) {
             $this->assertContains($registryType, $profile['supported_doc_types']);
         }
         $this->assertSame(0.9, $profile['confidence_thresholds']['ready']);
+    }
+
+    public function testClassificationTitleIsOptionalAndBounded(): void
+    {
+        // tasks/mail-message-title-partner.md D2/P3/P8: title musí být ve
+        // schématu (additionalProperties: false by jinak odmítlo celý
+        // výstup), ale nesmí být required (starší analyzer bez title projde).
+        [$profile] = $this->loadProfile();
+        $classification = $profile['output_schema']['properties']['message_classification'];
+
+        $this->assertSame(['type' => 'string', 'maxLength' => 120], $classification['properties']['title']);
+        $this->assertNotContains('title', $classification['required']);
+
+        $prompt = $profile['prompt_template'];
+        $this->assertStringContainsString('"title"', $prompt);
+        $this->assertStringContainsString('120 znaků', $prompt);
+        // Verze v promptu (source.promptVersion + ukázka) sleduje prompt_version profilu.
+        $this->assertSame(2, substr_count($prompt, $profile['prompt_version']));
+        $this->assertStringNotContainsString('v4.2.0', $prompt);
     }
 
     public function testPromptEnumeratesKindFieldsExactly(): void
@@ -116,7 +135,8 @@ class ProfileSchemaDriftTest extends TestCase
             );
         }
 
-        $this->assertStringContainsString('"v4.2.0"', $prompt, 'prompt must pin its own version');
+        $this->assertStringContainsString('"' . $profile['prompt_version'] . '"', $prompt, 'prompt must pin its own version');
+        $this->assertStringNotContainsString('v4.2.0', $prompt, 'stale prompt version reference');
         $this->assertStringNotContainsString('v4.0.0', $prompt, 'stale prompt version reference');
         $this->assertStringNotContainsString('v3.2.0', $prompt, 'stale prompt version reference');
         // Kontrakt v4 (mail-message-centric D11): nejvýše jeden document,

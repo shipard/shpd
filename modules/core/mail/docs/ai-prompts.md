@@ -24,7 +24,7 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v4.2.0)
+## Default prompt (v4.3.0)
 
 Od `v4.0.0` je analýza **message-centrická**
 ([tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
@@ -32,8 +32,10 @@ D1/D11): analyzer zpracovává zprávu **jako celek** — subject, tělo
 i přílohy jsou jeden kontext, tělo zprávy je plnohodnotný zdroj dat
 (platební instrukce, faktura přímo v textu, úřední obsah). Výstup:
 
-- **právě jedna `message_classification`** (`{primary_type, confidence}`)
-  — povinná, server ji vynucuje (422),
+- **právě jedna `message_classification`** (`{primary_type, confidence,
+  title}`) — povinná, server ji vynucuje (422); `title` je volitelný
+  krátký titulek zprávy (≤ 120 znaků, od v4.3.0) — bez něj server složí
+  fallback z canonicalu (`MessageTitleComposer`),
 - **nejvýše jeden `document`** — *primární* dokument zprávy. Kritérium
   primárnosti: business dokument, kvůli kterému zpráva přišla
   (faktura > smlouva > obchodní podmínky a doprovodné přílohy),
@@ -56,7 +58,7 @@ Klíčové pokyny v promptu:
   ISO 3166-1 alpha-2 lowercase (`cz`).
 - `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
 - `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
-  shodná s `prompt_version` profilu (`v4.2.0`).
+  shodná s `prompt_version` profilu (`v4.3.0`).
 - VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
   cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
 - `totals.totalRounding` = zaokrouhlení celkové částky se znaménkem
@@ -163,7 +165,7 @@ Plné schéma viz [`profiles/czech_general.jsonc`](../profiles/czech_general.jso
    přes `shpd.docs.document.v1` (polymorfní dle `docType`, bez per-typ
    branche), registry typy přes `shpd.registry.document.v1` (nový druh =
    nová if/then větev `kindFields` v registry schématu + kopie embedu).
-5. Bumpni `prompt_version` (`v4.2.0` → `v4.3.0`).
+5. Bumpni `prompt_version` (`v4.3.0` → `v4.4.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 
@@ -223,6 +225,28 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v4.3.0 (2026-09-10)
+
+Titulek zprávy
+([tasks/mail-message-title-partner.md](../../../../tasks/mail-message-title-partner.md)
+D2) — zprávy ze skeneru a ruční nahrání mají generický předmět
+(`Message from …`, název souboru), v seznamu Došlé pošty nebylo podle čeho
+hledat:
+
+- `message_classification` nově nese volitelný `title` (≤ 120 znaků,
+  česky): „co to je + od koho + částka / číslo, je-li"; u `other` stručný
+  popis obsahu. Nikdy název souboru ani opis generického předmětu. Ukázkové
+  JSONy doplněny.
+- `output_schema.message_classification.properties.title`
+  (`{"type": "string", "maxLength": 120}`), **ne** required — starší
+  analyzer bez `title` projde, server doplní deterministický fallback
+  z canonicalu (`MessageTitleComposer`).
+- Server ukládá titulek do `core_mail_incoming_messages.ai_title`
+  (AI-vlastněný sloupec, přepisuje každý běh) a zobrazuje ho místo předmětu
+  jen u generických / prázdných předmětů a ručních zpráv
+  (`core.mail.genericSubjectPatterns`; viz
+  [ai-analysis.md](ai-analysis.md#titulek-zprávy-ai_title)).
 
 ### v4.2.0 (2026-08-16)
 

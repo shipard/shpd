@@ -436,9 +436,10 @@ otevřený návrh (`resolution IS NULL`). Endpointy (detailně
 ## Klasifikace typu zprávy (message_classification)
 
 Analyzer v prvním kroku klasifikuje zprávu jako celek a vrací top-level
-pole `message_classification: {primary_type, confidence}` v `POST /result`
-— od kontraktu v4 **povinné** (422 při absenci; prompt v4 ho vždy
-generuje). Server v transakci resultu zapíše `primary_type` +
+pole `message_classification: {primary_type, confidence, title}` v `POST
+/result` — od kontraktu v4 **povinné** (422 při absenci; prompt v4 ho vždy
+generuje). `title` je volitelný lidský titulek zprávy (od promptu v4.3.0,
+viz [Titulek zprávy](#titulek-zprávy-ai_title)). Server v transakci resultu zapíše `primary_type` +
 `primary_type_source='ai'` — **jen pokud** `primary_type_source != 'user'`
 (ruční volba uživatele má vždy přednost; nastavuje ji dirty-change detekce
 v `IncomingMessageDocument::beforeSave`). Neznámý typ = warning + ignore,
@@ -512,6 +513,54 @@ stejného tvaru jako `senderPerson` (jméno + identifikátory, na cílovém DS s
 páruje jen identifikátorem), `partnerName` řetězec. Backfill historických
 zpráv se neřeší (D6 — import ze starého Shipardu).
 
+## Titulek zprávy (ai_title)
+
+Spec [tasks/mail-message-title-partner.md](../../../../tasks/mail-message-title-partner.md)
+(D1, D2, D3). `subject` je RFC822 hlavička a **nepřepisuje se** — u ručních
+zpráv je jedinou stopou vstupu uživatele. Vedle něj žije AI-vlastněný
+sloupec `core_mail_incoming_messages.ai_title` (varchar 200):
+
+- **Zdroj:** `message_classification.title` (prompt v4.3.0, ≤ 120 znaků,
+  jazyk profilu — „co to je + od koho + částka / číslo", u `other` stručný
+  popis obsahu; nikdy název souboru ani opis generického předmětu). Když
+  `title` chybí (starší analyzer, P8 — pole není required), server složí
+  fallback deterministicky z validního canonicalu:
+  `MessageTitleComposer` — docs `{label typu} {docNumber} — {supplier.name},
+  {totalAmount} {currency}` (chybějící části vypadnou), registry `title`,
+  bez dokumentu `null`. Label typu je z compiled configu **v jazyce AI
+  profilu** (profil běhu, jinak výchozí aktivní profil DS; fallback
+  výchozí jazyk DS) — `MessageTitleComposer::forDataSource()`. Ne v jazyce
+  requestu: intake od mail-routeru `Accept-Language` nenese a bez
+  `defaultLanguage` v main.json by titulek vyšel anglicky, zatímco AI píše
+  v jazyce profilu. Bez compiled configu se label vynechá.
+- **Zápis:** `AnalysisController::applyMessageTitle` v transakci resultu,
+  **vždy** (i `null` — re-analýza bez dokumentu titulek smaže), bez guardů
+  na `primary_type_source` (uživatel titulek needituje, ve formuláři je
+  read-only) i `target_row` (záměr). `IsdocImportService` píše titulek
+  z composeru jako primární zdroj (ISDOC nemá AI). Oba zápisy best-effort.
+- **Zobrazení (D3):** `IncomingMessageTitle::display(subject, ai_title,
+  source_type, patterns)` vrátí `ai_title` místo předmětu jen když je
+  předmět **prázdný**, zpráva je **ruční** (`source_type = 1` — pořízení
+  v UI i nahrání z dashboardu; předmět je název souboru), nebo předmět
+  odpovídá vzoru z cfgItem **`core.mail.genericSubjectPatterns`**
+  (`config/genericSubjectPatterns.jsonc`, pole PCRE bez delimiterů,
+  case-insensitive/unicode: `^Message from `, `^Scan(ned)?…`, `^Skenov`,
+  `^(image|img|doc|dsc)[_-]?\d+`, …; vadný vzor se přeskočí s warningem).
+  U běžného e-mailu zůstává předmět — uživatel ho zná ze svého klienta.
+  Detekce skenu jde **jen** přes vzory, nikdy přes `source_type` e-mailu
+  (skener posílá běžný e-mail, P1). Fulltext prohledává `subject`
+  i `ai_title` vždy.
+- **Kde se pravidlo uplatňuje:** `IncomingMessagesViewer` (t1 řádku, titulek
+  hlavičky detailu; když titulek nahradil předmět, původní předmět je
+  v Technických údajích detailu — popisek
+  `core.mail.viewerDetailLabels.labels.subject`), `IncomingMessagesForm`
+  (`header_info`), `FileFromMessageService` (název registry dokumentu ze
+  zprávy), `RegistryDocumentsViewer` (Zdrojová zpráva). Technická místa
+  (pravidla předzpracování, název souboru renderu těla, payload analyzeru)
+  zůstávají na `subject`. Dashboardové karty (`MailSuggestionsSource`)
+  a MCP `MailListPendingTool` jsou follow-up.
+- **Dataset:** `aiTitle` (řetězec) v exporteru / seederu / schématu.
+
 ## Deterministický ISDOC import
 
 Když došlá zpráva nese ISDOC, extrahuje se doklad **deterministicky
@@ -563,7 +612,9 @@ až runner `mail-preprocess` po dokončení akcí. Service:
    - partner zprávy (`partner_name` z dodavatele ISDOC, `partner_person`
      při shodě IČO / DIČ) přes `MessagePartnerWriter` — stejná pravidla
      jako u `/result`, viz [Partner zprávy](#partner-zprávy-partner_person--partner_name);
-     best-effort, selhání import neshodí.
+     best-effort, selhání import neshodí,
+   - titulek `ai_title` z canonicalu přes `MessageTitleComposer` (u ISDOC
+     primární zdroj — žádná AI), viz [Titulek zprávy](#titulek-zprávy-ai_title).
 
 Vztah k frontě: úspěšně naimportovaná zpráva se v AI frontě **vůbec
 neobjeví** (analysis_state přeskočí 10 → 30); analyzer daemon nevyžaduje

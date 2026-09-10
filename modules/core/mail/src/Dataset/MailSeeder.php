@@ -108,6 +108,7 @@ final class MailSeeder implements SectionSeeder
             'analysis_state'      => (int) ($m['analysisState'] ?? 0),
             'needs_reanalysis'    => !empty($m['needsReanalysis']) ? 1 : 0,
             'profile_override'    => $this->profileId($ctx, $m['profileOverride'] ?? null),
+            'ai_title'            => $m['aiTitle'] ?? null,
             'docState'            => $docState,
             'docStateMain'        => $ctx->mainState('core.mail.docStatesIncoming', $docState, [10 => 1, 20 => 2, 40 => 3, 80 => 4, 90 => 5]),
             'created_by'          => null,

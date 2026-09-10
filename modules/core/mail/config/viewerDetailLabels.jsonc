@@ -41,6 +41,13 @@
             "name": "from",
             "name:cs": "od",
             "name:en": "from"
+        },
+        // Původní předmět v Technických údajích, když hlavička ukazuje
+        // titulek z AI (IncomingMessageTitle, D3).
+        "subject": {
+            "name": "Subject",
+            "name:cs": "Předmět",
+            "name:en": "Subject"
         }
     }
 }

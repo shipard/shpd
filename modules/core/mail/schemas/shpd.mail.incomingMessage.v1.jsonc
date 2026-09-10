@@ -87,6 +87,8 @@
         "needsReanalysis":   { "type": ["boolean", "null"] },
         // core_mail_ai_profiles.profile_id
         "profileOverride":   { "type": ["string", "null"] },
+        // Titulek z AI analýzy / serverový fallback (AI-vlastněný sloupec ai_title).
+        "aiTitle":           { "type": ["string", "null"] },
         "created":           { "$ref": "#/$defs/LocalDateTimeOrNull" },
 
         // ── Lineage na vytvořený záznam (target_table_id / target_row) ──

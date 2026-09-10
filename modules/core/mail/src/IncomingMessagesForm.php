@@ -52,6 +52,9 @@ class IncomingMessagesForm extends TableForm
                     ->input('partner_name', readOnly: true)
                     ->separator('Obsah')
                     ->input('subject', required: true)
+                    ->input('ai_title', readOnly: true,
+                        hint: 'Titulek odvozený AI z obsahu — u skenů a nahraných souborů se zobrazuje místo předmětu. Přepíše ho každá analýza.',
+                    )
                     ->textarea('body_plain',
                         hint: 'Prostý text zprávy. HTML varianta se v Fázi 1 neupravuje ručně — vzniká jen přes import.',
                     )
@@ -94,8 +97,10 @@ class IncomingMessagesForm extends TableForm
      *   │✉ │ [Nový] Od Jan Novák · Doručeno 28.05.2024 14:30
      *   └──┘
      *
-     *   - title  = subject („Předmět"). Fallback na formDef.title
-     *              („Došlá zpráva") když předmět chybí.
+     *   - title  = lidský titulek zprávy (IncomingMessageTitle::display —
+     *              předmět, u generického / prázdného předmětu a ručních zpráv
+     *              ai_title). Fallback na formDef.title („Došlá zpráva")
+     *              když není ani jedno.
      *   - info[] = odesílatel (sender_name preferovaně, e-mail fallback) +
      *              datum doručení (s časem — v rámci dne se pořadí hraje).
      *   - icon   = stejná jako u vieweru pošty (`mail`).
@@ -107,7 +112,12 @@ class IncomingMessagesForm extends TableForm
      */
     public function buildHeaderInfo(array $data): ?FormHeaderInfo
     {
-        $subject = trim((string) ($data['subject'] ?? ''));
+        $subject = IncomingMessageTitle::display(
+            (string) ($data['subject'] ?? ''),
+            isset($data['ai_title']) ? (string) $data['ai_title'] : null,
+            (int) ($data['source_type'] ?? 0),
+            IncomingMessageTitle::patternsFrom($this->config),
+        );
         if ($subject === '') {
             return null;
         }

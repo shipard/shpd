@@ -1009,6 +1009,110 @@ class AnalysisControllerTest extends TestCase
         $this->callApplyClassification($dibi, ['model_name' => 'claude']);
     }
 
+    // -------------------------------------------------------------------
+    // ai_title (tasks/mail-message-title-partner.md D1/D2) — stejný vzor
+    // přes reflection jako klasifikace.
+    // -------------------------------------------------------------------
+
+    /**
+     * @param array<string, mixed>      $body
+     * @param array<string, mixed>|null $canonical
+     */
+    private function callApplyTitle(\Dibi\Connection $dibi, array $body, ?array $canonical, ?string $proposedType): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db); // configRuntime = null → composer bez labelu typu
+        $ref = new \ReflectionClass($ctrl);
+        $method = $ref->getMethod('applyMessageTitle');
+        $method->invoke($ctrl, $dibi, 42, $body, $canonical, $proposedType);
+    }
+
+    /** Dibi mock očekávající právě jeden UPDATE ai_title s danou hodnotou. */
+    private function dibiExpectingTitle(?string $expected): \Dibi\Connection
+    {
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->expects($this->once())->method('execute');
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->expects($this->once())
+            ->method('update')
+            ->with('core_mail_incoming_messages', ['ai_title' => $expected])
+            ->willReturn($fluent);
+        return $dibi;
+    }
+
+    /** @return array<string, mixed> */
+    private function titleCanonical(): array
+    {
+        return [
+            'docType' => 'invoiceReceived',
+            'docNumber' => 'FV-2026-0042',
+            'selfParty' => 'customer',
+            'supplier' => ['name' => 'Dodavatel s.r.o.', 'companyId' => '12345678'],
+            'currency' => 'CZK',
+            'totals' => ['totalAmount' => 13105.0],
+        ];
+    }
+
+    public function testTitleFromClassificationWins(): void
+    {
+        $this->callApplyTitle(
+            $this->dibiExpectingTitle('Faktura 2026-0042 — Dodavatel s.r.o., 13 105 Kč'),
+            ['message_classification' => [
+                'primary_type' => 'invoiceReceived',
+                'confidence' => 0.97,
+                'title' => "  Faktura 2026-0042 — Dodavatel s.r.o.,\n 13 105 Kč ",
+            ]],
+            $this->titleCanonical(),
+            'invoiceReceived',
+        );
+    }
+
+    public function testTitleFallsBackToComposerWhenMissing(): void
+    {
+        // Starší analyzer / prompt v4.2.0 bez title → deterministický fallback
+        // z canonicalu (P8), žádná 422.
+        $this->callApplyTitle(
+            $this->dibiExpectingTitle('FV-2026-0042 — Dodavatel s.r.o., 13 105 CZK'),
+            ['message_classification' => ['primary_type' => 'invoiceReceived', 'confidence' => 0.97]],
+            $this->titleCanonical(),
+            'invoiceReceived',
+        );
+    }
+
+    public function testTitleReadsAnalysisJsonFallback(): void
+    {
+        $this->callApplyTitle(
+            $this->dibiExpectingTitle('Newsletter — obchodní sdělení'),
+            ['analysis_json' => ['message_classification' => ['primary_type' => 'other', 'title' => 'Newsletter — obchodní sdělení']]],
+            null,
+            null,
+        );
+    }
+
+    public function testTitleIsNulledWhenNothingAvailable(): void
+    {
+        // Re-analýza bez dokumentu a bez title → ai_title = NULL (AI-vlastněný sloupec).
+        $this->callApplyTitle(
+            $this->dibiExpectingTitle(null),
+            ['message_classification' => ['primary_type' => 'other', 'confidence' => 0.9, 'title' => '   ']],
+            null,
+            null,
+        );
+    }
+
+    public function testTitleIsTruncatedToColumnLength(): void
+    {
+        $long = str_repeat('x', 250);
+        $this->callApplyTitle(
+            $this->dibiExpectingTitle(str_repeat('x', 200)),
+            ['message_classification' => ['primary_type' => 'other', 'title' => $long]],
+            null,
+            null,
+        );
+    }
+
     public function testKnownPrimaryTypesFallbackWithoutConfig(): void
     {
         $db = $this->createMock(DataSourceConnection::class);

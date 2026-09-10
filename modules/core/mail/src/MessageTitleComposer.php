@@ -24,6 +24,10 @@ use Shipard\Core\Logging\ErrorLogger;
  *   registry: `title` canonicalu
  *   bez dokumentu / forenzní wrapper: null
  *
+ * Třetí cesta je {@see fromDocument()} — titulek z hlavičky **cílového
+ * dokladu** u zprávy navázané importem ze starého Shipardu
+ * (tasks/mail-import-partner-title.md D4); tam canonical neexistuje.
+ *
  * Jazyk labelu: titulek je DS-wide data v **jazyce AI profilu** (D2), ne
  * v jazyce requestu — intake od mail-routeru žádný `Accept-Language`
  * nenese a padal by na výchozí jazyk DS (bez `defaultLanguage`
@@ -115,6 +119,44 @@ final class MessageTitleComposer
             self::formatAmount($canonical['totals']['totalAmount'] ?? null, $canonical['currency'] ?? null),
         ], static fn(?string $s): bool => $s !== null && $s !== ''));
 
+        return self::assemble($head, $tail);
+    }
+
+    /**
+     * Titulek z hlavičky dokladu (tasks/mail-import-partner-title.md D4) —
+     * třetí cesta k `ai_title` vedle `/result` a ISDOC: zpráva navázaná na
+     * doklad (`target_table_id` = `docs_core_heads`) si titulek odvodí
+     * z cíle, žádný canonical neexistuje. Tvar:
+     *
+     *   `{label typu} {doc_number} — {partner}, {total_amount} {doc_currency}`
+     *
+     * Label typu jde z `docs.core.docTypes`, ne z `core.mail.primaryTypes` —
+     * jinak by navázané vydané faktury a účetní doklady dostaly „Ostatní"
+     * (D4). Chybějící části se vynechají, bez ConfigRuntime se vynechá label.
+     *
+     * @param array<string, mixed> $doc řádek docs_core_heads + partner_full_name
+     */
+    public function fromDocument(array $doc): ?string
+    {
+        $head = trim(implode(' ', array_filter([
+            $this->docTypeLabel((string) ($doc['doc_type'] ?? '')),
+            self::clean($doc['doc_number'] ?? null),
+        ], static fn(?string $s): bool => $s !== null && $s !== '')));
+
+        $tail = implode(', ', array_filter([
+            self::clean($doc['partner_full_name'] ?? null),
+            self::formatAmount($doc['total_amount'] ?? null, $doc['doc_currency'] ?? null),
+        ], static fn(?string $s): bool => $s !== null && $s !== ''));
+
+        return self::assemble($head, $tail);
+    }
+
+    /**
+     * Sdílená skládačka titulku `head — tail` (aby se tvar `compose()`
+     * a `fromDocument()` nerozešel); prázdný výsledek → null.
+     */
+    private static function assemble(string $head, string $tail): ?string
+    {
         $title = match (true) {
             $head !== '' && $tail !== '' => $head . ' — ' . $tail,
             $head !== ''                 => $head,
@@ -163,6 +205,21 @@ final class MessageTitleComposer
     {
         $types = $this->config?->cfgItem('core.mail.primaryTypes');
         $name = is_array($types) ? ($types[$type]['name'] ?? null) : null;
+        return is_string($name) && trim($name) !== '' ? trim($name) : null;
+    }
+
+    /**
+     * Lokalizovaný název typu dokladu z `docs.core.docTypes` (D4) — stejná
+     * degradace jako u {@see typeLabel()}: bez configu nebo u neznámého typu
+     * se label vynechá.
+     */
+    private function docTypeLabel(string $docType): ?string
+    {
+        if ($docType === '') {
+            return null;
+        }
+        $types = $this->config?->cfgItem('docs.core.docTypes');
+        $name = is_array($types) ? ($types[$docType]['name'] ?? null) : null;
         return is_string($name) && trim($name) !== '' ? trim($name) : null;
     }
 }

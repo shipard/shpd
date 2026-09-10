@@ -11,7 +11,9 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Module\Core\Mail\MessageTitleComposer;
 
 /**
- * Serverový fallback titulku z canonicalu (D2) — docs / registry / null.
+ * Serverový fallback titulku z canonicalu (D2) — docs / registry / null —
+ * a titulek z hlavičky cílového dokladu (`fromDocument()`,
+ * tasks/mail-import-partner-title.md D4).
  */
 final class MessageTitleComposerTest extends TestCase
 {
@@ -23,6 +25,11 @@ final class MessageTitleComposerTest extends TestCase
                 'invoiceReceived' => ['name' => 'Přijatá faktura', 'target' => 'docs'],
                 'creditNote'      => ['name' => 'Dobropis', 'target' => 'docs'],
                 'contract'        => ['name' => 'Smlouva', 'target' => 'registry', 'docKind' => 'contract'],
+            ]],
+            ['docs.core.docTypes', [
+                'invni'  => ['name' => 'Faktura přijatá', 'shortcut' => 'FPB'],
+                'invno'  => ['name' => 'Faktura vydaná', 'shortcut' => 'FVB'],
+                'cmnbkp' => ['name' => 'Účetní doklad', 'shortcut' => 'UCD'],
             ]],
         ]);
         return $config;
@@ -117,6 +124,92 @@ final class MessageTitleComposerTest extends TestCase
         $canonical = $this->docsCanonical();
         $canonical['supplier']['name'] = str_repeat('x', 300);
         $title = (new MessageTitleComposer(null))->compose($canonical, 'invoiceReceived');
+        $this->assertSame(MessageTitleComposer::MAX_LENGTH, mb_strlen((string) $title));
+    }
+
+    // ── fromDocument: titulek z hlavičky cílového dokladu (import, D4) ──────
+
+    /** @return array<string, mixed> */
+    private function docRow(): array
+    {
+        return [
+            'doc_type' => 'invni',
+            'doc_number' => '2019-0123',
+            'partner' => 55,
+            'partner_full_name' => 'Dodavatel s.r.o.',
+            'total_amount' => '13105.00',
+            'doc_currency' => 'CZK',
+        ];
+    }
+
+    public function testFromDocumentFullShape(): void
+    {
+        $this->assertSame(
+            'Faktura přijatá 2019-0123 — Dodavatel s.r.o., 13 105 CZK',
+            (new MessageTitleComposer($this->config()))->fromDocument($this->docRow()),
+        );
+    }
+
+    public function testFromDocumentUsesDocTypesNotMailPrimaryTypes(): void
+    {
+        // D4: přes core.mail.primaryTypes by vydaná faktura a účetní doklad
+        // skončily jako „Ostatní" — klíč tam vůbec nemají.
+        $composer = new MessageTitleComposer($this->config());
+
+        $issued = $this->docRow();
+        $issued['doc_type'] = 'invno';
+        $this->assertSame(
+            'Faktura vydaná 2019-0123 — Dodavatel s.r.o., 13 105 CZK',
+            $composer->fromDocument($issued),
+        );
+
+        $booking = $this->docRow();
+        $booking['doc_type'] = 'cmnbkp';
+        $this->assertStringStartsWith('Účetní doklad ', (string) $composer->fromDocument($booking));
+    }
+
+    public function testFromDocumentMissingPartsAreOmitted(): void
+    {
+        $composer = new MessageTitleComposer($this->config());
+
+        $noNumber = $this->docRow();
+        $noNumber['doc_number'] = null;
+        $this->assertSame('Faktura přijatá — Dodavatel s.r.o., 13 105 CZK', $composer->fromDocument($noNumber));
+
+        $noPartner = $this->docRow();
+        $noPartner['partner_full_name'] = null;
+        $this->assertSame('Faktura přijatá 2019-0123 — 13 105 CZK', $composer->fromDocument($noPartner));
+
+        $noAmount = $this->docRow();
+        $noAmount['total_amount'] = null;
+        $this->assertSame('Faktura přijatá 2019-0123 — Dodavatel s.r.o.', $composer->fromDocument($noAmount));
+
+        $this->assertNull($composer->fromDocument([]));
+    }
+
+    public function testFromDocumentWithoutConfigOmitsTypeLabel(): void
+    {
+        $this->assertSame(
+            '2019-0123 — Dodavatel s.r.o., 13 105 CZK',
+            (new MessageTitleComposer(null))->fromDocument($this->docRow()),
+        );
+    }
+
+    public function testFromDocumentUnknownDocTypeOmitsLabel(): void
+    {
+        $row = $this->docRow();
+        $row['doc_type'] = 'stockin';
+        $this->assertSame(
+            '2019-0123 — Dodavatel s.r.o., 13 105 CZK',
+            (new MessageTitleComposer($this->config()))->fromDocument($row),
+        );
+    }
+
+    public function testFromDocumentIsTruncatedToColumnLength(): void
+    {
+        $row = $this->docRow();
+        $row['partner_full_name'] = str_repeat('x', 300);
+        $title = (new MessageTitleComposer($this->config()))->fromDocument($row);
         $this->assertSame(MessageTitleComposer::MAX_LENGTH, mb_strlen((string) $title));
     }
 

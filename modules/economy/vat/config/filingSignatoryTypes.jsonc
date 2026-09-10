@@ -1,0 +1,16 @@
+{
+    // economy.vat.filingSignatoryTypes — typ podepisující osoby (zástupce)
+    // ve větě P podání DPH (atribut `zast_typ`). Prázdná hodnota = podání
+    // podepisuje sám subjekt; tu nese prázdná volba selectu, ne položka
+    // číselníku.
+    "P": {
+        "name": "Legal entity",
+        "name:cs": "Právnická osoba",
+        "name:en": "Legal entity"
+    },
+    "F": {
+        "name": "Natural person",
+        "name:cs": "Fyzická osoba",
+        "name:en": "Natural person"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "world.cz",
+    "name": "Czech Republic — registries",
+    "name:cs": "Česko — číselníky",
+    "name:en": "Czech Republic — registries",
+    "description": "Static Czech state registries shared across domains — tax offices and their branches (filings), further lists as needed",
+    "description:cs": "Statické české státní číselníky společné pro víc domén — finanční úřady a jejich územní pracoviště (podání), další podle potřeby",
+    "description:en": "Static Czech state registries shared across domains — tax offices and their branches (filings), further lists as needed",
+
+    // Bez vlastních tabulek: jsou to statická data mimo DS, čtou se z cfgItem.
+    "dependencies": ["world.base"],
+
+    "config": [
+        {"id": "world.cz.taxOffices", "file": "config/taxOffices.jsonc"},
+        {"id": "world.cz.taxOfficeBranches", "file": "config/taxOfficeBranches.jsonc"},
+    ],
+}

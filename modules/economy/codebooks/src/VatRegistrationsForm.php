@@ -65,13 +65,29 @@ class VatRegistrationsForm extends TableForm
         }
         $basic = $tab->build();
 
+        $tabs = [$basic];
+
+        // Podací údaje = strukturované pole `filing_profile` (#74), které na
+        // registraci přináší extension modulu economy.vat. Bez toho modulu
+        // sloupec neexistuje a záložka se nekreslí; codebooks na economy.vat
+        // nezávisí, ví o něm jen přes definici tabulky.
+        if (!$isNew && $this->hasStructuredColumn('filing_profile')) {
+            $tabs[] = $this->tab('filing', 'Podací údaje')
+                ->section()
+                    ->col()
+                        ->html('<p class="muted">Údaje pro podání přiznání a hlášení na daňový portál — '
+                            . 'kdo podává, komu a kdo výstup sestavil. Vyplní se do hlavičky podání.</p>')
+                        ->addElements($this->structuredFieldElements('filing_profile', $data))
+                ->build();
+        }
+
         // Instance daňových tvrzení (přiznání / KH / SH) žijí ve vieweru
         // „Daňová tvrzení" modulu economy.vat — codebooks na něm nezávisí.
         return new FormDefinition(
             table: $this->table,
             title: 'Registrace DPH',
             titleNew: 'Nová registrace DPH',
-            tabs: [$basic],
+            tabs: $tabs,
         );
     }
 

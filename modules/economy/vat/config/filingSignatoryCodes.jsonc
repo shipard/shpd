@@ -1,0 +1,69 @@
+{
+    // economy.vat.filingSignatoryCodes — kód podepisující osoby ve větě P
+    // podání DPH (atribut `zast_kod`). Číselník daňového řádu; přeneseno ze
+    // starého Shipardu (`e10.taxes.reportProperties.cz.czTRKodPodOsoba`,
+    // stav 2021), ověřit proti XSD při implementaci XML (#55 Fáze 3).
+    //
+    // Prázdná hodnota (subjekt podepisuje sám) je prázdná volba selectu,
+    // ne položka číselníku.
+    "1": {
+        "name": "1 — statutory representative or guardian",
+        "name:cs": "1 — zákonný zástupce nebo opatrovník",
+        "name:en": "1 — statutory representative or guardian"
+    },
+    "2": {
+        "name": "2 — appointed representative",
+        "name:cs": "2 — ustanovený zástupce",
+        "name:en": "2 — appointed representative"
+    },
+    "3": {
+        "name": "3 — joint representative or joint agent",
+        "name:cs": "3 — společný zástupce, společný zmocněnec",
+        "name:en": "3 — joint representative or joint agent"
+    },
+    "4a": {
+        "name": "4a — general agent (natural or legal person)",
+        "name:cs": "4a — obecný zmocněnec (fyzická i právnická osoba)",
+        "name:en": "4a — general agent (natural or legal person)"
+    },
+    "4b": {
+        "name": "4b — tax adviser or attorney (natural person)",
+        "name:cs": "4b — fyzická osoba daňový poradce nebo advokát",
+        "name:en": "4b — tax adviser or attorney (natural person)"
+    },
+    "4c": {
+        "name": "4c — legal person providing tax advisory",
+        "name:cs": "4c — právnická osoba vykonávající daňové poradenství",
+        "name:en": "4c — legal person providing tax advisory"
+    },
+    "5a": {
+        "name": "5a — estate administrator",
+        "name:cs": "5a — osoba spravující pozůstalost",
+        "name:en": "5a — estate administrator"
+    },
+    "5b": {
+        "name": "5b — representative of the estate administrator",
+        "name:cs": "5b — zástupce osoby spravující pozůstalost",
+        "name:en": "5b — representative of the estate administrator"
+    },
+    "6a": {
+        "name": "6a — heir after the estate proceedings",
+        "name:cs": "6a — dědic po skončení řízení o pozůstalosti",
+        "name:en": "6a — heir after the estate proceedings"
+    },
+    "6b": {
+        "name": "6b — representative of the heir after the estate proceedings",
+        "name:cs": "6b — zástupce dědice po skončení řízení o pozůstalosti",
+        "name:en": "6b — representative of the heir after the estate proceedings"
+    },
+    "7a": {
+        "name": "7a — legal successor of a legal person",
+        "name:cs": "7a — právní nástupce právnické osoby",
+        "name:en": "7a — legal successor of a legal person"
+    },
+    "7b": {
+        "name": "7b — representative of the legal successor of a legal person",
+        "name:cs": "7b — zástupce právního nástupce právnické osoby",
+        "name:en": "7b — representative of the legal successor of a legal person"
+    }
+}

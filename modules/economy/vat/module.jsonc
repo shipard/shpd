@@ -10,7 +10,9 @@
     // world.vat = kódy DPH (legislativní vrstva bez výkaznických konvencí, D3),
     // economy.codebooks = registrace + období DPH, docs.core = doklady
     // a vat_recap, economy.accounting = deník pro křížovou kontrolu 343.
-    "dependencies": ["world.vat", "economy.codebooks", "docs.core", "economy.accounting"],
+    // world.cz = statické české číselníky (finanční úřady a jejich územní
+    // pracoviště v profilu podatele, #74).
+    "dependencies": ["world.vat", "world.cz", "economy.codebooks", "docs.core", "economy.accounting"],
 
     "tables": [
         "economy_vat_report_periods",
@@ -23,9 +25,11 @@
     ],
 
     // Zařazení dokladu do instancí tvrzení (vat_period / cs_period /
-    // rs_period, D13) — docs.core na economy.vat nezávisí.
+    // rs_period, D13) — docs.core na economy.vat nezávisí. Profil podatele
+    // na registraci k DPH (#74, D19) — dtto economy.codebooks.
     "extensions": [
-        "docs_core_heads"
+        "docs_core_heads",
+        "economy_codebooks_vat_registrations"
     ],
 
     "documentEventHandlers": [
@@ -65,7 +69,13 @@
         { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" },
         { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" },
         { "id": "economy.vat.filingKinds", "file": "config/filingKinds.jsonc" },
-        { "id": "economy.vat.docStatesFilings", "file": "config/docStatesFilings.jsonc" }
+        { "id": "economy.vat.docStatesFilings", "file": "config/docStatesFilings.jsonc" },
+
+        // Profil podatele — schéma strukturovaného pole a jeho číselníky (#74).
+        { "id": "economy.vat.filingProfileCz", "file": "config/filingProfileCz.jsonc" },
+        { "id": "economy.vat.filingSubjectTypes", "file": "config/filingSubjectTypes.jsonc" },
+        { "id": "economy.vat.filingSignatoryTypes", "file": "config/filingSignatoryTypes.jsonc" },
+        { "id": "economy.vat.filingSignatoryCodes", "file": "config/filingSignatoryCodes.jsonc" }
     ],
 
     // Koeficienty odpočtu patří do Nastavení vedle Registrací DPH; stejný

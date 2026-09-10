@@ -1,0 +1,15 @@
+{
+    // economy.vat.filingSubjectTypes — typ daňového subjektu ve větě P
+    // podání DPH (atribut `typ_ds`). Hodnoty jsou dané formulářem
+    // finanční správy, ne naší volbou.
+    "P": {
+        "name": "Legal entity",
+        "name:cs": "Právnická osoba",
+        "name:en": "Legal entity"
+    },
+    "F": {
+        "name": "Natural person",
+        "name:cs": "Fyzická osoba",
+        "name:en": "Natural person"
+    }
+}

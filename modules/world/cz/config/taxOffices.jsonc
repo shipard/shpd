@@ -1,0 +1,26 @@
+{
+    // world.cz.taxOffices — finanční úřady ČR (atribut `c_ufo` ve větě P
+    // podání DPHDP3 / DPHKH1 / DPHSHV). Kód = ID finančního úřadu podle
+    // číselníku Finanční správy, název = kraj, pro který úřad působí
+    // (celý název je „Finanční úřad pro <název>").
+    //
+    // Statická data mimo DS: přeneseno ze starého Shipardu
+    // (`e10doc/taxes/config/e10.taxes.reportProperties.cz.json`, stav 2021).
+    // Kódy je potřeba ověřit proti aktuálnímu XSD daňového portálu
+    // při implementaci XML (#55 Fáze 3).
+    "451": { "name": "Hlavní město Praha" },
+    "453": { "name": "Jihočeský kraj" },
+    "461": { "name": "Jihomoravský kraj" },
+    "455": { "name": "Karlovarský kraj" },
+    "460": { "name": "Kraj Vysočina" },
+    "458": { "name": "Královéhradecký kraj" },
+    "457": { "name": "Liberecký kraj" },
+    "463": { "name": "Moravskoslezský kraj" },
+    "462": { "name": "Olomoucký kraj" },
+    "459": { "name": "Pardubický kraj" },
+    "454": { "name": "Plzeňský kraj" },
+    "13": { "name": "Specializovaný finanční úřad" },
+    "452": { "name": "Středočeský kraj" },
+    "456": { "name": "Ústecký kraj" },
+    "464": { "name": "Zlínský kraj" },
+}

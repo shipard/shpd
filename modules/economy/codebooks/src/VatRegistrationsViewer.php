@@ -137,6 +137,21 @@ class VatRegistrationsViewer extends TableViewer
             'content' => $this->buildOverviewContent($record),
         ];
 
+        // Podací údaje — strukturované pole ze extension modulu economy.vat
+        // (#74). Prázdný profil (nebo neaktivní modul) záložku nepřidá.
+        $filingGroups = $this->structuredFieldProperties(
+            $record,
+            'filing_profile',
+            'economy.vat.filingProfileCz',
+        );
+        if ($filingGroups !== []) {
+            $tabs[] = [
+                'id'      => 'filing',
+                'label'   => 'Podací údaje',
+                'content' => ['type' => 'properties', 'groups' => $filingGroups],
+            ];
+        }
+
         // Instance daňových tvrzení registrace zobrazuje viewer „Daňová
         // tvrzení" modulu economy.vat (filtr registrace) — codebooks na něm nezávisí.
 

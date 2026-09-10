@@ -1,0 +1,27 @@
+{
+    // Extension z economy.vat: profil podatele na registraci k DPH
+    // (#74, #55 D19) — údaje věty P podání (kdo podává, komu, kdo sestavil),
+    // které se nedají odvodit z dokladů ani z registrace.
+    //
+    // Strukturované pole: obsah popisuje schéma `economy.vat.filingProfileCz`
+    // (config/filingProfileCz.jsonc), validaci a serializaci dělá
+    // TableGateway — viz docs/structured-fields.md.
+    //
+    // economy.codebooks na economy.vat nezávisí, a schéma je cfgItem tohoto
+    // modulu (bez něj by `ds-upgrade` na sloupec se schématem zastavil) —
+    // proto extension, ne sloupec tabulky. Formulář registrace i detail
+    // vieweru kreslí záložku jen tam, kde sloupec existuje.
+
+    "table": "economy_codebooks_vat_registrations",
+    "columns": [
+        {
+            "id": "filing_profile",
+            "name": "Filing profile",
+            "name:cs": "Podací údaje",
+            "name:en": "Filing profile",
+            "type": "json",
+            "nullable": true,
+            "schema": "economy.vat.filingProfileCz"
+        }
+    ]
+}

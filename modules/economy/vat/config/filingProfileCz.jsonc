@@ -1,0 +1,341 @@
+{
+    // economy.vat.filingProfileCz — schéma strukturovaného pole „profil
+    // podatele" (#74, #55 D19). Sloupec
+    // `economy_codebooks_vat_registrations.filing_profile` (extension
+    // z tohoto modulu), formát a chování viz docs/structured-fields.md.
+    //
+    // Obsah = údaje **věty P** podání DPHDP3 / DPHKH1 / DPHSHV, které se
+    // nedají odvodit z dokladů ani z registrace: kdo podává, komu a kdo to
+    // sestavil. Zbytek hlavičky (období, druh podání, DIČ, název subjektu)
+    // pochází z instance tvrzení, registrace a vlastní firmy — sem nepatří.
+    //
+    // Sada polí a jejich délky jsou přenesené ze starého Shipardu (properties
+    // `e10-CZ-TR-*` a jejich mapování na XML atributy ve
+    // `VatReturnProperties::loadProperties`). **Přesný seznam, délky a enumy
+    // je potřeba ověřit proti aktuálnímu XSD daňového portálu při
+    // implementaci XML (#55 Fáze 3)**; do té doby profil jen sbírá data.
+    //
+    // Změna sady polí = nová `version` (ta jde do `_schema` uložených
+    // hodnot). Pole, které novější verze zruší, zůstane v uložených datech
+    // a v detailu se zobrazí pod svým klíčem.
+    "version": "2026",
+
+    "groups": [
+        {
+            "id": "subject",
+            "name": "Taxpayer",
+            "name:cs": "Daňový subjekt",
+            "name:en": "Taxpayer"
+        },
+        {
+            "id": "office",
+            "name": "Tax office",
+            "name:cs": "Finanční úřad",
+            "name:en": "Tax office"
+        },
+        {
+            "id": "address",
+            "name": "Address",
+            "name:cs": "Adresa",
+            "name:en": "Address"
+        },
+        {
+            "id": "contact",
+            "name": "Contact",
+            "name:cs": "Kontakt",
+            "name:en": "Contact"
+        },
+        {
+            "id": "authorized",
+            "name": "Authorized person",
+            "name:cs": "Oprávněná osoba",
+            "name:en": "Authorized person"
+        },
+        {
+            "id": "preparer",
+            "name": "Prepared by",
+            "name:cs": "Sestavil",
+            "name:en": "Prepared by"
+        },
+        {
+            "id": "signatory",
+            "name": "Signatory (representative)",
+            "name:cs": "Podepisující osoba (zástupce)",
+            "name:en": "Signatory (representative)"
+        }
+    ],
+
+    "fields": [
+        // --- daňový subjekt ---
+        {
+            "id": "typ_ds",
+            "type": "enumString",
+            "length": 1,
+            "cfgItem": "economy.vat.filingSubjectTypes",
+            "group": "subject",
+            "name": "Taxpayer type",
+            "name:cs": "Typ subjektu",
+            "name:en": "Taxpayer type",
+            "required": true
+        },
+        {
+            "id": "c_okec",
+            "type": "varchar",
+            "length": 6,
+            "group": "subject",
+            "name": "Main activity code (NACE)",
+            "name:cs": "Kód hlavní činnosti (NACE)",
+            "name:en": "Main activity code (NACE)",
+            "hint": "Numeric NACE code, e.g. 620200",
+            "hint:cs": "Číselný kód NACE, např. 620200",
+            "hint:en": "Numeric NACE code, e.g. 620200"
+        },
+
+        // --- finanční úřad ---
+        {
+            "id": "c_ufo",
+            "type": "enumString",
+            "length": 5,
+            "cfgItem": "world.cz.taxOffices",
+            "group": "office",
+            "name": "Tax office for",
+            "name:cs": "Finanční úřad pro",
+            "name:en": "Tax office for"
+        },
+        {
+            "id": "c_pracufo",
+            "type": "enumString",
+            "length": 8,
+            "cfgItem": "world.cz.taxOfficeBranches",
+            "group": "office",
+            "name": "Tax office branch",
+            "name:cs": "Územní pracoviště",
+            "name:en": "Tax office branch"
+        },
+
+        // --- adresa subjektu ---
+        {
+            "id": "ulice",
+            "type": "varchar",
+            "length": 38,
+            "group": "address",
+            "name": "Street",
+            "name:cs": "Ulice",
+            "name:en": "Street"
+        },
+        {
+            "id": "c_pop",
+            "type": "varchar",
+            "length": 6,
+            "group": "address",
+            "name": "House number",
+            "name:cs": "Číslo popisné",
+            "name:en": "House number"
+        },
+        {
+            "id": "c_orient",
+            "type": "varchar",
+            "length": 4,
+            "group": "address",
+            "name": "Street number",
+            "name:cs": "Číslo orientační",
+            "name:en": "Street number"
+        },
+        {
+            "id": "naz_obce",
+            "type": "varchar",
+            "length": 48,
+            "group": "address",
+            "name": "Municipality",
+            "name:cs": "Obec",
+            "name:en": "Municipality"
+        },
+        {
+            "id": "psc",
+            "type": "varchar",
+            "length": 10,
+            "group": "address",
+            "name": "Postal code",
+            "name:cs": "PSČ",
+            "name:en": "Postal code"
+        },
+        {
+            "id": "stat",
+            "type": "enumString",
+            "length": 2,
+            "cfgItem": "world.base.countries",
+            "group": "address",
+            "name": "Country",
+            "name:cs": "Stát",
+            "name:en": "Country"
+        },
+
+        // --- kontakt na subjekt ---
+        {
+            "id": "c_telef",
+            "type": "varchar",
+            "length": 14,
+            "inputType": "tel",
+            "group": "contact",
+            "name": "Phone",
+            "name:cs": "Telefon",
+            "name:en": "Phone"
+        },
+        {
+            "id": "email",
+            "type": "varchar",
+            "length": 255,
+            "inputType": "email",
+            "group": "contact",
+            "name": "E-mail",
+            "name:cs": "E-mail",
+            "name:en": "E-mail"
+        },
+        {
+            "id": "id_dats",
+            "type": "varchar",
+            "length": 20,
+            "group": "contact",
+            "name": "Data box ID",
+            "name:cs": "ID datové schránky",
+            "name:en": "Data box ID"
+        },
+
+        // --- oprávněná osoba (jedná za subjekt) ---
+        {
+            "id": "opr_jmeno",
+            "type": "varchar",
+            "length": 20,
+            "group": "authorized",
+            "name": "First name",
+            "name:cs": "Jméno",
+            "name:en": "First name"
+        },
+        {
+            "id": "opr_prijmeni",
+            "type": "varchar",
+            "length": 36,
+            "group": "authorized",
+            "name": "Surname",
+            "name:cs": "Příjmení",
+            "name:en": "Surname"
+        },
+        {
+            "id": "opr_postaveni",
+            "type": "varchar",
+            "length": 40,
+            "group": "authorized",
+            "name": "Relation to the legal entity",
+            "name:cs": "Vztah k právnické osobě",
+            "name:en": "Relation to the legal entity"
+        },
+
+        // --- sestavil ---
+        {
+            "id": "sest_jmeno",
+            "type": "varchar",
+            "length": 20,
+            "group": "preparer",
+            "name": "First name",
+            "name:cs": "Jméno",
+            "name:en": "First name"
+        },
+        {
+            "id": "sest_prijmeni",
+            "type": "varchar",
+            "length": 36,
+            "group": "preparer",
+            "name": "Surname",
+            "name:cs": "Příjmení",
+            "name:en": "Surname"
+        },
+        {
+            "id": "sest_telef",
+            "type": "varchar",
+            "length": 14,
+            "inputType": "tel",
+            "group": "preparer",
+            "name": "Phone",
+            "name:cs": "Telefon",
+            "name:en": "Phone"
+        },
+
+        // --- podepisující osoba (zástupce) ---
+        {
+            "id": "zast_typ",
+            "type": "enumString",
+            "length": 1,
+            "cfgItem": "economy.vat.filingSignatoryTypes",
+            "group": "signatory",
+            "name": "Signatory type",
+            "name:cs": "Typ podepisující osoby",
+            "name:en": "Signatory type",
+            "hint": "Leave empty when the taxpayer signs the filing",
+            "hint:cs": "Nechte prázdné, když podání podepisuje sám subjekt",
+            "hint:en": "Leave empty when the taxpayer signs the filing"
+        },
+        {
+            "id": "zast_kod",
+            "type": "enumString",
+            "length": 2,
+            "cfgItem": "economy.vat.filingSignatoryCodes",
+            "group": "signatory",
+            "name": "Signatory code",
+            "name:cs": "Kód podepisující osoby",
+            "name:en": "Signatory code"
+        },
+        {
+            "id": "zast_nazev",
+            "type": "varchar",
+            "length": 255,
+            "group": "signatory",
+            "name": "Legal entity name",
+            "name:cs": "Název právnické osoby",
+            "name:en": "Legal entity name"
+        },
+        {
+            "id": "zast_ic",
+            "type": "varchar",
+            "length": 10,
+            "group": "signatory",
+            "name": "Legal entity registration number",
+            "name:cs": "IČ právnické osoby",
+            "name:en": "Legal entity registration number"
+        },
+        {
+            "id": "zast_jmeno",
+            "type": "varchar",
+            "length": 20,
+            "group": "signatory",
+            "name": "First name",
+            "name:cs": "Jméno",
+            "name:en": "First name"
+        },
+        {
+            "id": "zast_prijmeni",
+            "type": "varchar",
+            "length": 36,
+            "group": "signatory",
+            "name": "Surname",
+            "name:cs": "Příjmení",
+            "name:en": "Surname"
+        },
+        {
+            "id": "zast_dat_nar",
+            "type": "date",
+            "group": "signatory",
+            "name": "Date of birth",
+            "name:cs": "Datum narození",
+            "name:en": "Date of birth"
+        },
+        {
+            "id": "zast_ev_cislo",
+            "type": "varchar",
+            "length": 36,
+            "group": "signatory",
+            "name": "Tax adviser certificate number",
+            "name:cs": "Evidenční číslo osvědčení daňového poradce",
+            "name:en": "Tax adviser certificate number"
+        }
+    ]
+}

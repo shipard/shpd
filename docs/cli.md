@@ -918,6 +918,35 @@ skončí ve stavu Hotovo s chybami (40) a projde do AI fronty.
 | `--force` | Re-match dle **aktuálních** potvrzených pravidel, smazání dříve vygenerovaných příloh (dle provenance) a přegenerování. Funguje i na stavech 0/30/40 — ladění nového pravidla nad starou zprávou. Odmítne zprávu s aktivním AI claimem (`analysis_state=20`) |
 | `--sweep` | Rescue: stav 10 starší než 5 min (spawn selhal) a stav 20 starší než 15 min (proces umřel) → zpět na 10 + spawn; po 3 pokusech stav 40. Exit 0 i bez nálezu |
 
+#### `mail-target-backfill`
+
+```bash
+sudo shpd-ds mail-target-backfill --dry-run   # jen počty + ukázka titulků
+sudo shpd-ds mail-target-backfill             # ostrý běh
+sudo shpd-ds mail-target-backfill --limit 500 # po částech
+```
+
+Doplní partnera (`partner_person`, `partner_name`) a titulek (`ai_title`)
+u došlých zpráv **navázaných na doklad** — z hlavičky toho dokladu
+(`tasks/mail-import-partner-title.md`). Řeší historii, kterou nepokryje
+ani AI, ani ISDOC: zprávy naimportované ze starého Shipardu (do AI fronty
+nikdy nevstoupí), zprávy aplikované přes Použít před zavedením partnera
+zprávy a zprávy, jejichž doklad se doimportoval později.
+
+Zapisuje **jen do prázdných sloupců**, takže ručně vybraného partnera ani
+titulek od AI nepřepíše a druhý běh hlásí `updated = 0`. Jednorázový —
+nepatří do cronu. Exit 0 i bez nálezu.
+
+| Opce | Význam |
+|------|--------|
+| `--dry-run` | Nic nezapíše, vypíše počty a prvních 10 změn k namátkové kontrole |
+| `--limit <N>` | Zpracovat nejvýš N zpráv (0 = bez limitu, default) |
+| `--batch <N>` | Kolik řádků načíst jedním dotazem (default 500) — tabulka má na produkci 100k+ řádků, stránkuje se keysetem přes `id` |
+
+Souhrn: `scanned` (prohlédnuté zprávy), `updated` (doplněné), `skipped`
+(cíl mimo doklady nebo doklad, který v DS není), `unchanged` (nebylo co
+doplnit).
+
 ### Hosting
 
 Příkazy pro DS s modulem `hosting.core` (centrální správa DS —

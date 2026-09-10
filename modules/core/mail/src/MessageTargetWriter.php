@@ -106,30 +106,28 @@ final class MessageTargetWriter
 
     /**
      * Doplní zprávě jen ty ze sloupců {@see FACT_COLUMNS}, které jsou na ní
-     * NULL a cíl pro ně má hodnotu (D8/P7). Prázdný `$set` → žádný dotaz.
+     * NULL a cíl pro ně má hodnotu (D8/P7). Nic k doplnění → žádný dotaz.
      *
      * @param array<string, mixed> $message řádek zprávy včetně `target_*`
      *        a stávajících hodnot plněných sloupců
+     * @param array{partner_person: ?int, partner_name: ?string, ai_title: ?string}|null $facts
+     *        předpočítaná fakta (volající, který je už má z {@see factsFor()},
+     *        ušetří jeden SELECT na zprávu)
      * @return bool true = něco se zapsalo
      */
-    public function backfillRow(array $message): bool
+    public function backfillRow(array $message, ?array $facts = null): bool
     {
         $messageNdx = (int) ($message['id'] ?? 0);
         if ($messageNdx <= 0) {
             return false;
         }
 
-        $facts = $this->factsFor(
+        $facts ??= $this->factsFor(
             isset($message['target_table_id']) ? (string) $message['target_table_id'] : null,
             isset($message['target_row']) ? (int) $message['target_row'] : null,
         );
 
-        $set = [];
-        foreach (self::FACT_COLUMNS as $column) {
-            if ($facts[$column] !== null && ($message[$column] ?? null) === null) {
-                $set[$column] = $facts[$column];
-            }
-        }
+        $set = self::fillableColumns($facts, $message);
         if ($set === []) {
             return false;
         }
@@ -145,6 +143,36 @@ final class MessageTargetWriter
         }
 
         return true;
+    }
+
+    /**
+     * Sloupce, které jde zprávě doplnit: fakt je non-null a zpráva má
+     * v daném sloupci NULL (D8/P7). Veřejné kvůli `--dry-run` backfillu,
+     * který stejnou úvahu potřebuje bez zápisu.
+     *
+     * @param array{partner_person: ?int, partner_name: ?string, ai_title: ?string} $facts
+     * @param array<string, mixed> $message
+     * @return array<string, int|string>
+     */
+    public static function fillableColumns(array $facts, array $message): array
+    {
+        $set = [];
+        foreach (self::FACT_COLUMNS as $column) {
+            if (($facts[$column] ?? null) !== null && ($message[$column] ?? null) === null) {
+                $set[$column] = $facts[$column];
+            }
+        }
+        return $set;
+    }
+
+    /**
+     * Fakta bez jediné hodnoty — cíl mimo docs, chybějící doklad, chyba.
+     *
+     * @param array<string, mixed> $facts
+     */
+    public static function isEmptyFacts(array $facts): bool
+    {
+        return array_filter($facts, static fn(mixed $v): bool => $v !== null) === [];
     }
 
     /**

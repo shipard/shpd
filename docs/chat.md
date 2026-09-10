@@ -88,6 +88,10 @@ stropu.
 Messages API, streamovaně). `streamChat(LlmChatParams, $onTextDelta)`:
 
 - tělo `{model, max_tokens, system, messages, stream:true}` + `tools` (když jsou);
+  před odesláním normalizuje `tool_use.input` — prázdný vstup (`[]` po PHP
+  round-tripu `json_decode` assoc → persistence → `json_encode`) jde jako
+  JSON objekt `{}`, jinak API vrací 400 „input: Input should be an object"
+  (model volající nástroj bez argumentů, např. `mail_list_pending`);
 - parsuje provider SSE: `text_delta` → `$onTextDelta`; `tool_use` bloky
   (`content_block_start` + `input_json_delta`) → poskládá `input`;
 - vrací `LlmChatResult` s `text`, `contentBlocks` (celé bloky tahu v pořadí —

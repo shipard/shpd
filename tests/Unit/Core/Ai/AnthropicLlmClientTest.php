@@ -115,6 +115,59 @@ class AnthropicLlmClientTest extends TestCase
         }
     }
 
+    public function testEmptyToolUseInputIsSentAsJsonObject(): void
+    {
+        // Regrese: model zavolal nástroj bez argumentů (mail_list_pending),
+        // PHP round-trip udělal z `{}` prázdné pole a další kolo padlo na
+        // API s „tool_use.input: Input should be an object".
+        $captured = null;
+        $client = new class($this->sampleStream(), function (string $body) use (&$captured): void {
+            $captured = $body;
+        }) extends AnthropicLlmClient {
+            /** @param callable(string): void $capture */
+            public function __construct(private string $stream, private $capture) {}
+
+            protected function sendStreamingRequest(LlmChatParams $params, string $jsonBody, callable $onChunk): void
+            {
+                ($this->capture)($jsonBody);
+                $onChunk($this->stream);
+            }
+        };
+
+        $params = new LlmChatParams(
+            provider: 'anthropic',
+            model: 'claude-opus-4-8',
+            apiKey: 'sk-test',
+            baseUrl: '',
+            system: null,
+            messages: [
+                ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Co čeká v poště?']]],
+                ['role' => 'assistant', 'content' => [
+                    ['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'mail_list_pending', 'input' => []],
+                    ['type' => 'tool_use', 'id' => 'toolu_2', 'name' => 'persons_search', 'input' => ['query' => 'Acme', 'ids' => []]],
+                ]],
+                ['role' => 'user', 'content' => [
+                    ['type' => 'tool_result', 'tool_use_id' => 'toolu_1', 'content' => '{"summary":"Žádná čekající pošta."}'],
+                    ['type' => 'tool_result', 'tool_use_id' => 'toolu_2', 'content' => '[]'],
+                ]],
+            ],
+            maxTokens: 256,
+        );
+
+        $client->streamChat($params, function (): void {});
+
+        $this->assertNotNull($captured);
+        $decoded = json_decode((string) $captured, false);
+        $blocks = $decoded->messages[1]->content;
+        $this->assertInstanceOf(\stdClass::class, $blocks[0]->input, 'prázdný vstup musí zůstat objektem');
+        $this->assertStringContainsString('"input":{}', (string) $captured);
+        // Neprázdný vstup i prázdný seznam uvnitř vstupu se nemění.
+        $this->assertSame('Acme', $blocks[1]->input->query);
+        $this->assertSame([], $blocks[1]->input->ids);
+        // tool_result zůstává beze změny (řetězcový content).
+        $this->assertSame('[]', $decoded->messages[2]->content[1]->content);
+    }
+
     public function testParsesToolUseBlock(): void
     {
         $stream = implode("\n", [

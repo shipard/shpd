@@ -33,7 +33,7 @@ class AnthropicLlmClient implements LlmClient
             'model'      => $params->model,
             'max_tokens' => $params->maxTokens,
             'stream'     => true,
-            'messages'   => $params->messages,
+            'messages'   => self::normalizeMessages($params->messages),
         ];
         if ($params->system !== null && $params->system !== '') {
             $body['system'] = $params->system;
@@ -83,6 +83,38 @@ class AnthropicLlmClient implements LlmClient
             $toolUses,
             $contentBlocks,
         );
+    }
+
+    /**
+     * Anthropic requires `tool_use.input` to be a JSON object. The PHP
+     * round-trip (json_decode assoc in finalizeBlocks → persistence in
+     * ChatController → json_encode here) turns an empty object `{}` into
+     * `[]`, so a model calling a tool without arguments (e.g.
+     * `mail_list_pending`) got HTTP 400 „input: Input should be an object"
+     * on the next turn. Empty inputs are re-typed to stdClass right before
+     * encoding; non-empty associative arrays already encode as objects.
+     * Only the top-level `input` is known to be an object — nested empty
+     * arrays are left alone (a JSON list `[]` inside input is legitimate).
+     *
+     * @param array<int, array<string, mixed>> $messages
+     * @return array<int, array<string, mixed>>
+     */
+    private static function normalizeMessages(array $messages): array
+    {
+        foreach ($messages as &$message) {
+            if (!is_array($message['content'] ?? null)) {
+                continue;
+            }
+            foreach ($message['content'] as &$block) {
+                if (is_array($block) && ($block['type'] ?? '') === 'tool_use' && ($block['input'] ?? null) === []) {
+                    $block['input'] = new \stdClass();
+                }
+            }
+            unset($block);
+        }
+        unset($message);
+
+        return $messages;
     }
 
     /**

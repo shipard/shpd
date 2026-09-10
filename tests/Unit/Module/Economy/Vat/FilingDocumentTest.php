@@ -10,6 +10,7 @@ use Shipard\Core\Document\ValidationError;
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Economy\Vat\FilingDocument;
+use Shipard\Module\Economy\Vat\FilingHeaderSchema;
 
 /**
  * Testovatelná varianta — DB dotazy nahrazené in-memory daty: instance
@@ -465,5 +466,48 @@ final class FilingDocumentTest extends TestCase
         $result = $this->doc()->validate($data);
         $this->assertFalse($result->isValid());
         $this->assertSame('report_period', $result->toArray()[0]['column']);
+    }
+
+    // ── Schéma hlavičky per typ tvrzení (#55 Fáze 3, X2) ────────────────
+
+    /**
+     * Hook běží před `beforeSave()`, kde se teprve doplňuje denormalizovaný
+     * `report_type` — schéma se proto musí dohledat přes instanci.
+     */
+    public function testHeaderSchemaFollowsPeriodTypeWithoutDenormalizedColumn(): void
+    {
+        foreach (FilingHeaderSchema::CFG_ITEM_BY_TYPE as $type => $cfgItem) {
+            $doc = $this->doc($type);
+            $this->assertSame(
+                $cfgItem,
+                $doc->structuredSchemaFor('header', ['report_period' => 7]),
+            );
+        }
+    }
+
+    public function testHeaderSchemaUsesDenormalizedTypeWhenPresent(): void
+    {
+        $doc = $this->doc('return');
+        $this->assertSame(
+            'economy.vat.filingHeaderCzKh1',
+            $doc->structuredSchemaFor('header', ['report_type' => 'cs']),
+        );
+    }
+
+    /** Částečná aktualizace posílá jen `note` — typ nese uložený řádek. */
+    public function testHeaderSchemaFallsBackToStoredRow(): void
+    {
+        $doc = $this->doc('return', [3 => $this->filedRow(['id' => 3, 'report_type' => 'rs'])]);
+        $this->assertSame(
+            'economy.vat.filingHeaderCzShv',
+            $doc->structuredSchemaFor('header', ['id' => 3, 'note' => 'x']),
+        );
+    }
+
+    public function testOtherColumnsAndUnknownPeriodHaveNoSchemaOverride(): void
+    {
+        $doc = $this->doc();
+        $this->assertNull($doc->structuredSchemaFor('result', ['report_period' => 7]));
+        $this->assertNull($doc->structuredSchemaFor('header', []));
     }
 }

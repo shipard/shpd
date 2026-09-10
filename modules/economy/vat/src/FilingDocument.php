@@ -73,6 +73,51 @@ class FilingDocument extends Document
         'header', 'result', 'messages',
     ];
 
+    /**
+     * Hlavička podání má jinou sadu polí pro přiznání, kontrolní a souhrnné
+     * hlášení (#55 Fáze 3, X2). Zrcadlo je `FilingsForm::structuredSchemaFor()`
+     * — obě delegují na `FilingHeaderSchema`, aby se formulář kreslil podle
+     * téhož schématu, podle jakého se ukládá.
+     */
+    public function structuredSchemaFor(string $column, array $data): ?string
+    {
+        if ($column !== FilingHeaderSchema::COLUMN) {
+            return null;
+        }
+        return FilingHeaderSchema::forReportType($this->resolveReportType($data));
+    }
+
+    /**
+     * Typ tvrzení pro zapisovaná data. Hook běží **před** `beforeSave()`,
+     * takže denormalizovaný `report_type` v payloadu ještě být nemusí —
+     * dohledá se přes instanci, u částečné aktualizace přes uložený řádek.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function resolveReportType(array $data): ?string
+    {
+        $type = (string) ($data['report_type'] ?? '');
+        if ($type !== '') {
+            return $type;
+        }
+
+        $periodId = (int) ($data['report_period'] ?? 0);
+        if ($periodId <= 0 && !empty($data['id'])) {
+            $current = $this->loadCurrent((int) $data['id']);
+            $type    = (string) ($current['report_type'] ?? '');
+            if ($type !== '') {
+                return $type;
+            }
+            $periodId = (int) ($current['report_period'] ?? 0);
+        }
+        if ($periodId <= 0) {
+            return null;
+        }
+
+        $period = $this->loadReportPeriod($periodId);
+        return $period !== null ? (string) ($period['report_type'] ?? '') : null;
+    }
+
     public function beforeSave(array &$data, ?array $originalData = null): void
     {
         $isNew = empty($data['id']);

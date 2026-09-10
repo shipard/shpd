@@ -40,6 +40,10 @@ class FilingComposerTest extends IntegrationTestCase
     /** @var list<int> */
     private array $createdFilings = [];
 
+    /** Původní profil podatele registrace — vrací ho teardown. */
+    private mixed $originalProfile = null;
+    private bool $profileRestored = false;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -87,6 +91,10 @@ class FilingComposerTest extends IntegrationTestCase
         }
         foreach ($this->createdPeriods as $id) {
             $dibi->delete('economy_vat_report_periods')->where('id = %i', $id)->execute();
+        }
+        if ($this->profileRestored) {
+            $dibi->update('economy_codebooks_vat_registrations', ['filing_profile' => $this->originalProfile])
+                ->where('id = %i', $this->registrationId)->execute();
         }
     }
 
@@ -289,6 +297,85 @@ class FilingComposerTest extends IntegrationTestCase
         $this->assertSame(1, $result['cs']['sections']['A4']['rows']);
         $this->assertEqualsWithDelta(20000.0, $result['cs']['sections']['A4']['base'], 0.001);
         $this->assertArrayNotHasKey('crossCheck', $result, 'křížová kontrola je věc přiznání');
+
+        // Podklad věty C: základy per řádek přiznání spočítané nad TOUTO
+        // dokladovou úrovní (#55 X11) — 20 000 + 1 000 na ř. 1.
+        $this->assertEqualsWithDelta(21000.0, $result['cs']['dp3Base']['1'], 0.001);
+    }
+
+    // ── Hlavička podání (#55 Fáze 3) ────────────────────────────────────────
+
+    public function testHeaderIsPrefilledFromFilingProfile(): void
+    {
+        $this->setRegistrationProfile([
+            'typ_ds'   => 'P',
+            'c_ufo'    => '464',
+            'c_okec'   => '620200',
+            'naz_obce' => 'Ukázkov',
+            'email'    => 'ucto@example.com',
+        ]);
+
+        $periodId = $this->insertPeriod('return', '01/2029 hlavička');
+        $this->insertDoc('invno', $periodId, 'vat_period', 'cz-120', 1000.0, 210.0, 'CZ12345678');
+        $filingId = $this->createFiling($periodId, 'regular');
+
+        $header = $this->filingHeader($filingId);
+        $this->assertSame('economy.vat.filingHeaderCzDp3/2026', $header['_schema']);
+        $this->assertSame('464', $header['c_ufo']);
+        $this->assertSame('620200', $header['c_okec']);
+        $this->assertSame('Ukázkov', $header['naz_obce']);
+        $this->assertSame('ucto@example.com', $header['email']);
+        $this->assertSame('P', $header['typ_platce'], 'default schématu');
+        $this->assertTrue($header['trans'], 'daň na výstupu 210 Kč → vznikla daňová povinnost');
+        $this->assertSame(
+            preg_replace('/\D+/', '', (string) $this->registrationVatId()),
+            $header['dic'],
+            'DIČ ve větě P je číselná část z registrace',
+        );
+
+        // Koeficient ř. 52 je součástí snapshotu — XML ho vypisuje jako
+        // `koef_p20_nov` a živý resolver by po změně vydal jiné číslo.
+        $this->assertArrayHasKey('coefficient', $this->filingResult($filingId)['return']);
+    }
+
+    public function testControlStatementHeaderUsesItsOwnSchema(): void
+    {
+        $this->setRegistrationProfile(['typ_ds' => 'P', 'c_ufo' => '464', 'c_okec' => '620200']);
+
+        $periodId = $this->insertPeriod('cs', '01/2029 KH hlav');
+        $this->insertDoc('invno', $periodId, 'cs_period', 'cz-120', 1000.0, 210.0, 'CZ12345678');
+        $header = $this->filingHeader($this->createFiling($periodId, 'regular'));
+
+        $this->assertSame('economy.vat.filingHeaderCzKh1/2026', $header['_schema']);
+        $this->assertSame('464', $header['c_ufo']);
+        $this->assertArrayNotHasKey('c_okec', $header, 'věta D kontrolního hlášení kód činnosti nemá');
+        $this->assertArrayNotHasKey('trans', $header);
+    }
+
+    /**
+     * Přepočet konceptu je běžná operace — ruční úpravy hlavičky, jediného
+     * ručně zadávaného kusu snapshotu, přežít musí.
+     */
+    public function testRecomposeKeepsEditedHeader(): void
+    {
+        $this->setRegistrationProfile(['typ_ds' => 'P', 'c_ufo' => '464']);
+
+        $periodId = $this->insertPeriod('return', '01/2029 hlav edit');
+        $this->insertDoc('invno', $periodId, 'vat_period', 'cz-120', 1000.0, 210.0, 'CZ12345678');
+        $filingId = $this->createFiling($periodId, 'regular');
+
+        $edited = $this->filingHeader($filingId);
+        $edited['sest_prijmeni'] = 'Nováková';
+        $edited['c_ufo']         = '451';
+        $this->db->getDibiConnection()
+            ->update(FilingDocument::TABLE, ['header' => json_encode($edited, JSON_UNESCAPED_UNICODE)])
+            ->where('id = %i', $filingId)->execute();
+
+        (new FilingComposer($this->db->getDibiConnection(), $this->config))->compose($filingId);
+
+        $header = $this->filingHeader($filingId);
+        $this->assertSame('Nováková', $header['sest_prijmeni']);
+        $this->assertSame('451', $header['c_ufo'], 'přepočet hlavičku nepřepisuje z profilu');
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -463,6 +550,47 @@ class FilingComposerTest extends IntegrationTestCase
             $out[(int) $data['row']] = $data;
         }
         return $out;
+    }
+
+    /** @return array<string, mixed> */
+    /**
+     * Dočasně nastaví profil podatele registrace; původní hodnotu vrátí
+     * teardown — test si sahá na sdílený záznam dev DS.
+     *
+     * @param array<string, mixed> $profile
+     */
+    private function setRegistrationProfile(array $profile): void
+    {
+        if (!$this->profileRestored) {
+            $this->originalProfile = $this->db->fetchSingle(
+                'SELECT filing_profile FROM economy_codebooks_vat_registrations WHERE id = %i',
+                $this->registrationId,
+            );
+            $this->profileRestored = true;
+        }
+
+        $profile['_schema'] = 'economy.vat.filingProfileCz/2026';
+        $this->db->getDibiConnection()
+            ->update('economy_codebooks_vat_registrations', [
+                'filing_profile' => json_encode($profile, JSON_UNESCAPED_UNICODE),
+            ])
+            ->where('id = %i', $this->registrationId)->execute();
+    }
+
+    private function registrationVatId(): string
+    {
+        return (string) $this->db->fetchSingle(
+            'SELECT vat_id FROM economy_codebooks_vat_registrations WHERE id = %i',
+            $this->registrationId,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function filingHeader(int $filingId): array
+    {
+        $json = $this->db->fetchSingle('SELECT header FROM economy_vat_filings WHERE id = %i', $filingId);
+        $this->assertIsString($json, 'snapshot musí mít hlavičku');
+        return json_decode($json, true, 512, JSON_THROW_ON_ERROR);
     }
 
     /** @return array<string, mixed> */

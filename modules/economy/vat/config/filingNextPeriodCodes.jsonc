@@ -1,0 +1,19 @@
+{
+    // economy.vat.filingNextPeriodCodes — kód zdaňovacího období
+    // následujícího roku ve větě D přiznání DPHDP3 (atribut `kod_zo`).
+    //
+    // Vyplňuje se **jen v řádném přiznání za poslední zdaňovací období
+    // kalendářního roku** a nahrazuje oznámení o změně zdaňovacího období
+    // (§ 99a odst. 1). Plátce, jehož období se nemění, pole nevyplňuje —
+    // proto tu není žádná „beze změny" položka, tou je prázdná volba.
+    "Q": {
+        "name": "Q — monthly payer switching to quarterly periods",
+        "name:cs": "Q — měsíční plátce přechází na čtvrtletní období",
+        "name:en": "Q — monthly payer switching to quarterly periods"
+    },
+    "M": {
+        "name": "M — quarterly payer switching to monthly periods",
+        "name:cs": "M — čtvrtletní plátce přechází na měsíční období",
+        "name:en": "M — quarterly payer switching to monthly periods"
+    }
+}

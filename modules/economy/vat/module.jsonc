@@ -79,7 +79,15 @@
         { "id": "economy.vat.filingProfileCz", "file": "config/filingProfileCz.jsonc" },
         { "id": "economy.vat.filingSubjectTypes", "file": "config/filingSubjectTypes.jsonc" },
         { "id": "economy.vat.filingSignatoryTypes", "file": "config/filingSignatoryTypes.jsonc" },
-        { "id": "economy.vat.filingSignatoryCodes", "file": "config/filingSignatoryCodes.jsonc" }
+        { "id": "economy.vat.filingSignatoryCodes", "file": "config/filingSignatoryCodes.jsonc" },
+
+        // Hlavička podání — schéma strukturovaného pole per typ tvrzení
+        // (#55 Fáze 3, X2) a číselníky věty D přiznání.
+        { "id": "economy.vat.filingHeaderCzDp3", "file": "config/filingHeaderCzDp3.jsonc" },
+        { "id": "economy.vat.filingHeaderCzKh1", "file": "config/filingHeaderCzKh1.jsonc" },
+        { "id": "economy.vat.filingHeaderCzShv", "file": "config/filingHeaderCzShv.jsonc" },
+        { "id": "economy.vat.filingPayerTypes", "file": "config/filingPayerTypes.jsonc" },
+        { "id": "economy.vat.filingNextPeriodCodes", "file": "config/filingNextPeriodCodes.jsonc" }
     ],
 
     // Koeficienty odpočtu patří do Nastavení vedle Registrací DPH; stejný

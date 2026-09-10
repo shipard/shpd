@@ -6,6 +6,9 @@ namespace Shipard\Module\Economy\Vat;
 
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\StructuredFields\StructuredFieldValues;
+use Shipard\Core\StructuredFields\StructuredSchema;
+use Shipard\Module\Docs\Core\OwnCompanyResolver;
 use Shipard\Module\World\Vat\VatRateResolver;
 
 /**
@@ -35,6 +38,16 @@ final class FilingComposer
 {
     /** Pojistka proti zacyklení řetězu dodatečných podání. */
     private const MAX_CHAIN_DEPTH = 50;
+
+    /**
+     * Zálohový koeficient odpočtu použitý při výpočtu ř. 52 — do snapshotu
+     * (`result.return.coefficient`), protože XML ho vypisuje jako
+     * `koef_p20_nov` a živý resolver by po změně koeficientu vydal jiné
+     * číslo, než jaké se podávalo.
+     *
+     * @var ?array{value: float, source: string, year: int}
+     */
+    private ?array $returnCoefficient = null;
 
     public function __construct(
         private readonly \Dibi\Connection $db,
@@ -79,6 +92,8 @@ final class FilingComposer
             throw new \DomainException("Neznámý typ tvrzení '{$type}'");
         }
 
+        $this->returnCoefficient = null;
+
         $dsConnection = new DataSourceConnection($this->db);
         $docs         = (new VatDocumentSelection($dsConnection))->load((int) $period['id'], $column);
         $vatCodes     = (new VatRateResolver($this->config))->getVatCodes('cz', null, null, true);
@@ -100,10 +115,15 @@ final class FilingComposer
             $this->appendCrossCheck($dsConnection, $docs, $vatCodes, $result, $messages);
         }
 
-        $this->db->update(FilingDocument::TABLE, [
+        $update = [
             'result'   => self::encodeJson($result),
             'messages' => self::encodeJson($messages === [] ? null : $messages),
-        ])->where('id = %i', $filingId)->execute();
+        ];
+        $header = $this->buildHeader($filing, $period, $type, $result);
+        if ($header !== null) {
+            $update['header'] = $header;
+        }
+        $this->db->update(FilingDocument::TABLE, $update)->where('id = %i', $filingId)->execute();
 
         return ['items' => $itemCount, 'rows' => $rowCount, 'isEmpty' => (bool) $result['isEmpty']];
     }
@@ -211,6 +231,8 @@ final class FilingComposer
         $year        = (int) substr(self::isoDate($period['date_begin']), 0, 4);
         $coefficient = (new DeductionCoefficientResolver($dsConnection))
             ->provisional((int) $period['vat_registration'], $year) + ['year' => $year];
+
+        $this->returnCoefficient = $coefficient;
 
         $calculated = (new VatReturnCalculator($mapping))->calculate($docs, $coefficient['value']);
         $unit       = $mapping->roundingUnit('return');
@@ -419,6 +441,13 @@ final class FilingComposer
             foreach ([62, 63, 64, 65, 66] as $row) {
                 $result['return']['row' . $row] = $filed[$row]['taxFull'] ?? 0.0;
             }
+            // Koeficient ř. 52 patří do snapshotu — XML ho vypisuje jako
+            // `koef_p20_nov` a po pozdější změně koeficientu by živý
+            // resolver vydal jiné číslo, než jaké se podávalo.
+            if ($this->returnCoefficient !== null) {
+                $result['return']['coefficient'] = round($this->returnCoefficient['value'], 4);
+                $result['return']['coefficientSource'] = $this->returnCoefficient['source'];
+            }
             return $result;
         }
 
@@ -437,6 +466,7 @@ final class FilingComposer
                 ];
             }
             $result['cs']['sections'] ??= [];
+            $result['cs']['dp3Base']    = $this->returnRowBases($filingId);
             return $result;
         }
 
@@ -488,6 +518,125 @@ final class FilingComposer
         }
     }
 
+    /**
+     * Základy daně per řádek přiznání spočítané nad dokladovou úrovní
+     * **tohoto** podání. Kontrolní hlášení z nich staví větu C, která není
+     * součtem svých řádků, ale kontrolou proti přiznání (#55 X11):
+     * `obrat23` = ř. 1, `celk_zd_a2` = Σ ř. 3, 4, 5, 6, 9, 12, 13 atd.
+     * Který řádek jde do kterého atributu, říká mapovací config —
+     * snapshot drží jen fakta.
+     *
+     * @return array<string, float> číslo řádku (string kvůli JSON) → základ
+     */
+    private function returnRowBases(int $filingId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT [dp3_row], SUM([base_dom]) AS [base] FROM [economy_vat_filing_items]'
+            . ' WHERE [filing] = %i AND [dp3_row] IS NOT NULL GROUP BY [dp3_row] ORDER BY [dp3_row]',
+            $filingId,
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) (int) $row['dp3_row']] = round((float) $row['base'], 2);
+        }
+        return $out;
+    }
+
+    // ── Hlavička podání ─────────────────────────────────────────────────────
+
+    /**
+     * Předvyplněná hlavička podání (#55 X2): věta P z profilu podatele na
+     * registraci, identita z vlastní firmy, DIČ z registrace a defaulty
+     * věty D. Vrací JSON pro sloupec `header`, nebo `null` když se hlavička
+     * nemá měnit.
+     *
+     * **Přepočet konceptu hlavičku nepřepisuje** — uživatelské úpravy
+     * v tabu Hlavička jsou to jediné, co snapshot nese ručně, a přepočet je
+     * běžná operace nad konceptem. Obnovu z profilu dělá samostatná akce.
+     *
+     * @param array<string, mixed> $filing
+     * @param array<string, mixed> $period
+     * @param array<string, mixed> $result
+     */
+    private function buildHeader(array $filing, array $period, string $type, array $result): ?string
+    {
+        $stored = StructuredFieldValues::decode($filing['header'] ?? null);
+        if ($stored !== null && !StructuredFieldValues::isEmpty($stored)) {
+            return null;
+        }
+
+        $cfgItem = FilingHeaderSchema::forReportType($type);
+        $schema  = $cfgItem !== null ? StructuredSchema::fromCfgItem($this->config, $cfgItem) : null;
+        if ($schema === null) {
+            return null;
+        }
+
+        $registration = $this->loadRegistration((int) ($period['vat_registration'] ?? 0));
+        $profile      = StructuredFieldValues::decode($registration['filing_profile'] ?? null) ?? [];
+
+        $values = FilingHeaderSchema::prefill(
+            $schema,
+            $profile,
+            $this->ownCompanyIdentity((string) ($profile['typ_ds'] ?? '')),
+            $this->headerFilingDefaults($registration, $type, $result),
+        );
+
+        return StructuredFieldValues::encode($values, $schema);
+    }
+
+    /**
+     * Identita subjektu pro větu P — obchodní jméno u právnické osoby,
+     * jméno a příjmení u fyzické. Profil ji nenese (je to údaj vlastní
+     * firmy), typ subjektu ale ano. Bez nastavené vlastní firmy zůstanou
+     * pole prázdná a doplní je uživatel.
+     *
+     * @return array<string, mixed>
+     */
+    private function ownCompanyIdentity(string $subjectType): array
+    {
+        $person = (new OwnCompanyResolver($this->db))->getOwnPersonData();
+        if ($person === null) {
+            return [];
+        }
+
+        if ($subjectType === 'F') {
+            return [
+                'prijmeni' => (string) ($person['last_name'] ?? ''),
+                'jmeno'    => (string) ($person['first_name'] ?? ''),
+                'titul'    => (string) ($person['title_before'] ?? ''),
+            ];
+        }
+        return ['zkrobchjm' => (string) ($person['full_name'] ?? '')];
+    }
+
+    /**
+     * Údaje o podání do věty D a DIČ do věty P.
+     *
+     * `trans` = vznikla daňová povinnost: bereme daň na výstupu celkem
+     * (ř. 62) — povinnost přiznat daň vzniká z výstupu bez ohledu na to,
+     * jestli podání končí vlastní daní, nebo nadměrným odpočtem.
+     * Uživatel ho může v hlavičce přepnout.
+     *
+     * @param array<string, mixed> $registration
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function headerFilingDefaults(array $registration, string $type, array $result): array
+    {
+        $defaults = ['dic' => self::taxNumberDigits((string) ($registration['vat_id'] ?? ''))];
+
+        if ($type === 'return') {
+            $defaults['trans'] = abs((float) ($result['return']['row62'] ?? 0.0)) >= 0.005;
+        }
+        return $defaults;
+    }
+
+    /** Číselná část DIČ — XSD `dic` je `[0-9]{1,10}`, tedy bez prefixu státu. */
+    private static function taxNumberDigits(string $vatId): string
+    {
+        return (string) preg_replace('/\D+/', '', $vatId);
+    }
+
     // ── DB přístup ──────────────────────────────────────────────────────────
 
     /** @return ?array<string, mixed> */
@@ -506,6 +655,20 @@ final class FilingComposer
             $periodId,
         );
         return $row !== null ? $row->toArray() : null;
+    }
+
+    /** @return array<string, mixed> prázdné pole, když registrace chybí */
+    private function loadRegistration(int $registrationId): array
+    {
+        if ($registrationId <= 0) {
+            return [];
+        }
+        $row = $this->db->fetch(
+            'SELECT [id], [vat_id], [filing_profile] FROM [economy_codebooks_vat_registrations]'
+            . ' WHERE [id] = %i',
+            $registrationId,
+        );
+        return $row !== null ? $row->toArray() : [];
     }
 
     /**

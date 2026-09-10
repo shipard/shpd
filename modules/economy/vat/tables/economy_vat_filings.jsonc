@@ -128,15 +128,25 @@
             "reference": "economy_vat_filings"
         },
         {
-            // Snapshot hlavičky XML (D19) — Fáze 2 sloupec jen deklaruje,
-            // schéma a editaci doplní Fáze 3 po #74.
+            // Snapshot hlavičky XML (D19, #55 Fáze 3 X2): věta P podání
+            // a needvozená pole věty D. Composer ho předvyplní z profilu
+            // podatele na registraci, uživatel doupraví u konceptu, podáním
+            // zmrzne (`FROZEN_COLUMNS` ve FilingDocument).
+            //
+            // Sada polí se liší podle typu tvrzení — statické schéma je
+            // přiznání, `FilingDocument::structuredSchemaFor()` ho per typ
+            // přebije na `…CzKh1` / `…CzShv`. Sloupec **nesmí být
+            // `system`**: systémové sloupce zahazuje FormController včetně
+            // jejich virtuálních polí, takže by se `header.*` neuložilo.
+            // Zápis mimo formulář nehrozí — strukturovaný sloupec generické
+            // CRUD odmítá (400 STRUCTURED_COLUMN).
             "id": "header",
             "name": "XML header snapshot",
             "name:cs": "Hlavička podání",
             "name:en": "XML header snapshot",
             "type": "json",
             "nullable": true,
-            "system": true
+            "schema": "economy.vat.filingHeaderCzDp3"
         },
         {
             // Souhrn podaných hodnot (DP3 ř. 62–66, počty řádků sekcí KH,

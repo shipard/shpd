@@ -17,10 +17,33 @@ use Shipard\Core\Form\TableForm;
  * důvodů se ukazuje jen u druhů, kde je povinné; datum podání jen dokud
  * je podání koncept (po podání ho drží guard).
  *
- * Záložka hlavičky XML (#74) tu záměrně není — přijde s Fází 3.
+ * Záložka **Hlavička** (#55 Fáze 3, X2) drží snapshot věty P a needvozených
+ * polí věty D. Kreslí se u existujícího podání — u nového ještě hlavička
+ * neexistuje, předvyplní ji composer při sestavení. Ve stavech Podáno
+ * a Zrušeno je formulář read-only ze stavu dokladu, takže tab slouží
+ * k nahlédnutí, co se podalo.
  */
 class FilingsForm extends TableForm
 {
+    /**
+     * Zrcadlo `FilingDocument::structuredSchemaFor()` — obě strany musí
+     * vybrat totéž schéma, jinak by se hlavička kreslila podle jiné sady
+     * polí, než jakou gateway uloží (docs/structured-fields.md § 5).
+     */
+    public function structuredSchemaFor(string $column, array $data): ?string
+    {
+        if ($column !== FilingHeaderSchema::COLUMN) {
+            return null;
+        }
+
+        $type     = (string) ($data['report_type'] ?? '');
+        $periodId = (int) ($data['report_period'] ?? 0);
+        if ($type === '' && $periodId > 0) {
+            $type = (string) ($this->loadPeriod($periodId)['report_type'] ?? '');
+        }
+        return FilingHeaderSchema::forReportType($type);
+    }
+
     /**
      * Výchozí hodnoty nového podání, které se **propíšou do formuláře**
      * (mutace v `buildFormDefinition` se do response `data` nedostanou).
@@ -94,11 +117,29 @@ class FilingsForm extends TableForm
                     ->textarea('note', hint: 'Poznámka je jediné, co lze doplnit i k podanému podání.')
             ->build();
 
+        $tabs = [$basic];
+
+        // Hlavička podání = strukturované pole `header` se schématem per typ
+        // tvrzení (#55 Fáze 3). U nového podání ještě neexistuje — vyplní ji
+        // composer z profilu podatele při sestavení.
+        if (!$isNew && $this->hasStructuredColumn(FilingHeaderSchema::COLUMN)) {
+            $tabs[] = $this->tab('header', 'Hlavička')
+                ->section()
+                    ->col()
+                        ->html('<p class="muted">Údaje, které jdou do hlavičky souboru pro daňový portál. '
+                            . 'Předvyplněné z <strong>Podacích údajů</strong> registrace k DPH a z vlastní firmy; '
+                            . 'úpravy tady platí jen pro toto podání.</p>')
+                        ->addElements($this->structuredFieldElements(FilingHeaderSchema::COLUMN, $data))
+                ->build();
+        }
+
+        $tabs[] = $this->attachmentsTab();
+
         return new FormDefinition(
             table: $this->table,
             title: 'Podání DPH',
             titleNew: 'Nové podání DPH',
-            tabs: [$basic, $this->attachmentsTab()],
+            tabs: $tabs,
         );
     }
 

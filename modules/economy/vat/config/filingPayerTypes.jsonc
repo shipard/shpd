@@ -1,0 +1,38 @@
+{
+    // economy.vat.filingPayerTypes — typ podávající osoby ve větě D
+    // přiznání DPHDP3 (atribut `typ_platce`, povinný). Hodnoty a jejich
+    // význam jsou z popisu struktury Finanční správy (dphdp3_epo2.xsd,
+    // dokumentace atributu) — ne naše volba.
+    //
+    // Kontrolní a souhrnné hlášení tento údaj nemají.
+    "P": {
+        "name": "P — VAT payer (§ 6 to § 6fa)",
+        "name:cs": "P — plátce daně (§ 6 až § 6fa)",
+        "name:en": "P — VAT payer (§ 6 to § 6fa)"
+    },
+    "I": {
+        "name": "I — identified person (§ 6g to § 6l)",
+        "name:cs": "I — identifikovaná osoba (§ 6g až § 6l)",
+        "name:en": "I — identified person (§ 6g to § 6l)"
+    },
+    "S": {
+        "name": "S — group (§ 5a)",
+        "name:cs": "S — skupina (§ 5a)",
+        "name:en": "S — group (§ 5a)"
+    },
+    "N": {
+        "name": "N — non-payer under § 108",
+        "name:cs": "N — neplátce dle § 108",
+        "name:en": "N — non-payer under § 108"
+    },
+    "R": {
+        "name": "R — non-payer, acquisition of a new means of transport (§ 19c)",
+        "name:cs": "R — neplátce, pořízení nového dopravního prostředku (§ 19c)",
+        "name:en": "R — non-payer, acquisition of a new means of transport (§ 19c)"
+    },
+    "D": {
+        "name": "D — non-payer, supply of a new means of transport (§ 19b)",
+        "name:cs": "D — neplátce, dodání nového dopravního prostředku (§ 19b)",
+        "name:en": "D — non-payer, supply of a new means of transport (§ 19b)"
+    }
+}

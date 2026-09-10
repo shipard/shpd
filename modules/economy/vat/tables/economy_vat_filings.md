@@ -30,7 +30,7 @@ Fáze 2 je jen deklaruje, plní je Fáze 3.
 | `date_filed` | date, nullable | Podáno; přechod do stavu Podáno doplní dnešek, když je prázdné |
 | `date_found` | date, nullable | Datum zjištění důvodů pro podání — povinné u druhů z `dateFoundRequiredFor` a vždy u dodatečného přiznání |
 | `previous_filing` | int, nullable, reference `economy_vat_filings` | Poslední podané podání instance = základ pro rozdíly; u řádného NULL, u dodatečného povinné |
-| `header` | json, nullable, system | Snapshot hlavičky XML (D19) — Fáze 2 sloupec jen deklaruje, schéma a editaci doplní Fáze 3 po #74 |
+| `header` | json, nullable, schema `economy.vat.filingHeaderCzDp3` | Snapshot hlavičky XML (D19): věta P a needvozená pole věty D. Sada polí per typ tvrzení — statické schéma je přiznání, `FilingDocument::structuredSchemaFor()` ho přebíjí na `…CzKh1` / `…CzShv`. Předvyplní `FilingComposer` z profilu podatele, přepočet ho nepřepíše. **Není `system`** — systémové sloupce by formulář neuložil |
 | `result` | json, nullable, system | Souhrn podaných hodnot (DP3 ř. 62–66, počty řádků sekcí KH, hodnota SH, stav křížové kontroly, `isEmpty`). **NULL = snapshot nesestaven** — podat takové podání nelze |
 | `messages` | json, nullable, system | Měkké chyby kalkulátorů v okamžiku sestavení — historický záznam, ne živý stav |
 | `note` | text, nullable | Jediný sloupec editovatelný i po podání |

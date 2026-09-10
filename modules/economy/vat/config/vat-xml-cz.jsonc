@@ -131,11 +131,23 @@
             "kinds": ["supplementary"]
         },
 
+        // Hlavička: pole schématu `economy.vat.filingHeaderCzDp3` (X2)
+        // rozdělená mezi větu D a P + atributy, které se počítají při
+        // generování (`FilingHeaderResolver`, X3).
+        "header": {
+            "schema": "economy.vat.filingHeaderCzDp3",
+            "vetaP": "VetaP",
+            "vetaD": "VetaD",
+            // Pole schématu patřící do věty D; zbytek jde do věty P.
+            "vetaDFields": ["typ_platce", "c_okec", "trans", "kod_zo", "d_por_dod"],
+            // Boolean pole schématu, které se v XML vypisuje jako A / N.
+            "yesNoFields": ["trans"],
+            // Odvozené atributy věty D nad rámec `constants` a `formaAttr`:
+            // datum zjištění důvodů z podání, datum podání, období z instance.
+            "derived": ["d_zjist", "d_poddp", "rok", "mesic", "ctvrt", "zdobd_od", "zdobd_do"]
+        },
+
         "unmapped": {
-            // Hlavička — pole nese schéma `economy.vat.filingHeaderCzDp3`
-            // (X2) a odvozená pole `FilingHeaderResolver` (X3).
-            "VetaD": ["*header*"],
-            "VetaP": ["*header*"],
             // Obecná příloha (naskenovaný dokument v base64) — podání
             // v Shipardu ji nepoužívá, přílohy žijí v core.attachments.
             "Prilohy": ["*"],
@@ -265,9 +277,18 @@
             }
         },
 
+        // Kontrolní hlášení nemá ve větě D jediné needvozené pole — proto
+        // prázdné `vetaDFields` a schéma bez skupiny „Údaje o podání".
+        "header": {
+            "schema": "economy.vat.filingHeaderCzKh1",
+            "vetaP": "VetaP",
+            "vetaD": "VetaD",
+            "vetaDFields": [],
+            "yesNoFields": [],
+            "derived": ["d_zjist", "d_poddp", "rok", "mesic", "ctvrt", "zdobd_od", "zdobd_do"]
+        },
+
         "unmapped": {
-            "VetaD": ["*header*"],
-            "VetaP": ["*header*"],
             // Sekce A.3 — zvláštní režim pro investiční zlato (§ 92).
             // Shipard tuto agendu nevede, sekce nikdy nevznikne.
             "VetaA3": ["*"],
@@ -316,9 +337,19 @@
             "value": "pln_hodnota"
         },
 
+        // Souhrnné hlášení nemá ve větě D needvozené pole a na rozdíl od
+        // přiznání a KH nezná ani `d_zjist`, ani částečné období
+        // (`zdobd_*`) — následné hlášení se datem zjištění neoznačuje.
+        "header": {
+            "schema": "economy.vat.filingHeaderCzShv",
+            "vetaP": "VetaP",
+            "vetaD": "VetaD",
+            "vetaDFields": [],
+            "yesNoFields": [],
+            "derived": ["d_poddp", "rok", "mesic", "ctvrt"]
+        },
+
         "unmapped": {
-            "VetaD": ["*header*"],
-            "VetaP": ["*header*"],
             // Storno řádky následného hlášení — Shipard podává následné SH
             // jako plný obsah znovu (viz docs/README § XML pro EPO).
             "VetaS": ["*"],

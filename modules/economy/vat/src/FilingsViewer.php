@@ -162,6 +162,21 @@ class FilingsViewer extends TableViewer
             ];
         }
 
+        // Hlavička podání (#55 Fáze 3) — zobrazuje se podle `_schema`
+        // uložené hodnoty, tedy podle sady polí platné v době sestavení.
+        $headerGroups = $this->structuredFieldProperties(
+            (array) $record,
+            FilingHeaderSchema::COLUMN,
+            FilingHeaderSchema::forReportType($type),
+        );
+        if ($headerGroups !== []) {
+            $tabs[] = [
+                'id'      => 'header',
+                'label'   => $cs ? 'Hlavička' : 'Header',
+                'content' => ['type' => 'properties', 'groups' => $headerGroups],
+            ];
+        }
+
         $previousId = (int) ($record['previous_filing'] ?? 0);
         if ($previousId > 0) {
             $tabs[] = [

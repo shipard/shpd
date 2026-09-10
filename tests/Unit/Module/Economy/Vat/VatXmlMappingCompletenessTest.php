@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Module\Economy\Vat;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Economy\Vat\ControlStatementCalculator;
+use Shipard\Module\Economy\Vat\FilingHeaderSchema;
 use Shipard\Module\Economy\Vat\FilingRounding;
 
 /**
@@ -18,16 +19,14 @@ use Shipard\Module\Economy\Vat\FilingRounding;
  * shodí testy, dokud se nerozhodne, co s ním — stejný princip jako
  * explicitní `null` v mapování kódů DPH (VatReportsMappingCompletenessTest).
  *
- * Věty D a P (hlavička) se tu kontrolují jen na existenci deklarace;
- * jejich pole nese strukturované schéma `economy.vat.filingHeaderCz*`
- * a hlídá je test hlavičky.
+ * Do invariantu spadá i hlavička: atributy věty P musí přesně odpovídat
+ * polím schématu `economy.vat.filingHeaderCz*` a věta D jeho polím ze
+ * sekce `vetaDFields` plus konstantám, kódu formy a odvozeným atributům.
+ * Tím je pokryté i to, co Fáze 3 počítá až při generování.
  */
 class VatXmlMappingCompletenessTest extends TestCase
 {
     private const MODULE = __DIR__ . '/../../../../../modules/economy/vat';
-
-    /** Věty, jejichž obsah nepochází ze snapshotu, ale ze schématu hlavičky. */
-    private const HEADER_MARKER = '*header*';
 
     /** Celá věta se negeneruje. */
     private const SKIP_MARKER = '*';
@@ -62,9 +61,7 @@ class VatXmlMappingCompletenessTest extends TestCase
                     "{$document}: věta '{$element}' ze schématu není v vat-xml-cz.jsonc ani mapovaná,"
                     . ' ani vědomě vynechaná',
                 );
-                if (in_array(self::SKIP_MARKER, $declared[$element], true)
-                    || in_array(self::HEADER_MARKER, $declared[$element], true)
-                ) {
+                if (in_array(self::SKIP_MARKER, $declared[$element], true)) {
                     continue;
                 }
 
@@ -100,9 +97,7 @@ class VatXmlMappingCompletenessTest extends TestCase
 
             foreach ($required as $element => $attributes) {
                 $declared = $unmapped[$element] ?? [];
-                if (in_array(self::SKIP_MARKER, $declared, true)
-                    || in_array(self::HEADER_MARKER, $declared, true)
-                ) {
+                if (in_array(self::SKIP_MARKER, $declared, true)) {
                     continue;
                 }
                 $this->assertSame(
@@ -115,15 +110,64 @@ class VatXmlMappingCompletenessTest extends TestCase
         }
     }
 
-    public function testHeaderSentencesAreDeclaredForEveryDocument(): void
+    public function testHeaderSchemaFieldsMatchVetaP(): void
     {
         foreach (self::DOCUMENTS as $document) {
-            $unmapped = $this->xmlConfig()[$document]['unmapped'] ?? [];
-            foreach (['VetaD', 'VetaP'] as $element) {
+            $header = $this->xmlConfig()[$document]['header'];
+            $fields = array_diff($this->headerSchemaFields($document), $header['vetaDFields']);
+            sort($fields);
+
+            $expected = $this->xsdAttributes($document)[$header['vetaP']];
+            sort($expected);
+
+            $this->assertSame(
+                $expected,
+                array_values($fields),
+                "{$document}: pole schématu hlavičky se neshodují s atributy věty P",
+            );
+        }
+    }
+
+    public function testHeaderSchemaExistsAndIsReferencedByBothLayers(): void
+    {
+        foreach (self::DOCUMENTS as $document) {
+            $schema = (string) $this->xmlConfig()[$document]['header']['schema'];
+            $this->assertNotSame(
+                [],
+                $this->headerSchemaFields($document),
+                "{$document}: schéma hlavičky '{$schema}' nemá pole",
+            );
+        }
+
+        // Config a doménová konstanta musí ukazovat na tatáž schémata —
+        // podle konstanty vybírá schéma dokument i formulář.
+        foreach (FilingHeaderSchema::CFG_ITEM_BY_TYPE as $type => $cfgItem) {
+            $this->assertSame(
+                $cfgItem,
+                $this->xmlConfig()[self::DOCUMENT_BY_REPORT_TYPE[$type]]['header']['schema'],
+                "Typ {$type}: FilingHeaderSchema a vat-xml-cz.jsonc ukazují na jiné schéma hlavičky",
+            );
+        }
+    }
+
+    public function testYesNoFieldsAreBooleansInSchema(): void
+    {
+        foreach (self::DOCUMENTS as $document) {
+            $header = $this->xmlConfig()[$document]['header'];
+            $types  = $this->headerSchemaFieldTypes($document);
+
+            foreach ($header['yesNoFields'] as $field) {
                 $this->assertSame(
-                    [self::HEADER_MARKER],
-                    $unmapped[$element] ?? null,
-                    "{$document}: věta '{$element}' musí být deklarovaná jako hlavička",
+                    'boolean',
+                    $types[$field] ?? null,
+                    "{$document}: pole '{$field}' se vypisuje jako A/N, musí být boolean",
+                );
+            }
+            foreach ($header['vetaDFields'] as $field) {
+                $this->assertArrayHasKey(
+                    $field,
+                    $types,
+                    "{$document}: věta D odkazuje na pole '{$field}', které schéma hlavičky nemá",
                 );
             }
         }
@@ -409,6 +453,18 @@ class VatXmlMappingCompletenessTest extends TestCase
             );
         }
 
+        if (isset($config['header'])) {
+            $header = $config['header'];
+            $fields = $this->headerSchemaFields($document);
+            $add($header['vetaD'], ...array_merge(
+                array_keys($config['constants']),
+                [$config['formaAttr']],
+                $header['vetaDFields'],
+                $header['derived'],
+            ));
+            $add($header['vetaP'], ...array_diff($fields, $header['vetaDFields']));
+        }
+
         foreach ([$config['unmapped'] ?? [], $config['optionalUnmapped'] ?? []] as $group) {
             foreach ($group as $element => $attributes) {
                 $add($element, ...$attributes);
@@ -423,5 +479,43 @@ class VatXmlMappingCompletenessTest extends TestCase
             );
         }
         return $out;
+    }
+
+    /**
+     * Pole schématu hlavičky té které písemnosti — čte se ze souboru, na
+     * který ukazuje `header.schema` v mapování, přes registraci cfgItem
+     * v `module.jsonc` (žádná cesta natvrdo v testu).
+     *
+     * @return list<string>
+     */
+    private function headerSchemaFields(string $document): array
+    {
+        return array_keys($this->headerSchemaFieldTypes($document));
+    }
+
+    /** @return array<string, string> id pole → typ */
+    private function headerSchemaFieldTypes(string $document): array
+    {
+        $cfgItem = (string) $this->xmlConfig()[$document]['header']['schema'];
+        $file    = $this->configFileByCfgItem()[$cfgItem] ?? null;
+        $this->assertNotNull($file, "cfgItem '{$cfgItem}' není registrovaný v module.jsonc");
+
+        $schema = JsoncParser::parseFile(self::MODULE . '/' . $file);
+        $types  = [];
+        foreach ($schema['fields'] as $field) {
+            $types[(string) $field['id']] = (string) $field['type'];
+        }
+        return $types;
+    }
+
+    /** @return array<string, string> cfgItem → cesta k souboru v modulu */
+    private function configFileByCfgItem(): array
+    {
+        $module = JsoncParser::parseFile(self::MODULE . '/module.jsonc');
+        $files  = [];
+        foreach ($module['config'] ?? [] as $entry) {
+            $files[(string) $entry['id']] = (string) $entry['file'];
+        }
+        return $files;
     }
 }

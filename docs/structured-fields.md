@@ -297,6 +297,20 @@ nedají odvodit z dokladů ani z registrace. Sada polí a délky jsou přenesen�
 ze starých properties; proti XSD je ověří Fáze 3 (#55), do té doby profil
 jen sbírá data. Import ze starého Shipardu se nedělá — profil zadá uživatel.
 
+Druhým konzumentem je od Fáze 3 (#55) **hlavička podání DPH**
+(`economy_vat_filings.header`) — první uživatel hooku ze sekce 5: sadu polí
+vybírá podle typu tvrzení `FilingHeaderSchema::forReportType()`, na který
+delegují `FilingDocument` i `FilingsForm`. Hodnoty předvyplňuje
+`FilingComposer` z profilu podatele; přepočet snapshotu je nepřepisuje.
+Pozor na dvě věci, které z toho plynou obecně:
+
+- **sloupec se schématem nesmí být `system`** — `FormController` systémové
+  sloupce zahazuje i s jejich virtuálními poli, takže by se hodnota
+  z formuláře tiše neuložila;
+- schéma, které vybírá jen hook (KH a SH), **nekontroluje `ds-upgrade`** —
+  ten vidí jen statický atribut sloupce. Takové schéma potřebuje vlastní
+  test (vzor `FilingHeaderSchemaTest`).
+
 ## 10. Co to hlídá
 
 | Kontrola | Kde |
@@ -319,5 +333,3 @@ jen sbírá data. Import ze starého Shipardu se nedělá — profil zadá uživ
   (S1). Kdo potřebuje hledat, dá hodnotě relační sloupec.
 - **Migrace existujících `json` sloupců** na schéma — snapshoty a payloady
   ho mít nemají.
-- **Hlavička podání se schématem per typ tvrzení** — Fáze 3 v #55; tady je
-  jen hook, kterým si ji vybere.

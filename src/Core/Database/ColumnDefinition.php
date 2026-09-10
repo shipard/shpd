@@ -34,6 +34,7 @@ class ColumnDefinition
         public readonly ?string $reference,
         public readonly bool $system,
         public readonly bool $sensitive = false,
+        public readonly ?string $schema = null,
     ) {}
 
     public static function fromArray(array $data): self
@@ -82,6 +83,18 @@ class ColumnDefinition
             }
         }
 
+        // Strukturované pole (#74): `schema` ukazuje na cfgItem s definicí
+        // vnořených polí. Jen nad `json` — na jiném typu by slibovalo
+        // validaci a formulář, které nikde nevzniknou.
+        $schema = isset($data['schema']) && is_string($data['schema']) && $data['schema'] !== ''
+            ? $data['schema']
+            : null;
+        if ($schema !== null && $type !== 'json') {
+            throw new \InvalidArgumentException(
+                "Column '{$data['id']}': attribute 'schema' is allowed only for type 'json', got '{$type}'",
+            );
+        }
+
         return new self(
             id: $data['id'],
             name: $data['name'],
@@ -105,6 +118,7 @@ class ColumnDefinition
             system: (bool) ($data['system'] ?? false),
             sensitive: (bool) ($data['sensitive'] ?? false)
                 || $type === SchemaIntrospector::ENCRYPTED_COLUMN_TYPE,
+            schema: $schema,
         );
     }
 }

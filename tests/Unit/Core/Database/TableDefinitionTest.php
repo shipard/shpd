@@ -357,4 +357,32 @@ class TableDefinitionTest extends TestCase
 
         $this->assertFalse($table->adminOnly);
     }
+
+    public function testStructuredColumnsCollected(): void
+    {
+        $data = $this->coreSystemUsersData();
+        $data['columns'][] = [
+            'id' => 'filing_profile',
+            'name' => 'Filing profile',
+            'type' => 'json',
+            'nullable' => true,
+            'schema' => 'economy.vat.filingProfileCz',
+        ];
+        $data['columns'][] = [
+            'id' => 'snapshot',
+            'name' => 'Snapshot',
+            'type' => 'json',
+            'nullable' => true,
+        ];
+
+        $this->assertSame(
+            ['filing_profile' => 'economy.vat.filingProfileCz'],
+            TableDefinition::fromArray($data)->getStructuredColumns(),
+        );
+    }
+
+    public function testStructuredColumnsEmptyWithoutSchema(): void
+    {
+        $this->assertSame([], TableDefinition::fromArray($this->coreSystemUsersData())->getStructuredColumns());
+    }
 }

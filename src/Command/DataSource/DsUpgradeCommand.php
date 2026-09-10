@@ -176,7 +176,26 @@ class DsUpgradeCommand extends Command
         $output->writeln('Compiling configuration...', OutputInterface::VERBOSITY_VERBOSE);
         $languages = ['cs', 'en'];
         $outputPath = $dsDir . '/config/configuration';
-        ConfigCompiler::compile($resolvedModules, $modulePathResolver, $languages, $outputPath);
+
+        // Schémata strukturovaných polí (#74) sbíráme z UŽ MERGNUTÝCH definic —
+        // sloupec se `schema` může přijít i z extension (profil podatele).
+        $structuredSchemas = [];
+        foreach ($tableDefs as $tableName => $tableDef) {
+            foreach ($tableDef->getStructuredColumns() as $colId => $cfgId) {
+                $structuredSchemas[$cfgId] = $tableName . '.' . $colId;
+            }
+        }
+
+        try {
+            ConfigCompiler::compile(
+                $resolvedModules, $modulePathResolver, $languages, $outputPath, $structuredSchemas,
+            );
+        } catch (\RuntimeException $e) {
+            // Nevalidní schéma = upgrade se zastaví s cestou k chybě; bez
+            // validace by se sloupec ukládal bez kontroly hodnot.
+            $output->writeln('<error>' . $e->getMessage() . '</error>');
+            return Command::FAILURE;
+        }
 
         $configItemCount = 0;
         foreach ($resolvedModules as $module) {

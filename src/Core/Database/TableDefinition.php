@@ -33,6 +33,24 @@ class TableDefinition
         return $result;
     }
 
+    /**
+     * Sloupce se strukturovaným schématem (#74) — id sloupce => cfgItem
+     * se schématem. Jediný zdroj pravdy pro zápisovou cestu
+     * (`TableGateway`), formulář a `ds-upgrade`.
+     *
+     * @return array<string, string>
+     */
+    public function getStructuredColumns(): array
+    {
+        $result = [];
+        foreach ($this->columns as $col) {
+            if ($col->schema !== null) {
+                $result[$col->id] = $col->schema;
+            }
+        }
+        return $result;
+    }
+
     public static function fromArray(array $data): self
     {
         if (!isset($data['tableId']) || !is_int($data['tableId']) || $data['tableId'] <= 0) {

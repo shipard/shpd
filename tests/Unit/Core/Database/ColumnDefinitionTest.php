@@ -91,4 +91,41 @@ class ColumnDefinitionTest extends TestCase
 
         $this->assertFalse($col->sensitive);
     }
+
+    public function testStructuredSchemaOnJsonColumn(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'filing_profile',
+            'name' => 'Filing profile',
+            'type' => 'json',
+            'nullable' => true,
+            'schema' => 'economy.vat.filingProfileCz',
+        ]);
+
+        $this->assertSame('economy.vat.filingProfileCz', $col->schema);
+    }
+
+    public function testSchemaDefaultsToNull(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'snapshot',
+            'name' => 'Snapshot',
+            'type' => 'json',
+        ]);
+
+        $this->assertNull($col->schema);
+    }
+
+    public function testSchemaOnNonJsonColumnThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("attribute 'schema' is allowed only for type 'json'");
+
+        ColumnDefinition::fromArray([
+            'id' => 'note',
+            'name' => 'Note',
+            'type' => 'text',
+            'schema' => 'economy.vat.filingProfileCz',
+        ]);
+    }
 }

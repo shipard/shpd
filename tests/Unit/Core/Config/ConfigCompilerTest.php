@@ -195,4 +195,83 @@ class ConfigCompilerTest extends TestCase
         $this->assertDirectoryExists($outputPath);
         $this->assertFileExists($outputPath . '/compiled.en.json');
     }
+
+    // ── Strukturovaná schémata (#74) ─────────────────────────────────────────
+
+    /** @return array{ModuleDefinition, string} modul se schématem + output path */
+    private function moduleWithSchema(array $schema): array
+    {
+        $modulePath = $this->tmpDir . '/modules/economy/vat';
+        $this->writeConfigFile($modulePath, 'config/filingProfileCz.jsonc', $schema);
+
+        return [
+            $this->makeModule('economy.vat', [
+                ['id' => 'economy.vat.filingProfileCz', 'file' => 'config/filingProfileCz.jsonc'],
+            ]),
+            $this->tmpDir . '/output',
+        ];
+    }
+
+    public function testStructuredSchemaCompilesAndLocalizes(): void
+    {
+        [$module, $outputPath] = $this->moduleWithSchema([
+            'version' => '2026',
+            'groups'  => [['id' => 'office', 'name' => 'Tax office', 'name:cs' => 'Finanční úřad']],
+            'fields'  => [[
+                'id' => 'c_ufo', 'type' => 'enumString', 'length' => 5,
+                'cfgItem' => 'world.cz.taxOffices', 'group' => 'office',
+                'name' => 'Tax office', 'name:cs' => 'Finanční úřad',
+            ]],
+        ]);
+
+        ConfigCompiler::compile(
+            [$module],
+            new ModulePathResolver([$this->tmpDir . '/modules']),
+            ['cs'],
+            $outputPath,
+            ['economy.vat.filingProfileCz' => 'economy_codebooks_vat_registrations.filing_profile'],
+        );
+
+        $data = json_decode(file_get_contents($outputPath . '/compiled.cs.json'), true);
+        $schema = $data['items']['economy.vat.filingProfileCz'];
+        $this->assertSame('Finanční úřad', $schema['groups'][0]['name']);
+        $this->assertSame('Finanční úřad', $schema['fields'][0]['name']);
+    }
+
+    public function testInvalidStructuredSchemaStopsCompilation(): void
+    {
+        [$module, $outputPath] = $this->moduleWithSchema([
+            'version' => '2026',
+            'fields'  => [['id' => 'c_ufo', 'type' => 'enumString', 'length' => 5, 'name' => 'Tax office']],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches("/fields\[0\]\.cfgItem/");
+
+        ConfigCompiler::compile(
+            [$module],
+            new ModulePathResolver([$this->tmpDir . '/modules']),
+            ['cs'],
+            $outputPath,
+            ['economy.vat.filingProfileCz' => 'economy_codebooks_vat_registrations.filing_profile'],
+        );
+    }
+
+    public function testUnknownStructuredSchemaCfgItemStopsCompilation(): void
+    {
+        $modulePath = $this->tmpDir . '/modules/core/system';
+        $this->writeConfigFile($modulePath, 'config/app.jsonc', ['name' => 'App']);
+        $module = $this->makeModule('core.system', [['id' => 'core.app', 'file' => 'config/app.jsonc']]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/references unknown schema cfgItem/');
+
+        ConfigCompiler::compile(
+            [$module],
+            new ModulePathResolver([$this->tmpDir . '/modules']),
+            ['en'],
+            $this->tmpDir . '/output',
+            ['economy.vat.filingProfileCz' => 'economy_codebooks_vat_registrations.filing_profile'],
+        );
+    }
 }

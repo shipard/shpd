@@ -52,8 +52,10 @@ Historický režim (řádek = samostatná účtenka v jednom pokladním lístku)
 pro doklady, kde protistrana počítala po řádcích a my doklad počítáme sami; u
 vydaných faktur a prodejek nedává smysl a časem se z nich odstraní.
 
-`round()` = `vat_rounding_mode` dokladu (`docs.core.roundingModes`, default na
-haléře), aplikuje se na dokladové úrovni: mode 1 na daň, mode 2 na základ.
+`round()` = `vat_rounding_mode` dokladu (cfgItem `docs.core.vatRoundingModes`
+— jen na haléře (0, default) nebo matematicky na 1; sémantiku kódů drží
+`RoundingModes`), aplikuje se na dokladové úrovni: při `vat_mode` 1 na daň,
+při `vat_mode` 2 na základ.
 
 Koeficientová metoda (do 2019, `k = round(pct / (100 + pct), 4)`) se **neimplementuje**;
 historické doklady kryje převzatá rekapitulace.
@@ -135,9 +137,14 @@ dle režimu) — signál neúplných nebo špatně zadaných řádků.
 
 ## 6. Zaokrouhlení celkové částky — `total_rounding_mode`
 
-Až po rekapitulaci: `total_amount` se zaokrouhlí (na celé jednotky, nahoru, dolů,
-na haléře), rozdíl jde do `total_rounding`; rekapitulace zůstává. Hotovostní úhrada
-faktury na celé Kč = #73.
+Až po rekapitulaci: `total_amount` se zaokrouhlí (matematicky na celé jednotky,
+nahoru, dolů, **matematicky na 0,05** — hotovost SK a část eurozóny, nebo na
+haléře = bez efektu), rozdíl jde do `total_rounding`; rekapitulace zůstává.
+Kódy módů a výpočet `kód → (krok, směr)` drží `RoundingModes`
+(`modules/docs/core/src/`), jsonc `docs.core.roundingModes` nese jen názvy;
+historický kód 2 (matematicky na 0,01) byl totožný s 0 a `ds-upgrade` ho slévá
+(#63). `vat_rounding_mode` má užší nabídku `docs.core.vatRoundingModes` (§ 4).
+Hotovostní úhrada faktury na celé Kč = #73.
 
 ## 7. Dorovnání řádků na rekapitulaci — obě měny
 

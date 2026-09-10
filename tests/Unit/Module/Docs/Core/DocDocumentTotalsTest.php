@@ -47,10 +47,12 @@ class DocDocumentTotalsTest extends TestCase
         $this->assertSame(200.0, $data['total_amount']);
     }
 
-    public function testApplyRoundingNoRounding(): void
+    public function testApplyRoundingOnCents(): void
     {
-        // mode 0 still rounds to 2 decimals (storage precision)
+        // mód 0 = na haléře: jediné zaokrouhlení je na 2 desetinná místa
+        // (scale sloupců); dřívější mód 2 dělal totéž a byl sloučen (#63)
         $this->assertSame(123.46, $this->doc()->applyRoundingPub(123.4567, 0));
+        $this->assertSame(123.45, $this->doc()->applyRoundingPub(123.454, 0));
     }
 
     public function testApplyRoundingToWholeUnits(): void
@@ -58,12 +60,6 @@ class DocDocumentTotalsTest extends TestCase
         $this->assertSame(124.0, $this->doc()->applyRoundingPub(123.55, 1));
         $this->assertSame(123.0, $this->doc()->applyRoundingPub(123.45, 1));
         $this->assertSame(123.0, $this->doc()->applyRoundingPub(123.49, 1));
-    }
-
-    public function testApplyRoundingTo001(): void
-    {
-        $this->assertSame(123.46, $this->doc()->applyRoundingPub(123.456, 2));
-        $this->assertSame(123.45, $this->doc()->applyRoundingPub(123.454, 2));
     }
 
     public function testApplyRoundingUpToWholeUnits(): void
@@ -84,6 +80,26 @@ class DocDocumentTotalsTest extends TestCase
         $this->assertSame(-1710.0, $this->doc()->applyRoundingPub(-1709.05, 4));
     }
 
+    public function testApplyRoundingToFiveCents(): void
+    {
+        // mód 5 = matematicky na 0,05 (hotovost SK a část eurozóny)
+        $this->assertSame(1709.05, $this->doc()->applyRoundingPub(1709.03, 5));
+        $this->assertSame(1709.0, $this->doc()->applyRoundingPub(1709.02, 5));
+        // P1: 1709.05 / 0.05 = 34180.999999… — bez normalizace by uskočilo
+        $this->assertSame(1709.05, $this->doc()->applyRoundingPub(1709.05, 5));
+        // půlka intervalu: round half away from zero
+        $this->assertSame(0.15, $this->doc()->applyRoundingPub(0.125, 5));
+        // dobropis: symetricky k nule
+        $this->assertSame(-1709.05, $this->doc()->applyRoundingPub(-1709.03, 5));
+    }
+
+    public function testApplyRoundingUnknownModeBehavesAsCents(): void
+    {
+        // historický mód 2 před doběhnutím ds-upgrade (P3) i nesmysl 99
+        $this->assertSame(123.46, $this->doc()->applyRoundingPub(123.456, 2));
+        $this->assertSame(123.46, $this->doc()->applyRoundingPub(123.456, 99));
+    }
+
     public function testApplyTotalRoundingComputesDiff(): void
     {
         $data = ['total_amount' => 1234.56, 'total_rounding_mode' => 1];
@@ -100,6 +116,25 @@ class DocDocumentTotalsTest extends TestCase
         $this->doc()->applyTotalRoundingPub($data);
 
         $this->assertSame(100.0, $data['total_amount']);
+        $this->assertSame(0.0, $data['total_rounding']);
+    }
+
+    public function testApplyTotalRoundingFiveCentsComputesDiff(): void
+    {
+        $data = ['total_amount' => 1709.03, 'total_rounding_mode' => 5];
+        $this->doc()->applyTotalRoundingPub($data);
+
+        $this->assertSame(1709.05, $data['total_amount']);
+        $this->assertEqualsWithDelta(0.02, $data['total_rounding'], 0.001);
+    }
+
+    public function testApplyTotalRoundingFiveCentsExactAmountZeroDiff(): void
+    {
+        // P1: částka už na násobku 0,05 nesmí dát rozdíl −0,05
+        $data = ['total_amount' => 1709.05, 'total_rounding_mode' => 5];
+        $this->doc()->applyTotalRoundingPub($data);
+
+        $this->assertSame(1709.05, $data['total_amount']);
         $this->assertSame(0.0, $data['total_rounding']);
     }
 

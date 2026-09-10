@@ -93,6 +93,7 @@ dokladu — kruh uzavírá. Automatické stahování přes bankovní API je v M4
 | Ověření celého toku na reálných datech testovacího prostředí | — |
 | Ověření správnosti saldokonta na reálných datech — konkrétní chyba není známá, jde o kontrolu součtů proti deníku a proti starému systému | — |
 | Zbytky po M0: dokončení message-centric nasazení na alfě (živá analýza, aktuální prompt — v4.2.0, `schema_error` v provozu), vzory koncových cen nad reálnými analýzami | `mail-message-centric.md` |
+| Zaokrouhlovací módy dokladu: sloučení 0/2, matematicky na 0,05 (SK účtenky hrazené hotově končí s `totals_mismatch`), užší nabídka pro DPH | `doc-rounding-modes.md` |
 
 **Hotovo když:** přijatá faktura z e-mailu projde až do spárované úhrady
 a uživatel do toho zasáhne jen potvrzením návrhu; saldo po partnerech

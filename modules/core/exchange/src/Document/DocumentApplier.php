@@ -18,6 +18,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Module\Docs\Core\BoundNumberSeriesProvisioner;
 use Shipard\Module\Docs\Core\DocDocument;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
+use Shipard\Module\Docs\Core\RoundingModes;
 use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ItemResolver;
@@ -1647,7 +1648,9 @@ class DocumentApplier
      * Computed se bere z nejautoritativnějšího dostupného zdroje:
      * Σ vatRecap[].total → totalBase + totalVat → Σ řádků s DPH per řádek.
      * Matematický mod (1) má u shodného výsledku přednost před směrovými
-     * (3 = ceil, 4 = floor). DocDocument si pak total_amount/total_rounding
+     * (3 = ceil, 4 = floor); mod 5 (matematicky na 0,05 — hotovost SK a část
+     * eurozóny) se zkouší až za celými jednotkami, protože celá declared je
+     * násobek 0,05 taky. DocDocument si pak total_amount/total_rounding
      * dopočte sám z řádků — tady se výpočet neduplikuje, jen se volí mod.
      *
      * @param array<string, mixed> $canonical
@@ -1716,15 +1719,19 @@ class DocumentApplier
             return null;
         }
 
+        // Pořadí = priorita (viz docblok): 1 → 3 → 4 → 5. Kdyby se 0,05
+        // zkoušelo před celými jednotkami, faktury na celé Kč by dostaly mod 5.
         $eps = 0.001;
-        if (abs(round($computed, 0) - $declared) <= $eps) {
-            return 1;
-        }
-        if (abs(ceil($computed) - $declared) <= $eps) {
-            return 3;
-        }
-        if (abs(floor($computed) - $declared) <= $eps) {
-            return 4;
+        $candidates = [
+            RoundingModes::MATH_UNIT,
+            RoundingModes::UP_UNIT,
+            RoundingModes::DOWN_UNIT,
+            RoundingModes::MATH_FIVE_CENT,
+        ];
+        foreach ($candidates as $mode) {
+            if (abs(RoundingModes::apply($computed, $mode) - $declared) <= $eps) {
+                return $mode;
+            }
         }
         return null;
     }

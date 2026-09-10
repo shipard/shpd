@@ -210,7 +210,7 @@ class IssuedInvoiceForm extends DocsHeadsFormBase
             )
             ->select(
                 'vat_rounding_mode',
-                options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                options: $this->resolveCfgItemOptions('docs.core.vatRoundingModes'),
                 hidden: !$hasVat,
             )
             ->input('constant_symbol')

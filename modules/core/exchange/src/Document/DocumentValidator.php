@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Core\Exchange\Document;
 
+use Shipard\Module\Docs\Core\RoundingModes;
+
 /**
  * Semantic validator for a canonical document — runs **after** schema
  * validation and **before** resolve. Two kinds of checks:
@@ -206,13 +208,19 @@ final class DocumentValidator
 
         // Celá deklarovaná částka v pásmu < 1,00 od varianty je vždy její
         // floor/ceil/round podoba — pokrývá zaokrouhlení celkové částky
-        // (total_rounding_mode 1/3/4) bez výčtu módů. Nezávisí na
-        // extrahovaném totals.totalRounding.
+        // (total_rounding_mode 1/3/4) bez výčtu módů. Deklarovaná částka
+        // rovná variantě zaokrouhlené na 0,05 pokrývá mód 5 (hotovost SK):
+        // záměrně stejná podmínka, jakou má DocumentApplier::
+        // deriveTotalRoundingMode, takže validátor mlčí právě tam, kde
+        // applier mód přidělí (volnější pásmo < 0,05 by nechalo projít
+        // rozdíly, které žádný mód nereprodukuje). Nezávisí na extrahovaném
+        // totals.totalRounding.
         $tolerance = 0.01;
         $declaredIsWhole = abs($declaredF - round($declaredF, 0)) <= 0.001;
         $matches = static fn (float $v): bool =>
             abs($v - $declaredF) <= $tolerance
-            || ($declaredIsWhole && abs($v - $declaredF) < 1.00);
+            || ($declaredIsWhole && abs($v - $declaredF) < 1.00)
+            || abs(RoundingModes::apply($v, RoundingModes::MATH_FIVE_CENT) - $declaredF) <= 0.001;
 
         $matchBase = $matches($sumBase);
         $matchWithVat = $matches($sumWithVat);

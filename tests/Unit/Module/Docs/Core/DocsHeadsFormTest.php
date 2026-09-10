@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Docs\Core;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
 use Shipard\Core\Form\FormTab;
+use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Docs\Core\DocsHeadsForm;
 use Shipard\Tests\Fixtures\Module\Docs\Core\TestableDocsHeadsForm;
 
@@ -191,6 +193,66 @@ class DocsHeadsFormTest extends TestCase
         $this->assertSame('Doklad', $def->title);
         $this->assertSame('Nový doklad', $def->titleNew);
         $this->assertSame('docs_core_heads', $def->table);
+    }
+
+    // ── Rounding mode selects (#63) ──────────────────────────────────────────
+
+    /** Form s reálnými jsonc cfgItems zaokrouhlení (ostatní cfgItem → null). */
+    private function createFormWithRoundingCfg(): DocsHeadsForm
+    {
+        $root = dirname(__DIR__, 5);
+        $items = [
+            'docs.core.roundingModes'    => JsoncParser::parseFile($root . '/modules/docs/core/config/roundingModes.jsonc'),
+            'docs.core.vatRoundingModes' => JsoncParser::parseFile($root . '/modules/docs/core/config/vatRoundingModes.jsonc'),
+        ];
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnCallback(
+            static fn (string $id): mixed => $items[$id] ?? null,
+        );
+        $form = $this->createForm();
+        $form->setConfig($config);
+        return $form;
+    }
+
+    /** @return list<int> */
+    private function optionValues(FormElement $el): array
+    {
+        $values = array_map(static fn (array $o): int => (int) $o['value'], $el->options ?? []);
+        sort($values);
+        return $values;
+    }
+
+    public function testTotalRoundingModeOptionsHaveNoModeTwoAndOfferFiveCents(): void
+    {
+        $def = $this->createFormWithRoundingCfg()->buildFormDefinition(['vat_mode' => 1], true);
+        $el = $this->findElement($def, 'basic', 'total_rounding_mode');
+        $this->assertNotNull($el);
+
+        $values = $this->optionValues($el);
+        $this->assertNotContains(2, $values, 'mode 2 merged into 0 (#63)');
+        $this->assertContains(5, $values, 'mode 5 = round to 0.05');
+        $this->assertSame([0, 1, 3, 4, 5], $values);
+    }
+
+    public function testVatRoundingModeOptionsAreOnlyCentsAndUnit(): void
+    {
+        $def = $this->createFormWithRoundingCfg()->buildFormDefinition(['vat_mode' => 1], true);
+        $el = $this->findElement($def, 'basic', 'vat_rounding_mode');
+        $this->assertNotNull($el);
+
+        $this->assertSame([0, 1], $this->optionValues($el));
+    }
+
+    public function testNewDocumentDefaultsRoundingModes(): void
+    {
+        // Akceptace #63/3: nový doklad z formuláře total 1, vat 0 (dřív 2,
+        // které bylo s 0 totožné).
+        $form = new TestableDocsHeadsForm('docs_core_heads');
+        $data = [];
+        $form->applyClientDefaultsPub($data, true);
+
+        $this->assertSame(1, $data['total_rounding_mode']);
+        $this->assertSame(0, $data['vat_rounding_mode']);
     }
 
     // ── VAT mode visibility ──────────────────────────────────────────────────

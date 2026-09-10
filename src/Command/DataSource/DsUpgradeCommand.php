@@ -269,6 +269,12 @@ class DsUpgradeCommand extends Command
         // Without it, StaleInRepairCheck would silently ignore those rows forever.
         if ($this->isModuleActive($resolvedModules, 'docs.core')) {
             $dsConnection->executeSQL('UPDATE docs_core_heads SET doc_state_changed_at = NOW() WHERE doc_state_changed_at IS NULL');
+
+            // #63: mód 2 (matematicky na 0,01) sloučen do 0 (na haléře) — byly
+            // totožné, viz RoundingModes. Idempotentní: po prvním běhu žádný
+            // řádek s 2 nezbývá, druhý běh je no-op.
+            $dsConnection->executeSQL('UPDATE docs_core_heads SET total_rounding_mode = 0 WHERE total_rounding_mode = 2');
+            $dsConnection->executeSQL('UPDATE docs_core_heads SET vat_rounding_mode = 0 WHERE vat_rounding_mode = 2');
         }
 
         // Clearing infrastruktura (261200/261300 + saldo skupina unmatched_payments)

@@ -227,6 +227,58 @@ class DocumentValidatorTest extends TestCase
         $this->assertNotNull($this->findByCode($issues, 'totals_mismatch'));
     }
 
+    public function testTotalsFiveCentDeclaredMatchingRoundedVariantProducesNoWarning(): void
+    {
+        // SK hotovostní účtenka (total_rounding_mode 5): recap 12,33,
+        // deklarováno 12,35 = round5(12,33). Řádky ani base nesedí — chytá
+        // to větev pro 0,05 nad vatRecap.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 10.00, 'vat' => ['pct' => 20]],
+            ],
+            'vatRecap' => [['vatPct' => 20, 'total' => 12.33]],
+            'totals' => ['totalAmount' => 12.35],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsOddCentsDeclaredStillWarns(): void
+    {
+        // 12,36 není násobek 0,05 — rozdíl 0,03 proti recapu musí dál warnovat.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 10.00, 'vat' => ['pct' => 20]],
+            ],
+            'vatRecap' => [['vatPct' => 20, 'total' => 12.33]],
+            'totals' => ['totalAmount' => 12.36],
+        ]);
+        $this->assertNotNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsFiveCentDeclaredNotReproducedByRoundingStillWarns(): void
+    {
+        // Deklarovaná 12,35 je násobek 0,05, ale round5(12,31) = 12,30 —
+        // applier by mód 5 nepřidělil, validátor proto nesmí mlčet (užší
+        // podmínka než pásmo < 0,05).
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 10.00, 'vat' => ['pct' => 20]],
+            ],
+            'vatRecap' => [['vatPct' => 20, 'total' => 12.31]],
+            'totals' => ['totalAmount' => 12.35],
+        ]);
+        $this->assertNotNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
     public function testVatModeSuspectWarnsWhenDerivationLacksData(): void
     {
         // Řádky v cenách s DPH, mode fromBase, ale chybí recap i totalBase

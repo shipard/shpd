@@ -331,10 +331,13 @@ flagy sčítání) → `computed` + info issue.
 `totals.totalRounding` nese zaokrouhlení celkové částky se znaménkem
 (zaokrouhleno dolů = záporné, např. `-0.05`). I ono je informativní —
 applier z něj **nečte**; `total_rounding_mode` dokladu (matematicky /
-nahoru / dolů na celé jednotky) si odvozuje nezávisle porovnáním
-vypočtené a deklarované částky (`DocumentApplier::deriveTotalRoundingMode`,
-konzervativně jen pro rozdíl >= 0,01 a < 1,00, který některý mod přesně
-reprodukuje — rozdíl o jediný haléř je platné zaokrouhlení, 69,99 → 70,00).
+nahoru / dolů na celé jednotky, nebo matematicky na 0,05 — hotovost SK)
+si odvozuje nezávisle porovnáním vypočtené a deklarované částky
+(`DocumentApplier::deriveTotalRoundingMode`, konzervativně jen pro rozdíl
+>= 0,01 a < 1,00, který některý mod přesně reprodukuje — rozdíl o jediný
+haléř je platné zaokrouhlení, 69,99 → 70,00; celé jednotky mají přednost
+před 0,05, protože celá částka je násobek 0,05 taky). Validátor
+(`checkTotals`) mlčí přesně tam, kde applier mód přidělí.
 Výslednou částku a `total_rounding` pak dopočte `DocDocument` sám.
 **Důsledek pro zdroje dat:** `totalAmount` musí být částka **po** zaokrouhlení
 (placená) — starý Shipard drží `sumTotal` bez zaokrouhlení a runner musí

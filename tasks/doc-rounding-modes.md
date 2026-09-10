@@ -1,6 +1,6 @@
 # Task: Zaokrouhlovací módy dokladu — sloučení 0/2, mód 0,05, užší nabídka pro DPH (Issue #63)
 
-**Stav:** naplánováno — rozhodnutí D1–D5 potvrzena (Anna, 2026-09-10), D6 zamítnuto
+**Stav:** hotovo — kód, testy a docs 2026-09-10; proklik roletek na dev DS OK (Anna); alfa: 47 004 dokladů ve 4 DS má oba módy 0, migrace 2 → 0 je no-op a P4 prázdná
 **Issue:** shipard/shpd#63 (Sebik)
 **Návaznost:** #73 (hotovostní úhrada faktury na Kč — řeší účtování na 211,
 tady se neřeší), #71 (`DocRowCalculator` — řádkový výpočet zaokrouhluje pevně
@@ -305,3 +305,25 @@ UPDATE měl obcházet (vzor ř. 271 to neřeší, chovat se stejně).
 - **P6 — `DocsHeadsViewer` a exporty** čtou jen `total_rounding` (částku), ne
   mód — bez změny. `DocumentExporter` mód nevyváží (jen `totalRounding`),
   mód 5 se tedy do výměnného formátu nedostane a nemusí.
+
+## Poznámky z implementace (2026-09-10)
+
+- **Validátor přísněji než D5.** Místo pásma „násobek 0,05 a rozdíl < 0,05"
+  třetí větev `round5(Σ) == declared` — tj. přesně podmínka, kterou používá
+  `deriveTotalRoundingMode`. Pásmo < 0,05 by nechalo bez varování projít
+  třeba Σ 12,31 vs. deklarováno 12,35 (rozdíl 0,04), kde applier mód 5
+  nepřidělí (round5(12,31) = 12,30) a doklad by se uložil s jinou částkou
+  než na účtence. Potvrdila Anna 2026-09-10; test
+  `testTotalsFiveCentDeclaredNotReproducedByRoundingStillWarns`.
+- **Derivace módu jako smyčka.** `deriveTotalRoundingMode` už neduplikuje
+  `round/ceil/floor`, prochází kandidáty `[1, 3, 4, 5]` přes
+  `RoundingModes::apply` v pořadí priority (P2). Kontrola „declared je
+  násobek 0,05" ze zadání je redundantní (plyne z `round5(computed) ==
+  declared`) a není v kódu.
+- **Formulářový test s konfigurací.** `DocsHeadsFormTest` dostal mock
+  `ConfigRuntime::cfgItem` nad reálnými jsonc (`createFormWithRoundingCfg`),
+  takže bod 8 „pokud test má přístup ke konfiguraci" platí — options obou
+  selectů se ověřují přímo na `FormDefinition`.
+- **Roadmapa:** zařazeno do M2 (import SK účtenek je součást kruhu
+  pošta → doklad).
+- **`help/`** beze změny — žádná stránka nevyjmenovává hodnoty roletek.

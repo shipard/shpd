@@ -411,7 +411,7 @@ abstract class DocsHeadsFormBase extends TableForm
             $data['total_rounding_mode'] = 1;
         }
         if (!isset($data['vat_rounding_mode'])) {
-            $data['vat_rounding_mode'] = 2;
+            $data['vat_rounding_mode'] = 0;
         }
         if (empty($data['home_currency'])) {
             $data['home_currency'] = $this->homeCurrency();
@@ -549,7 +549,7 @@ abstract class DocsHeadsFormBase extends TableForm
                         options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
                     )
                     ->select('vat_rounding_mode',
-                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                        options: $this->resolveCfgItemOptions('docs.core.vatRoundingModes'),
                         hidden: !$hasVat,
                     )
 

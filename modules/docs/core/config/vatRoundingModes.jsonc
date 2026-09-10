@@ -1,0 +1,19 @@
+{
+    // docs.core.vatRoundingModes — zaokrouhlení DPH (`vat_rounding_mode`).
+    //
+    // Podmnožina docs.core.roundingModes se stejnými kódy a názvy: u daně
+    // dávají smysl jen haléře a celé jednotky (nahoru/dolů/0,05 matou).
+    // Autorita sémantiky: RoundingModes::VAT_MODES v
+    // `modules/docs/core/src/RoundingModes.php`.
+
+    "0": {
+        "name": "On cents (0.01)",
+        "name:cs": "Na haléře (0,01)",
+        "name:en": "On cents (0.01)"
+    },
+    "1": {
+        "name": "Round to 1",
+        "name:cs": "Matematicky na 1",
+        "name:en": "Round to 1"
+    }
+}

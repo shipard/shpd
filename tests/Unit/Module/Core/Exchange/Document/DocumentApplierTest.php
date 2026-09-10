@@ -1229,6 +1229,50 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(1, $data['total_rounding_mode'] ?? null);
     }
 
+    /** Mód 5: slovenská hotovostní účtenka — recap 12,34, deklarováno 12,35. */
+    public function testDeriveRoundingModeFiveCents(): void
+    {
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 20, 'total' => 12.34]],
+            'totals'   => ['totalAmount' => 12.35],
+        ]);
+
+        $this->assertSame(5, $data['total_rounding_mode']);
+    }
+
+    /** Akceptace #63/6: rozdíl 0,02 dolů — round5(12,33) = 12,35. */
+    public function testDeriveRoundingModeFiveCentsTwoCentDiff(): void
+    {
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 20, 'total' => 12.33]],
+            'totals'   => ['totalAmount' => 12.35],
+        ]);
+
+        $this->assertSame(5, $data['total_rounding_mode']);
+    }
+
+    /** P2: celá declared je násobek 0,05 taky — mód 1 se zkouší první. */
+    public function testDeriveRoundingModeWholePrefersMathOverFiveCents(): void
+    {
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 69.99]],
+            'totals'   => ['totalAmount' => 70.00],
+        ]);
+
+        $this->assertSame(1, $data['total_rounding_mode']);
+    }
+
+    /** Declared mimo násobky 0,05 žádný mód nereprodukuje — klíč chybí. */
+    public function testDeriveRoundingModeFiveCentsNotForOddCents(): void
+    {
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 20, 'total' => 12.34]],
+            'totals'   => ['totalAmount' => 12.36],
+        ]);
+
+        $this->assertArrayNotHasKey('total_rounding_mode', $data);
+    }
+
     public function testDeriveRoundingModeSkippedWithoutTotals(): void
     {
         $data = $this->transformWithTotals([]);

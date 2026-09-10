@@ -178,7 +178,7 @@ class CashDocForm extends CashDeskFormBase
                     )
                     ->select(
                         'vat_rounding_mode',
-                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                        options: $this->resolveCfgItemOptions('docs.core.vatRoundingModes'),
                         hidden: !$hasVat,
                     )
             ->build();

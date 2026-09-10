@@ -838,7 +838,7 @@ abstract class DocDocument extends Document
         if ($exchRate <= 0) {
             $exchRate = 1.0;
         }
-        $vatRoundingMode = (int) ($data['vat_rounding_mode'] ?? 2);
+        $vatRoundingMode = (int) ($data['vat_rounding_mode'] ?? 0);
 
         foreach ($grouped as $entry) {
             $code = $entry['vat_code'];
@@ -975,8 +975,9 @@ abstract class DocDocument extends Document
     /**
      * Metoda `0 z hlavičky` (norma § 37 odst. 1 ZDPH): daň se počítá **jednou**
      * ze součtu cen skupiny, ne po řádcích. `vat_rounding_mode` se aplikuje na
-     * dokladové úrovni — v mode 1 na daň, v mode 2 na základ (daň je pak
-     * rozdíl, aby celková částka dokladu byla přesně Σ řádkových cen).
+     * dokladové úrovni — při `vat_mode` 1 na daň, při `vat_mode` 2 na základ
+     * (daň je pak rozdíl, aby celková částka dokladu byla přesně Σ řádkových
+     * cen).
      *
      * `noPayTax` (tuzemská PDP, EU pořízení, osvobozená plnění) zůstává zdola:
      * cena je základ i celkem, daň je informativní nárok na odpočet jen
@@ -1308,19 +1309,10 @@ abstract class DocDocument extends Document
         $data['total_rounding'] = round($rounded - $original, 2);
     }
 
+    /** Sémantika kódů (krok, směr, chování u dobropisů): {@see RoundingModes}. */
     protected function applyRounding(float $amount, int $mode): float
     {
-        // Módy 3/4 mají u záporných částek (dobropisy) matematickou sémantiku
-        // PHP ceil/floor: ceil(-1709.05) = -1709.0. Derivace modu v Exchange
-        // applieru vybírá mod porovnáním výsledku s deklarovanou částkou,
-        // takže směr vždy odpovídá faktuře.
-        return match ($mode) {
-            1       => (float) round($amount, 0),  // Whole units
-            2       => round($amount, 2),          // 0.01
-            3       => ceil($amount),              // Up to whole units
-            4       => floor($amount),             // Down to whole units
-            default => round($amount, 2),          // No rounding (still 2 decimals)
-        };
+        return RoundingModes::apply($amount, $mode);
     }
 
     /**

@@ -25,7 +25,7 @@ resolvuje konkrétní Document subclass.
 MVP je hotové. Modul obsahuje:
 
 - **5 tabulek** (heads, rows, vat_recap, number_series, number_counters)
-  + 10 cfgItem souborů
+  + cfgItem soubory (výčet v module.jsonc)
 - **`DocDocument` (abstract)** — orchestrační `beforeSave` pipeline
   (denormalizace doc_type, defaulty datumů, home currency, fiscal periods,
   výpočty na řádcích, DPH rekapitulace vč. reverse charge párů, sumarizace,
@@ -97,7 +97,8 @@ změna prezentační vrstvy vyžaduje deploy backendu.
 
 ## Konfigurace
 
-Modul registruje 10 cfgItem souborů — viz `config/`:
+Modul registruje cfgItem soubory — viz `config/` (výčet v `module.jsonc`,
+zde ty podstatné):
 
 - `docs.core.docTypes` — typy dokladů (zatím `invno`, `invni`)
 - `docs.core.docStates` — stavový automat (Koncept → Potvrzeno → V pořádku
@@ -107,7 +108,9 @@ Modul registruje 10 cfgItem souborů — viz `config/`:
 - `docs.core.vatPlaces` — místo plnění
 - `docs.core.priceCalcModes` — způsob výpočtu ceny na řádku
 - `docs.core.rowKinds` — typ řádku (text / běžný)
-- `docs.core.roundingModes` — zaokrouhlení
+- `docs.core.roundingModes` — zaokrouhlení celkové částky (názvy pro UI;
+  sémantiku kódů drží `src/RoundingModes.php`)
+- `docs.core.vatRoundingModes` — zaokrouhlení DPH, podmnožina {0, 1}
 - `docs.core.paymentMethods` — způsoby platby
 - `docs.core.resetScopes` — kdy se restartuje counter řady
 

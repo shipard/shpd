@@ -409,7 +409,7 @@
             "name:en": "VAT rounding",
             "type": "enumInt",
             "default": 0,
-            "cfgItem": "docs.core.roundingModes",
+            "cfgItem": "docs.core.vatRoundingModes",
             "group": "rounding"
         },
 

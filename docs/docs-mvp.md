@@ -1117,7 +1117,7 @@ na entitu (#59 D2, D3):
          "cfgItem": "docs.core.roundingModes",
          "group": "rounding", "name:cs": "Zaokrouhlení částky"},
         {"id": "vat_rounding_mode", "type": "enumInt", "default": 0,
-         "cfgItem": "docs.core.roundingModes",
+         "cfgItem": "docs.core.vatRoundingModes",
          "group": "rounding", "name:cs": "Zaokrouhlení DPH"},
 
         // -- totals (vše system, plněné v beforeSave) --
@@ -1232,7 +1232,7 @@ serveru v `Document::beforeSave`** podle povahy:
 | `vat_registration` | jediná aktivní registrace, pokud je jen jedna |
 | `payment_method` | 1 (převodem) |
 | `total_rounding_mode` | 1 (matematicky na 1 — celé Kč) |
-| `vat_rounding_mode` | 2 (matematicky na 0,01) |
+| `vat_rounding_mode` | 0 (na haléře) |
 | `fiscal_year`, `fiscal_month` | resolvované z `accounting_date` v `beforeSave` |
 | `vat_period` | resolvované z `vat_duzp` + `vat_registration` v `beforeSave` |
 | `payment_reference` | = `sequence_number` po přidělení čísla (jen pokud uživatel nezadal jinak) |
@@ -1982,7 +1982,10 @@ upřesnit při startu implementace nebo až vznikne potřeba:
 1. **cfgItem `docs.core.paymentMethods`** — přesné hodnoty (návrh: 0
    hotovost, 1 převodem, 2 kartou, 3 dobírkou, 4 zápočtem)
 2. **cfgItem `docs.core.roundingModes`** — přesné hodnoty (návrh: 0 bez
-   zaokrouhlení, 1 matematicky na 1, 2 matematicky na 0,01)
+   zaokrouhlení, 1 matematicky na 1, 2 matematicky na 0,01). *Vyřešeno
+   (#63):* 0 na haléře, 1 / 3 / 4 matematicky / nahoru / dolů na 1,
+   5 matematicky na 0,05; kód 2 sloučen do 0. Pro DPH podmnožina
+   `docs.core.vatRoundingModes` {0, 1}. Autorita: `RoundingModes`.
 3. **payment_term_days** — má být v `base.persons` extension z `docs.core`,
    nebo přímo v `base.persons`? (Patrně extension — je to ekonomická
    informace.)

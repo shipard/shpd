@@ -143,6 +143,7 @@
         { "id": "docs.core.applyRowOperations", "file": "config/applyRowOperations.jsonc" },
         { "id": "docs.core.accSides",        "file": "config/accSides.jsonc" },
         { "id": "docs.core.roundingModes",   "file": "config/roundingModes.jsonc" },
+        { "id": "docs.core.vatRoundingModes", "file": "config/vatRoundingModes.jsonc" },
         { "id": "docs.core.paymentMethods",  "file": "config/paymentMethods.jsonc" },
         { "id": "docs.core.cashDirections",  "file": "config/cashDirections.jsonc" },
         { "id": "docs.core.resetScopes",     "file": "config/resetScopes.jsonc" },

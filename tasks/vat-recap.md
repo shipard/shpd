@@ -1,6 +1,6 @@
 # Task: Rekapitulace DPH — výpočet na úrovni dokladu a převzatá rekapitulace — #75
 
-**Stav:** hotovo (2026-09-10) — implementace obě strany (nová 6 commitů, stará `old_shipard` 9bffa3e2 / task 34), reimport 689089 a 732084, zlatý test ✓. Zbývá jen ruční proklik UI (přepínač převzaté rekapitulace na FPB).
+**Stav:** hotovo — 2026-09-10, implementace obě strany (nová 6 commitů, stará `old_shipard` 9bffa3e2 / task 34), reimport 689089 a 732084, zlatý test ✓. Zbývá jen ruční proklik UI (přepínač převzaté rekapitulace na FPB).
 **Issue:** #75 — komentář „Rozhodnutí (2026-09-09)" C1–C6, R1–R6
 **Spec:** `docs/vat-calculation.md` (napsáno předem jako design dokument — **je
 autoritativní**, tento task ho implementuje)

@@ -1,6 +1,6 @@
 # Task: Podání DPH — snapshot tvrzení, druhy podání, lifecycle (M1 Fáze 2) — #55 D14–D22
 
-**Stav:** hotovo (2026-09-10) — všechna kritéria splněna po #75 a reimportu; zlatý test DP3 01–04/2026 přesně
+**Stav:** hotovo — 2026-09-10, všechna kritéria splněna po #75 a reimportu; zlatý test DP3 01–04/2026 přesně
 **Issue:** #55 — komentář „Fáze 2 — Podání: rozhodnutí D14–D22 (2026-09-08)"
 **Návaznost:** staví na `economy.vat` Fáze 1 (živé reporty, kalkulátory,
 `VatDocumentSelection`) a instancích tvrzení (`economy_vat_report_periods`,

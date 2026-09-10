@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 268 tasků: **naplánováno** 4 · **částečně** 9 · **hotovo** 255.
+Celkem 268 tasků: **naplánováno** 4 · **částečně** 7 · **hotovo** 257.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -35,8 +35,6 @@ nevypisují — níže je jen to, co není dokončené.
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 | `mail-preprocess.md` | částečně | Fáze 1 hotová (2026-08-29, 6 commitů), otevřený jen Bolt E2E na alfě (živý odkaz ze vzorku); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) hotová 2026-08-29 — `tasks/mail-preprocess-phase2.md` |
 | `taxes-phase01.md` | částečně | implementace kompletní (mapping, jádro reportů s periodSource vatPeriod + text/date sloupci, kalkulátory, buildery, UI, testy); zbývá ds-upgrade + proklik na dev DS a read-only ověření na alfě dle „Hotovo když" |
-| `vat-filings.md` | částečně | implementace kompletní (5 commitů 2026-09-08: config druhů a zaokrouhlení, tabulky + FilingDocument + guardy instance, FilingRounding + FilingComposer + CLI, viewer Podání DPH s rozdíly + formulář + akce + hlavička reportů, dokumentace). E2E na 4l3j prošlo (CLI sestavení, podání, dodatečné s ř. 66, rozdíly po dokladech, guardy instance, immutabilita). Zbývá ruční proklik UI a ověření podaných ř. 64 na btpg-p po reimportu zdroje. |
-| `vat-recap.md` | částečně | implementace kompletní (6 commitů: dokladová úroveň + obě metody `vat_calc_source` + dorovnání obou měn dle I5, formuláře a docs, sloupec `vat_recap_source` + převzetí + kontroly, editovatelná rekapitulace v sub-tabulce, warningy formuláře ve frontendu, kanonická pole `vat.recapSource`/`calcSource` + applier + exportér). Zbývá ruční proklik UI, task pro starou stranu (B5), reimport 689089 a zlatý test `vat-filings.md` |
 | `vat-report-periods.md` | částečně | implementace kompletní (5 commitů 2026-09-03: tabulka + eventy jádra, přiřazení + on-demand, reporty nad instancemi, cron + zrušení `vat_periods`, docs); E2E na dev DS prošlo (uložení dokladu → koncepty, reporty `--period`, alert, guard, přepočet, ruční přesun). Zbývá ruční proklik UI (picker, viewer Daňová tvrzení, selecty na dokladu) a ověření po re-importu qrce (task 30) — poslední bod „Hotovo když“. |
 
 <!-- STAV:END -->

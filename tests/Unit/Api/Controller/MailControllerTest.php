@@ -297,6 +297,142 @@ class MailControllerTest extends TestCase
     // Unit úroveň s prázdným DocumentRegistry ji nezachytí — pokrývá ji
     // MailImportEndpointTest::testImportInvalidSenderEmailReturns422.
 
+    // ── partner a titulek z cílového dokladu (mail-import-partner-title) ────
+    //
+    // Bez dsConfig staví controller composer bez configu, takže titulek
+    // vyjde bez labelu typu — jazyk labelu pokrývá MessageTitleComposerTest,
+    // reálnou cestu s dokladem MailImportEndpointTest.
+
+    /**
+     * Connection pro happy path importu: mailbox → docs_core_heads → zpráva.
+     * Vložený řádek se zaznamená do `$inserted`.
+     *
+     * @param array<string, mixed>|null $doc řádek cílového dokladu (null = není)
+     * @param array<string, mixed>|null $inserted out param
+     */
+    private function importDb(?array $doc, ?array &$inserted): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnCallback(
+            static function (mixed ...$args) use ($doc): ?array {
+                $sql = (string) $args[0];
+                if (str_contains($sql, 'core_mail_mailboxes')) {
+                    return ['id' => 7];
+                }
+                if (in_array('docs_core_heads', array_filter($args, 'is_string'), true)) {
+                    return $doc;
+                }
+                return ['message_id' => 'MSG-20260910-0001'];
+            },
+        );
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('insert')->willReturnCallback(
+            function (string $table, array $data) use (&$inserted): \Dibi\Fluent {
+                $inserted = $data;
+                $fluent = $this->createMock(\Dibi\Fluent::class);
+                $fluent->method('__call')->willReturn($fluent);
+                return $fluent;
+            },
+        );
+        $dibi->method('getInsertId')->willReturn(101);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        return $db;
+    }
+
+    /** @return array<string, mixed> */
+    private function targetDocRow(): array
+    {
+        return [
+            'doc_type' => 'invni',
+            'doc_number' => '2019-0123',
+            'total_amount' => '13105.00',
+            'doc_currency' => 'CZK',
+            'partner' => 55,
+            'partner_full_name' => 'Dodavatel s.r.o.',
+        ];
+    }
+
+    public function testImportLinkedMessageTakesPartnerAndTitleFromDocument(): void
+    {
+        $inserted = null;
+        $ctrl = $this->controller($this->importDb($this->targetDocRow(), $inserted));
+        $auth = new AuthContext(true, 2, 'api_key', 'shpd_ak_importer');
+
+        $response = $ctrl->importMessage($auth, $this->jsonRequest([
+            'subject' => 'FW: doklad',
+            'sender_email' => 'scanner@example.com',
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'target_table_id' => 'docs_core_heads',
+            'target_row' => 4711,
+        ]));
+
+        $this->assertSame(201, $this->statusOf($response));
+        $this->assertSame(55, $inserted['partner_person']);
+        $this->assertSame('Dodavatel s.r.o.', $inserted['partner_name']);
+        $this->assertSame('2019-0123 — Dodavatel s.r.o., 13 105 CZK', $inserted['ai_title']);
+    }
+
+    public function testImportDocumentFactsBeatPayloadPartner(): void
+    {
+        // D8: u navázané zprávy je autorita doklad, ne payload.
+        $inserted = null;
+        $ctrl = $this->controller($this->importDb($this->targetDocRow(), $inserted));
+        $auth = new AuthContext(true, 2, 'api_key', 'shpd_ak_importer');
+
+        $ctrl->importMessage($auth, $this->jsonRequest([
+            'subject' => 'FW: doklad',
+            'sender_email' => 'scanner@example.com',
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'target_table_id' => 'docs_core_heads',
+            'target_row' => 4711,
+            'partner_person' => 99,
+            'partner_name' => 'Někdo jiný s.r.o.',
+        ]));
+
+        $this->assertSame(55, $inserted['partner_person']);
+        $this->assertSame('Dodavatel s.r.o.', $inserted['partner_name']);
+    }
+
+    public function testImportUnlinkedMessageKeepsPayloadPartnerWithoutTitle(): void
+    {
+        // D5 + D6: partnera dodá runner, titulek nevzniká (není z čeho).
+        $inserted = null;
+        $ctrl = $this->controller($this->importDb(null, $inserted));
+        $auth = new AuthContext(true, 2, 'api_key', 'shpd_ak_importer');
+
+        $ctrl->importMessage($auth, $this->jsonRequest([
+            'subject' => 'Dotaz k objednávce',
+            'sender_email' => 'obchod@example.com',
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'partner_person' => 99,
+            'partner_name' => '  Odběratel   a.s. ',
+        ]));
+
+        $this->assertSame(99, $inserted['partner_person']);
+        $this->assertSame('Odběratel a.s.', $inserted['partner_name'], 'normalizace bílých znaků');
+        $this->assertNull($inserted['ai_title'] ?? null);
+    }
+
+    public function testImportWithoutPartnerFieldsInsertsNulls(): void
+    {
+        // Regrese mail-phase4: payload bez nových polí se chová jako dřív.
+        $inserted = null;
+        $ctrl = $this->controller($this->importDb(null, $inserted));
+        $auth = new AuthContext(true, 2, 'api_key', 'shpd_ak_importer');
+
+        $ctrl->importMessage($auth, $this->jsonRequest([
+            'subject' => 'Newsletter',
+            'sender_email' => 'news@example.com',
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'partner_person' => 0,
+        ]));
+
+        $this->assertNull($inserted['partner_person']);
+        $this->assertNull($inserted['partner_name']);
+    }
+
     // ── ISDOC import hook (tasks/mail-isdoc-import.md) ──────────────────────
     //
     // Plný multipart flow pokrývají integrační testy; tady se testuje jen

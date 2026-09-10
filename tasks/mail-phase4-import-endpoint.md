@@ -92,6 +92,8 @@ Tj. `if (!$auth->isAuthenticated || $auth->tokenType !== 'api_key') → 401`.
 | `source_type` | int | ne | default 1 |
 | `target_table_id` | string\|null | ne | např. `docs_core_heads` |
 | `target_row` | int\|null | ne | |
+| `partner_person` | int\|null | ne | FK `base_persons_persons`; **u navázané zprávy se ignoruje** — vyhrává partner cílového dokladu (`tasks/mail-import-partner-title.md` D8) |
+| `partner_name` | string\|null | ne | totéž; jméno protistrany, ne odesílatele |
 | `external_message_id` | string\|null | ne | |
 | `in_reply_to` | string\|null | ne | |
 | `reply_references` | string\|null | ne | |

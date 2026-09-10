@@ -23,6 +23,9 @@ use Shipard\Module\Core\Mail\IsdocImportService;
 use Shipard\Module\Core\Mail\Preprocess\PreprocessRuleMatcher;
 use Shipard\Module\Core\Mail\Preprocess\PreprocessSpawner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
+use Shipard\Module\Core\Mail\MessagePartnerWriter;
+use Shipard\Module\Core\Mail\MessageTargetWriter;
+use Shipard\Module\Core\Mail\MessageTitleComposer;
 use Shipard\Module\Core\Mail\SenderRuleMatcher;
 
 /**
@@ -53,6 +56,7 @@ class MailController
 
     private AttachmentService $attachments;
     private IdempotencyStore $idempotency;
+    private ?MessageTargetWriter $targetWriter = null;
 
     /**
      * @param array<string, TableDefinition> $tables
@@ -520,7 +524,14 @@ class MailController
      * `_mail_router` — běží pod libovolným api_key (typicky `_legacy_importer`),
      * konzistentně s `/_exchange/*`. Idempotenci řeší volající (LocalIdMap).
      *
-     * Viz `tasks/mail-phase4-import-endpoint.md`.
+     * Volitelná pole `partner_person` a `partner_name` nesou partnera zprávy
+     * (protistrana dokumentu, ne odesílatel). **U zprávy navázané na doklad
+     * se ignorují** — vyhrává partner cílového dokladu, stejně jako titulek
+     * `ai_title`, který si server odvodí sám (tasks/mail-import-partner-title.md
+     * D1/D8). Runner je proto posílá jen u zpráv bez navázaného dokladu.
+     *
+     * Viz `tasks/mail-phase4-import-endpoint.md`,
+     * `tasks/mail-import-partner-title.md`.
      */
     public function importMessage(AuthContext $auth, Request $request): Response
     {
@@ -566,6 +577,11 @@ class MailController
             'reply_references'    => self::nullIfEmpty($body['reply_references'] ?? null),
             'target_table_id'     => self::nullIfEmpty($body['target_table_id'] ?? null),
             'target_row'          => isset($body['target_row']) ? (int) $body['target_row'] : null,
+            // Partner zprávy jako **návrh** (vrstva 1) — u navázané zprávy ho
+            // níž přebijí fakta z dokladu (D8). Runner ho posílá jen tam, kde
+            // ho server nezjistí: zprávy bez navázaného dokladu (D5).
+            'partner_person'      => self::positiveIntOrNull($body['partner_person'] ?? null),
+            'partner_name'        => MessagePartnerWriter::normalizeName($body['partner_name'] ?? null),
             'created_by'          => $auth->userId,
         ];
         if (!empty($body['primary_type'])) {
@@ -587,6 +603,16 @@ class MailController
         // dostane 0.
         if (isset($body['analysis_state'])) {
             $data['analysis_state'] = (int) $body['analysis_state'];
+        }
+
+        // Partner a titulek z cílového dokladu (vrstva 2, D1/D2/D4) — cíl je
+        // autorita, non-null fakt přebije hodnotu z payloadu; null nechává
+        // vrstvu 1 na pokoji (D8). Patří to před validate(): zprávu vkládáme
+        // rovnou v cílovém stavu, ne UPDATEm po insertu (P3).
+        foreach ($this->targetWriter()->factsFor($data['target_table_id'], $data['target_row']) as $column => $value) {
+            if ($value !== null) {
+                $data[$column] = $value;
+            }
         }
 
         $doc = $this->documentRegistry->getDocument(self::MAIL_TABLE);
@@ -617,6 +643,30 @@ class MailController
             'ndx'        => $messageId,
             'message_id' => (string) ($createdRow['message_id'] ?? ''),
         ], 201);
+    }
+
+    /**
+     * Writer faktů z cílového záznamu (lazy — import bez navázaného dokladu
+     * ho nepotřebuje). Titulek je DS-wide data v jazyce AI profilu, proto
+     * `forDataSource()`; bez `dsConfig` degraduje na composer bez configu
+     * (titulek bez labelu typu). `$this->config` se tu vědomě nepoužije —
+     * je v jazyce requestu a runner `Accept-Language` neposílá (P2).
+     */
+    private function targetWriter(): MessageTargetWriter
+    {
+        if ($this->targetWriter === null) {
+            $this->targetWriter = $this->dsConfig !== null
+                ? MessageTargetWriter::forDataSource($this->db, $this->dsConfig)
+                : new MessageTargetWriter($this->db, new MessageTitleComposer(null));
+        }
+        return $this->targetWriter;
+    }
+
+    /** Kladné celé číslo z payloadu, jinak null (0 a záporné = „nevyplněno"). */
+    private static function positiveIntOrNull(mixed $value): ?int
+    {
+        $int = is_numeric($value) ? (int) $value : 0;
+        return $int > 0 ? $int : null;
     }
 
     /**

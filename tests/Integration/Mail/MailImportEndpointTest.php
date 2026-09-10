@@ -36,6 +36,12 @@ class MailImportEndpointTest extends IntegrationTestCase
     /** @var list<int> */
     private array $createdMessageIds = [];
 
+    /** @var list<int> */
+    private array $createdDocIds = [];
+
+    /** @var list<int> */
+    private array $createdPersonIds = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -67,6 +73,12 @@ class MailImportEndpointTest extends IntegrationTestCase
     {
         foreach ($this->createdMessageIds as $id) {
             $this->db->execute('DELETE FROM core_mail_incoming_messages WHERE id = %i', $id);
+        }
+        foreach ($this->createdDocIds as $id) {
+            $this->db->execute('DELETE FROM docs_core_heads WHERE id = %i', $id);
+        }
+        foreach ($this->createdPersonIds as $id) {
+            $this->db->execute('DELETE FROM base_persons_persons WHERE id = %i', $id);
         }
     }
 
@@ -202,9 +214,137 @@ class MailImportEndpointTest extends IntegrationTestCase
         $this->assertSame('sender_email', $response->getPayload()['error']['details'][0]['field']);
     }
 
+    // ── partner a titulek z cílového dokladu (mail-import-partner-title) ────
+
+    /**
+     * Fiktivní Osoba + přijatá faktura jako cíl importované zprávy.
+     * Vkládá se SQL (obchází Document), o úklid se stará onTearDown.
+     *
+     * @return array{docId: int, personId: int, partnerName: string, docNumber: string}
+     */
+    private function createTargetDocument(): array
+    {
+        $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
+        $partnerName = 'IT Dodavatel ' . $suffix . ' s.r.o.';
+
+        $this->db->execute(
+            'INSERT INTO base_persons_persons (person_id, full_name, docState, docStateMain) VALUES (%s, %s, %i, %i)',
+            'IT' . $suffix, $partnerName, 40, 3,   // person_id je varchar(10)
+        );
+        $personId = (int) $this->db->getDibiConnection()->getInsertId();
+        $this->createdPersonIds[] = $personId;
+
+        $docNumber = 'IT-2019-' . $suffix;
+        $this->db->execute(
+            'INSERT INTO docs_core_heads'
+            . ' (doc_type, number_series, doc_number, issue_date, accounting_date, partner,'
+            . '  total_amount, doc_currency, docState, docStateMain)'
+            . ' VALUES (%s, %i, %s, %d, %d, %i, %f, %s, %i, %i)',
+            'invni', 0, $docNumber, '2019-03-14', '2019-03-14', $personId,
+            13105.00, 'CZK', 40, 3,
+        );
+        $docId = (int) $this->db->getDibiConnection()->getInsertId();
+        $this->createdDocIds[] = $docId;
+
+        return ['docId' => $docId, 'personId' => $personId, 'partnerName' => $partnerName, 'docNumber' => $docNumber];
+    }
+
+    public function testImportLinkedMessageTakesPartnerAndTitleFromDocument(): void
+    {
+        $target = $this->createTargetDocument();
+
+        $response = $this->invoke([
+            'mailbox' => 'default',
+            'subject' => self::TEST_SUBJECT_PREFIX . ' FW: skenovaný doklad',
+            'sender_email' => self::TEST_SENDER,
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'target_table_id' => 'docs_core_heads',
+            'target_row' => $target['docId'],
+        ]);
+
+        $this->assertResponseStatus(201, $response);
+        $ndx = (int) $response->getPayload()['data']['ndx'];
+        $this->createdMessageIds[] = $ndx;
+
+        $row = $this->db->fetchRow(
+            'SELECT partner_person, partner_name, ai_title FROM core_mail_incoming_messages WHERE id = %i',
+            $ndx,
+        );
+        $this->assertSame($target['personId'], (int) $row['partner_person'], 'D2: partner dokladu');
+        $this->assertSame($target['partnerName'], $row['partner_name'], 'D3: full_name Osoby');
+
+        $title = (string) $row['ai_title'];
+        $this->assertStringEndsWith(
+            $target['docNumber'] . ' — ' . $target['partnerName'] . ', 13 105 CZK',
+            $title,
+        );
+        $this->assertStringStartsNotWith(
+            $target['docNumber'],
+            $title,
+            'D4: titulek nese název typu dokladu z docs.core.docTypes',
+        );
+    }
+
+    public function testImportDocumentFactsBeatPayloadPartner(): void
+    {
+        $target = $this->createTargetDocument();
+
+        $response = $this->invoke([
+            'mailbox' => 'default',
+            'subject' => self::TEST_SUBJECT_PREFIX . ' payload vs doklad',
+            'sender_email' => self::TEST_SENDER,
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'target_table_id' => 'docs_core_heads',
+            'target_row' => $target['docId'],
+            'partner_person' => $target['personId'] + 100000,
+            'partner_name' => 'IT Někdo jiný s.r.o.',
+        ]);
+
+        $this->assertResponseStatus(201, $response);
+        $ndx = (int) $response->getPayload()['data']['ndx'];
+        $this->createdMessageIds[] = $ndx;
+
+        $row = $this->db->fetchRow(
+            'SELECT partner_person, partner_name FROM core_mail_incoming_messages WHERE id = %i',
+            $ndx,
+        );
+        $this->assertSame($target['personId'], (int) $row['partner_person'], 'D8: doklad je autorita');
+        $this->assertSame($target['partnerName'], $row['partner_name']);
+    }
+
+    public function testImportUnlinkedMessageKeepsPayloadPartnerWithoutTitle(): void
+    {
+        $target = $this->createTargetDocument();
+
+        $response = $this->invoke([
+            'mailbox' => 'default',
+            'subject' => self::TEST_SUBJECT_PREFIX . ' bez vazby',
+            'sender_email' => self::TEST_SENDER,
+            'received_at' => '2026-04-18T14:32:00+02:00',
+            'docState' => 10,
+            'partner_person' => $target['personId'],
+            'partner_name' => '  IT Odběratel   a.s. ',
+        ]);
+
+        $this->assertResponseStatus(201, $response);
+        $ndx = (int) $response->getPayload()['data']['ndx'];
+        $this->createdMessageIds[] = $ndx;
+
+        $row = $this->db->fetchRow(
+            'SELECT partner_person, partner_name, ai_title FROM core_mail_incoming_messages WHERE id = %i',
+            $ndx,
+        );
+        $this->assertSame($target['personId'], (int) $row['partner_person'], 'D5: partnera dodal runner');
+        $this->assertSame('IT Odběratel a.s.', $row['partner_name']);
+        $this->assertNull($row['ai_title'], 'D6: bez dokladu titulek nevzniká');
+    }
+
     private function invoke(array $body, ?AuthContext $auth = null): \Shipard\Api\Response
     {
-        $ctrl = new MailController($this->db, $this->dsPath, $this->tables, $this->documentRegistry, $this->config);
+        $ctrl = new MailController(
+            $this->db, $this->dsPath, $this->tables, $this->documentRegistry,
+            $this->config, $this->dsConfig,
+        );
         $auth ??= new AuthContext(true, $this->importerUserId, 'api_key', 'shpd_ak_importer');
         $request = Request::fromArray(
             'POST',

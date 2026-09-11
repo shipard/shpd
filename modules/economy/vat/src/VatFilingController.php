@@ -23,6 +23,10 @@ use Shipard\Module\Economy\Vat\Xml\FilingXmlValidationException;
  * podání ve stavu Sestaveno z aktuálních dokladů instance (akce
  * „Přepočítat" v detailu podání). Podané ani zrušené podání composer
  * odmítne — je to záznam o tom, co odešlo.
+ *
+ * POST /_vat/filing-header-from-profile, body {"filingId": N} — přepíše
+ * hlavičku konceptu předvyplněním z profilu podatele (akce „Načíst
+ * hlavičku z profilu", #55 F3-5); přepočet hlavičku schválně nechává být.
  */
 final class VatFilingController
 {
@@ -36,19 +40,11 @@ final class VatFilingController
 
     public function compose(Request $request): Response
     {
-        $body     = $request->getBody();
-        $filingId = is_array($body) ? (int) ($body['filingId'] ?? 0) : 0;
-        if ($filingId <= 0) {
-            return Response::error('BAD_REQUEST', 'Body must contain a positive filingId', 400);
+        $filing = $this->resolveFiling($request);
+        if ($filing instanceof Response) {
+            return $filing;
         }
-
-        $filing = $this->db->fetchRow(
-            'SELECT id, docState FROM ' . FilingDocument::TABLE . ' WHERE id = %i',
-            $filingId,
-        );
-        if ($filing === null) {
-            return Response::error('NOT_FOUND', "Filing {$filingId} not found", 404);
-        }
+        $filingId = (int) $filing['id'];
         if ((int) $filing['docState'] !== FilingDocument::DOC_STATE_COMPOSED) {
             return Response::error(
                 'INVALID_DOC_STATE',
@@ -90,19 +86,11 @@ final class VatFilingController
      */
     public function files(Request $request): Response
     {
-        $body     = $request->getBody();
-        $filingId = is_array($body) ? (int) ($body['filingId'] ?? 0) : 0;
-        if ($filingId <= 0) {
-            return Response::error('BAD_REQUEST', 'Body must contain a positive filingId', 400);
+        $filing = $this->resolveFiling($request);
+        if ($filing instanceof Response) {
+            return $filing;
         }
-
-        $filing = $this->db->fetchRow(
-            'SELECT id, docState FROM ' . FilingDocument::TABLE . ' WHERE id = %i',
-            $filingId,
-        );
-        if ($filing === null) {
-            return Response::error('NOT_FOUND', "Filing {$filingId} not found", 404);
-        }
+        $filingId = (int) $filing['id'];
         if ((int) $filing['docState'] === FilingDocument::DOC_STATE_CANCELLED) {
             return Response::error(
                 'INVALID_DOC_STATE',
@@ -132,5 +120,58 @@ final class VatFilingController
             ),
             'warnings' => $result->warnings,
         ]);
+    }
+
+    /**
+     * POST /_vat/filing-header-from-profile — hlavička konceptu znovu
+     * z profilu podatele (#55 F3-5). Ruční úpravy hlavičky zaniknou, proto
+     * se UI ptá před voláním; podané a zrušené podání composer odmítne.
+     */
+    public function headerFromProfile(Request $request): Response
+    {
+        $filing = $this->resolveFiling($request);
+        if ($filing instanceof Response) {
+            return $filing;
+        }
+        $filingId = (int) $filing['id'];
+        if ((int) $filing['docState'] !== FilingDocument::DOC_STATE_COMPOSED) {
+            return Response::error(
+                'INVALID_DOC_STATE',
+                'Only filings in state 10 (composed) can reload the header',
+                422,
+            );
+        }
+
+        try {
+            (new FilingComposer($this->db->getDibiConnection(), $this->config))->resetHeader($filingId);
+        } catch (\DomainException | \RuntimeException $e) {
+            return Response::error('FILING_HEADER_RESET_FAILED', $e->getMessage(), 422);
+        }
+
+        return Response::success(['filingId' => $filingId]);
+    }
+
+    /**
+     * Podání z těla požadavku (`{"filingId": N}`), nebo hotová chybová
+     * odpověď — všechny endpointy začínají stejně.
+     *
+     * @return array<string, mixed>|Response
+     */
+    private function resolveFiling(Request $request): array|Response
+    {
+        $body     = $request->getBody();
+        $filingId = is_array($body) ? (int) ($body['filingId'] ?? 0) : 0;
+        if ($filingId <= 0) {
+            return Response::error('BAD_REQUEST', 'Body must contain a positive filingId', 400);
+        }
+
+        $filing = $this->db->fetchRow(
+            'SELECT id, docState FROM ' . FilingDocument::TABLE . ' WHERE id = %i',
+            $filingId,
+        );
+        if ($filing === null) {
+            return Response::error('NOT_FOUND', "Filing {$filingId} not found", 404);
+        }
+        return $filing;
     }
 }

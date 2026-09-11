@@ -364,6 +364,14 @@ class Router
 			return new Route('vat', 'filingFiles');
 		}
 
+		// POST /_vat/filing-header-from-profile — hlavička konceptu znovu z profilu (#55 F3-5)
+		if ($subpath === '/_vat/filing-header-from-profile') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('vat', 'filingHeaderFromProfile');
+		}
+
 		// POST /_bank/import-statement — import bankovního výpisu (multipart)
 		if ($subpath === '/_bank/import-statement') {
 			if ($method !== 'POST') {

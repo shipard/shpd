@@ -490,9 +490,10 @@ function dispatchVat(
 		$auth->userId,
 	);
 	return match ($route->action) {
-		'filingCompose' => $ctrl->compose($request),
-		'filingFiles'   => $ctrl->files($request),
-		default         => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
+		'filingCompose'           => $ctrl->compose($request),
+		'filingFiles'             => $ctrl->files($request),
+		'filingHeaderFromProfile' => $ctrl->headerFromProfile($request),
+		default                   => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
 	};
 }
 

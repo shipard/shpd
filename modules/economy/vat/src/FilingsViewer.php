@@ -200,13 +200,22 @@ class FilingsViewer extends TableViewer
         $docState = (int) ($record['docState'] ?? 0);
 
         // Přepočet je smysluplný jen u konceptu — podané podání je záznam
-        // o tom, co odešlo, a composer ho odmítne.
+        // o tom, co odešlo, a composer ho odmítne. Hlavičku přepočet nechává
+        // být (ruční úpravy), proto je obnova z profilu zvláštní akce
+        // (#55 F3-5).
         if ($docState === FilingDocument::DOC_STATE_COMPOSED) {
-            $detail['actions'] = [[
-                'id'      => 'recomposeFiling',
-                'label'   => $cs ? 'Přepočítat' : 'Recompose',
-                'variant' => 'secondary',
-            ]];
+            $detail['actions'] = [
+                [
+                    'id'      => 'recomposeFiling',
+                    'label'   => $cs ? 'Přepočítat' : 'Recompose',
+                    'variant' => 'secondary',
+                ],
+                [
+                    'id'      => 'reloadFilingHeader',
+                    'label'   => $cs ? 'Načíst hlavičku z profilu' : 'Load header from profile',
+                    'variant' => 'secondary',
+                ],
+            ];
         }
 
         // Soubory pro daňový portál (#55 X6): u konceptu si je lze vyrobit

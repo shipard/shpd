@@ -2,8 +2,9 @@
  * API helpers pro podání DPH.
  *
  * Backend endpoint (viz `modules/economy/vat/src/VatFilingController.php`):
- *   POST /_vat/filing-compose  body {"filingId": N}
- *   POST /_vat/filing-files    body {"filingId": N}
+ *   POST /_vat/filing-compose              body {"filingId": N}
+ *   POST /_vat/filing-files                body {"filingId": N}
+ *   POST /_vat/filing-header-from-profile  body {"filingId": N}
  *
  * Podání samotná se čtou jako jakákoliv jiná tabulka přes /_ui/viewer.
  */
@@ -30,4 +31,14 @@ export async function recomposeFiling(filingId) {
  */
 export async function generateFilingFiles(filingId) {
   return await post('/_vat/filing-files', { filingId });
+}
+
+/**
+ * Přepsat hlavičku podání ve stavu Sestaveno předvyplněním z podacích
+ * údajů registrace (profil podatele) a z vlastní firmy. Ruční úpravy
+ * hlavičky zaniknou — volající se před tím ptá. Vrací {filingId}; chybové
+ * kódy BAD_REQUEST, NOT_FOUND, INVALID_DOC_STATE, FILING_HEADER_RESET_FAILED.
+ */
+export async function reloadFilingHeader(filingId) {
+  return await post('/_vat/filing-header-from-profile', { filingId });
 }

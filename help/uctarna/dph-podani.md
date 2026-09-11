@@ -1,7 +1,7 @@
 ---
 title: Podání DPH
 summary: Jak z živého výpočtu udělat podání, vyrobit soubor pro daňový portál a mít trvalý záznam toho, co jsi za období odevzdal.
-keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál, soubor pro EPO, vytvořit soubory, opis přiznání, obsah podání, hlavička podání, elektronické podání]
+keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál, soubor pro EPO, vytvořit soubory, opis přiznání, obsah podání, hlavička podání, načíst hlavičku z profilu, elektronické podání]
 related: [uctarna/dph-zive-vystupy.md, co-dnes-nejde.md]
 ---
 
@@ -119,6 +119,12 @@ podepisující osoba, kód zdaňovacího období následujícího roku).
 
 Sada polí odpovídá formuláři: přiznání jich má víc než hlášení. Změny
 platí **jen pro to jedno podání**; trvale se údaje mění na registraci.
+
+Když Podací údaje na registraci opravíš až po sestavení, koncept si je
+sám nevezme — **Přepočítat** hlavičku nechává být, aby nepřepsal, co jsi
+v ní změnil. Použij akci **Načíst hlavičku z profilu** v detailu podání:
+naplní celou hlavičku znovu z Podacích údajů a z tvojí firmy, včetně polí,
+která jsi upravil ručně. Funguje jen u podání ve stavu **Sestaveno**.
 
 Po podání se hlavička, stejně jako celý obsah, už nemění — a soubory
 podaného tvrzení nejde smazat ani přejmenovat. Přílohy k němu **přidat

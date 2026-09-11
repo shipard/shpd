@@ -8,7 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
-  import { recomposeFiling, generateFilingFiles } from '../../api/vat.js';
+  import { recomposeFiling, generateFilingFiles, reloadFilingHeader } from '../../api/vat.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import { inviteUser } from '../../api/security.js';
   import { fileFromMessage } from '../../api/registry.js';
@@ -656,6 +656,16 @@
     // uživatel ji musí vidět, snapshot zůstane nezměněný.
     if (actionId === 'recomposeFiling') {
       const result = await recomposeFiling(recordId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    // Načíst hlavičku podání znovu z profilu podatele (FilingsViewer,
+    // koncept ve stavu 10). Přepíše i ruční úpravy v tabu Hlavička, proto
+    // potvrzení; přepočet snapshotu hlavičku schválně nechává být.
+    if (actionId === 'reloadFilingHeader') {
+      if (!confirm(t('viewer.detail.reloadFilingHeaderConfirm'))) return;
+      const result = await reloadFilingHeader(recordId);
       if (result?.success) refreshAfterAction();
       else alert(translateError(result?.error));
       return;

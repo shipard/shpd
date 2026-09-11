@@ -298,8 +298,11 @@ pole se schématem **per typ tvrzení** — vybírá ho `FilingHeaderSchema::
 forReportType()`, na který delegují `FilingDocument::structuredSchemaFor()`
 i `FilingsForm`. Composer ji při sestavení předvyplní z profilu podatele,
 z vlastní firmy a z registrace (DIČ); **přepočet ji nepřepisuje**, protože
-ruční úpravy jsou jediná část snapshotu, kterou zadává člověk. Podáním
-zmrzne jako zbytek snapshotu.
+ruční úpravy jsou jediná část snapshotu, kterou zadává člověk. Obnovu
+z profilu dělá zvláštní akce **Načíst hlavičku z profilu** v detailu
+konceptu (`FilingComposer::resetHeader()`, `POST
+/_vat/filing-header-from-profile`) — přepíše celou hlavičku včetně ručních
+úprav, proto se UI ptá. Podáním zmrzne jako zbytek snapshotu.
 
 ### UI (D20)
 

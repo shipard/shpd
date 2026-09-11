@@ -128,6 +128,41 @@ final class FilingComposer
         return ['items' => $itemCount, 'rows' => $rowCount, 'isEmpty' => (bool) $result['isEmpty']];
     }
 
+    /**
+     * Přepíše hlavičku konceptu čerstvým předvyplněním z profilu podatele,
+     * vlastní firmy a registrace — akce „Načíst hlavičku z profilu"
+     * (#55 F3-5). Ruční úpravy v tabu Hlavička tím zaniknou; to je smysl
+     * akce, ne vedlejší účinek, a potvrzení je věc UI. Podané ani zrušené
+     * podání se nemění: hlavička je součást snapshotu.
+     */
+    public function resetHeader(int $filingId): void
+    {
+        $filing = $this->loadFiling($filingId);
+        if ($filing === null) {
+            throw new \DomainException("Podání #{$filingId} nenalezeno");
+        }
+        if ((int) $filing['docState'] !== FilingDocument::DOC_STATE_COMPOSED) {
+            throw new \DomainException(
+                "Podání #{$filingId} není ve stavu Sestaveno — hlavička podaného ani zrušeného"
+                . ' podání se nemění.',
+            );
+        }
+
+        $period = $this->loadPeriod((int) $filing['report_period']);
+        if ($period === null) {
+            throw new \DomainException("Podání #{$filingId} míří na neexistující daňové tvrzení");
+        }
+
+        $header = $this->prefillHeader($period, (string) $period['report_type'], self::decodeJson($filing['result'] ?? null));
+        if ($header === null) {
+            throw new \RuntimeException(
+                'Chybí kompilované schéma hlavičky podání (economy.vat.filingHeaderCz*) — spusťte ds-upgrade.',
+            );
+        }
+
+        $this->db->update(FilingDocument::TABLE, ['header' => $header])->where('id = %i', $filingId)->execute();
+    }
+
     /** Smaže snapshot podání (přepočet i úklid po smazání konceptu). */
     public function clear(int $filingId): void
     {
@@ -545,14 +580,13 @@ final class FilingComposer
     // ── Hlavička podání ─────────────────────────────────────────────────────
 
     /**
-     * Předvyplněná hlavička podání (#55 X2): věta P z profilu podatele na
-     * registraci, identita z vlastní firmy, DIČ z registrace a defaulty
-     * věty D. Vrací JSON pro sloupec `header`, nebo `null` když se hlavička
-     * nemá měnit.
+     * Hlavička podání při sestavení (#55 X2): předvyplní se jen prázdná.
+     * Vrací JSON pro sloupec `header`, nebo `null` když se hlavička nemá
+     * měnit.
      *
      * **Přepočet konceptu hlavičku nepřepisuje** — uživatelské úpravy
      * v tabu Hlavička jsou to jediné, co snapshot nese ručně, a přepočet je
-     * běžná operace nad konceptem. Obnovu z profilu dělá samostatná akce.
+     * běžná operace nad konceptem. Obnovu z profilu dělá `resetHeader()`.
      *
      * @param array<string, mixed> $filing
      * @param array<string, mixed> $period
@@ -564,7 +598,19 @@ final class FilingComposer
         if ($stored !== null && !StructuredFieldValues::isEmpty($stored)) {
             return null;
         }
+        return $this->prefillHeader($period, $type, $result);
+    }
 
+    /**
+     * Čerstvé předvyplnění hlavičky: věta P z profilu podatele na
+     * registraci, identita z vlastní firmy, DIČ z registrace a defaulty
+     * věty D. `null` bez zkompilovaného schématu.
+     *
+     * @param array<string, mixed> $period
+     * @param array<string, mixed> $result snapshot `result` (kvůli `trans`)
+     */
+    private function prefillHeader(array $period, string $type, array $result): ?string
+    {
         $cfgItem = FilingHeaderSchema::forReportType($type);
         $schema  = $cfgItem !== null ? StructuredSchema::fromCfgItem($this->config, $cfgItem) : null;
         if ($schema === null) {
@@ -701,6 +747,16 @@ final class FilingComposer
             return null;
         }
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** @return array<string, mixed> prázdné pole pro NULL i nevalidní JSON */
+    private static function decodeJson(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        $decoded = json_decode((string) $value, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     private static function isoDate(mixed $value): string

@@ -390,6 +390,52 @@ class FilingComposerTest extends IntegrationTestCase
         $this->assertSame('451', $header['c_ufo'], 'přepočet hlavičku nepřepisuje z profilu');
     }
 
+    /**
+     * Obnova z profilu (#55 F3-5) je opak přepočtu: přepíše všechno včetně
+     * ručních úprav a vezme i to, co se v profilu změnilo po sestavení.
+     */
+    public function testResetHeaderReloadsFromProfileAndDropsEdits(): void
+    {
+        $this->setRegistrationProfile(['typ_ds' => 'P', 'c_ufo' => '464', 'c_okec' => '620200']);
+
+        $periodId = $this->insertPeriod('return', '01/2029 hlav reset');
+        $this->insertDoc('invno', $periodId, 'vat_period', 'cz-120', 1000.0, 210.0, 'CZ12345678');
+        $filingId = $this->createFiling($periodId, 'regular');
+
+        $edited = $this->filingHeader($filingId);
+        $edited['sest_prijmeni'] = 'Nováková';
+        $edited['c_ufo']         = '451';
+        $this->db->getDibiConnection()
+            ->update(FilingDocument::TABLE, ['header' => json_encode($edited, JSON_UNESCAPED_UNICODE)])
+            ->where('id = %i', $filingId)->execute();
+
+        // Profil se po sestavení změnil — obnova ho má vzít.
+        $this->setRegistrationProfile([
+            'typ_ds' => 'P', 'c_ufo' => '464', 'c_okec' => '620200', 'naz_obce' => 'Ukázkov',
+        ]);
+
+        (new FilingComposer($this->db->getDibiConnection(), $this->config))->resetHeader($filingId);
+
+        $header = $this->filingHeader($filingId);
+        $this->assertSame('464', $header['c_ufo'], 'ruční úprava zanikla');
+        $this->assertArrayNotHasKey('sest_prijmeni', $header, 'ručně doplněné pole zaniklo');
+        $this->assertSame('Ukázkov', $header['naz_obce'], 'změna profilu po sestavení se propsala');
+        $this->assertSame('economy.vat.filingHeaderCzDp3/2026', $header['_schema']);
+        $this->assertTrue($header['trans'], 'defaulty věty D se dopočítají ze snapshotu');
+    }
+
+    public function testResetHeaderRefusesFiledFiling(): void
+    {
+        $periodId = $this->insertPeriod('return', '01/2029 hlav podané');
+        $this->insertDoc('invno', $periodId, 'vat_period', 'cz-120', 1000.0, 210.0, 'CZ12345678');
+        $filingId = $this->createFiling($periodId, 'regular');
+        $this->fileFiling($filingId);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('není ve stavu Sestaveno');
+        (new FilingComposer($this->db->getDibiConnection(), $this->config))->resetHeader($filingId);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private function insertPeriod(string $type, string $name): int

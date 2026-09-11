@@ -73,6 +73,20 @@ abstract class Document
     }
 
     /**
+     * Zápis, který zámek záznamu (`documentLockProviders`, #55 D26) záměrně
+     * obchází — import mód zrcadlí cizí systém, needituje ho. TableGateway
+     * se ptá po `validate()` a před `beforeSave()`, takže virtuální markery
+     * payloadu (`_importNumber`) jsou v `$data` ještě přítomné. Default: nic
+     * neobchází.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function isLockExempt(array $data): bool
+    {
+        return false;
+    }
+
+    /**
      * Schéma strukturovaného pole (#74) pro **zápis a editaci** tohoto
      * záznamu — hook I2. `null` = použij statický atribut `schema` z definice
      * sloupce (to je případ všech dnešních konzumentů, např. profil podatele).

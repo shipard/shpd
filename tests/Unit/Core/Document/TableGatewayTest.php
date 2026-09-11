@@ -9,6 +9,8 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Document\DefaultDocument;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\DocStatesDefinition;
+use Shipard\Core\Document\DocumentLockProvider;
+use Shipard\Core\Document\DocumentLockReason;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
@@ -507,5 +509,202 @@ class TableGatewayTest extends TestCase
 
         $this->assertSame(3, $doc->beforeDeleteData['id']);
         $this->assertSame(3, $doc->afterDeleteData['id']);
+    }
+
+    // --- zámek záznamu (documentLockProviders, #55 D24) -----------------------
+
+    private function makeLockedGateway(Document $doc): TestableTableGateway
+    {
+        GatewayTestLockProvider::reset();
+        return new TestableTableGateway('heads', $this->makeDb(), new LockingRegistry($doc));
+    }
+
+    public function testLockedUpdateFailsWithFormErrorAndSkipsDb(): void
+    {
+        $doc = new TrackingDocument();
+        $gw = $this->makeLockedGateway($doc);
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice', 'docState' => 40];
+
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Invoice edited']);
+
+        $this->assertFalse($result->isSuccess());
+        $errors = $result->getValidation()->getErrors();
+        $this->assertCount(1, $errors);
+        $this->assertSame('_form', $errors[0]->column);
+        $this->assertSame('locked', $errors[0]->code);
+        $this->assertSame('Období je uzamčené', $errors[0]->message);
+        $this->assertEmpty($gw->updateCalls);
+        $this->assertSame(0, $gw->beginCount);
+        // beforeSave nikdy neběžel — zámek se ptá dřív.
+        $this->assertSame([], $doc->beforeSaveData);
+        // Provider viděl nový stav i uložený originál.
+        $this->assertSame('Invoice edited', GatewayTestLockProvider::$lastData['title']);
+        $this->assertSame('Invoice', GatewayTestLockProvider::$lastOriginal['title']);
+    }
+
+    public function testLockedInsertFailsWithNullOriginal(): void
+    {
+        $gw = $this->makeLockedGateway(new DefaultDocument());
+
+        $result = $gw->saveDocument(['title' => 'New into locked range']);
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertSame('locked', $result->getValidation()->getErrors()[0]->code);
+        $this->assertNull(GatewayTestLockProvider::$lastOriginal);
+        $this->assertEmpty($gw->insertCalls);
+    }
+
+    public function testLockExemptDocumentSkipsProviders(): void
+    {
+        $gw = $this->makeLockedGateway(new ExemptDocument());
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice'];
+
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Mirrored', '_importNumber' => ['docNumber' => 'X']]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(0, GatewayTestLockProvider::$calls);
+        $this->assertCount(1, $gw->updateCalls);
+    }
+
+    public function testForceUnlockBypassesLockAndNeverReachesSql(): void
+    {
+        $gw = $this->makeLockedGateway(new DefaultDocument());
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice'];
+
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Forced', '_forceUnlock' => true]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(1, GatewayTestLockProvider::$calls);
+        $this->assertCount(1, $gw->updateCalls);
+        $this->assertArrayNotHasKey('_forceUnlock', $gw->updateCalls[0]['data']);
+        $this->assertSame('Forced', $gw->updateCalls[0]['data']['title']);
+    }
+
+    public function testForceMarkerStrippedEvenWhenNothingIsLocked(): void
+    {
+        $gw = $this->makeLockedGateway(new DefaultDocument());
+        GatewayTestLockProvider::$locked = false;
+
+        $result = $gw->saveDocument(['title' => 'Free', '_forceUnlock' => true]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertArrayNotHasKey('_forceUnlock', $gw->insertCalls[0]['data']);
+    }
+
+    public function testUnlockedRecordSavesNormally(): void
+    {
+        $gw = $this->makeLockedGateway(new DefaultDocument());
+        GatewayTestLockProvider::$locked = false;
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice'];
+
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Edited']);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(1, GatewayTestLockProvider::$calls);
+    }
+
+    public function testProviderExceptionFailsSaveClosed(): void
+    {
+        $gw = $this->makeLockedGateway(new DefaultDocument());
+        GatewayTestLockProvider::$throw = true;
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice'];
+
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Edited']);
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertNull($result->getValidation());
+        $this->assertStringContainsString('provider down', (string) $result->getErrorMessage());
+        $this->assertEmpty($gw->updateCalls);
+    }
+
+    public function testLockedDeleteIsDomainErrorWithoutTouchingDb(): void
+    {
+        $doc = new TrackingDocument();
+        $gw = $this->makeLockedGateway($doc);
+        $gw->storedRows[3] = ['id' => 3, 'title' => 'Invoice'];
+
+        $result = $gw->deleteDocument(3);
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertTrue($result->isDomainError());
+        $this->assertSame('DOCUMENT_LOCKED', $result->getDomainErrorCode());
+        $this->assertSame('Období je uzamčené', $result->getErrorMessage());
+        $this->assertEmpty($gw->deleteRowCalls);
+        $this->assertSame(0, $gw->beginCount);
+        $this->assertSame([], $doc->beforeDeleteData);
+    }
+
+    public function testUnlockedDeleteProceeds(): void
+    {
+        $gw = $this->makeLockedGateway(new TrackingDocument());
+        GatewayTestLockProvider::$locked = false;
+        $gw->storedRows[3] = ['id' => 3, 'title' => 'Invoice'];
+
+        $result = $gw->deleteDocument(3);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertCount(1, $gw->deleteRowCalls);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lock fixtures (#55 D24)
+// ---------------------------------------------------------------------------
+
+final class GatewayTestLockProvider implements DocumentLockProvider
+{
+    public static bool $locked = true;
+    public static bool $throw = false;
+    public static int $calls = 0;
+    /** @var array<string, mixed> */
+    public static array $lastData = [];
+    /** @var array<string, mixed>|null */
+    public static ?array $lastOriginal = null;
+
+    public static function reset(): void
+    {
+        self::$locked = true;
+        self::$throw = false;
+        self::$calls = 0;
+        self::$lastData = [];
+        self::$lastOriginal = null;
+    }
+
+    public function lockReasons(string $tableId, array $data, ?array $original): array
+    {
+        self::$calls++;
+        self::$lastData = $data;
+        self::$lastOriginal = $original;
+        if (self::$throw) {
+            throw new \RuntimeException('provider down');
+        }
+        return self::$locked ? [new DocumentLockReason('test', 'Období je uzamčené')] : [];
+    }
+}
+
+/** SingletonRegistry s jedním providerem zámku na tabulce `heads`. */
+class LockingRegistry extends SingletonRegistry
+{
+    public function getLockProviders(): array
+    {
+        return [['table' => 'heads', 'class' => GatewayTestLockProvider::class]];
+    }
+
+    public function hasLockProviders(string $tableId): bool
+    {
+        return $tableId === 'heads';
+    }
+}
+
+class ExemptDocument extends Document
+{
+    public function isLockExempt(array $data): bool
+    {
+        return isset($data['_importNumber']);
+    }
+
+    public function beforeSave(array &$data, ?array $originalData = null): void
+    {
+        unset($data['_importNumber']);
     }
 }

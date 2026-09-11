@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Document;
 
+use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
+
 /**
  * Prohnání nabídky stavových přechodů hookem
  * Document::filterStateTransitions — sdílené oběma producenty přechodů
@@ -26,9 +29,21 @@ final class DocStateTransitionFilter
         array $transitions,
         ?DocumentRegistry $registry,
         ?\Dibi\Connection $db,
+        ?ConfigRuntime $config = null,
+        ?DataSourceConfig $dsConfig = null,
     ): array {
         if ($transitions === [] || $registry === null) {
             return $transitions;
+        }
+
+        // Zamčený záznam (documentLockProviders, #55 D24): žádné přechody.
+        // Jen s DB — bez ní by provider neměl nad čím rozhodovat; bariérou
+        // zůstává gateway.
+        if ($db !== null && $registry->hasLockProviders($table)) {
+            $locks = DocumentLockRegistry::forDocuments($registry, $db, $config, $dsConfig);
+            if ($locks->reasons($table, $row, $row) !== []) {
+                return [];
+            }
         }
 
         $doc = $registry->getDocument($table, $row);

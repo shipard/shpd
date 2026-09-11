@@ -13,6 +13,8 @@ use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Document\DocumentLockReason;
+use Shipard\Core\Document\DocumentLockRegistry;
 
 class CrudController
 {
@@ -204,6 +206,11 @@ class CrudController
 			return $stateErr;
 		}
 
+		$lockErr = $this->guardLock($table, $def, $id, $data);
+		if ($lockErr !== null) {
+			return $lockErr;
+		}
+
 		if ($this->tableHasColumn($def, 'modified')) {
 			$data['modified'] = date('Y-m-d H:i:s');
 		}
@@ -261,6 +268,11 @@ class CrudController
 			return Response::success($this->castRow($row ?? [], $def));
 		}
 
+		$lockErr = $this->guardLock($table, $def, $id, $data);
+		if ($lockErr !== null) {
+			return $lockErr;
+		}
+
 		if ($this->tableHasColumn($def, 'modified')) {
 			$data['modified'] = date('Y-m-d H:i:s');
 		}
@@ -283,9 +295,54 @@ class CrudController
 			return Response::error('NOT_FOUND', 'Record not found', 404);
 		}
 
+		$lockErr = $this->guardLock($table, $def, $id, null);
+		if ($lockErr !== null) {
+			return $lockErr;
+		}
+
 		$this->deleteRecord($table, $id);
 
 		return Response::success(null, 204);
+	}
+
+	/**
+	 * Zámek záznamu (documentLockProviders, #55 D24). Generické CRUD píše
+	 * mimo TableGateway (přímý UPDATE/DELETE bez Document lifecycle), takže
+	 * bariéru musí mít samo — jinak by zámek obešel `PATCH /{table}/{id}`.
+	 * Nový stav = uložený řádek přepsaný patchem (child sety REST nenese,
+	 * providery si je dočtou z DB). Fail-closed: výjimka providera = 500.
+	 *
+	 * @param array<string, mixed>|null $patch null = mazání (stav se nemění)
+	 */
+	private function guardLock(string $table, TableDefinition $def, int $id, ?array $patch): ?Response
+	{
+		if ($this->documentRegistry === null || !$this->documentRegistry->hasLockProviders($table)) {
+			return null;
+		}
+		$row = $this->fetchById($table, $id, $this->allReadableColumns($def));
+		if ($row === null) {
+			return null;
+		}
+		$reasons = $this->lockRegistry()->reasons($table, $patch === null ? $row : array_merge($row, $patch), $row);
+		if ($reasons === []) {
+			return null;
+		}
+		return Response::error(
+			DocumentLockRegistry::DOMAIN_CODE,
+			DocumentLockRegistry::summarize($reasons),
+			422,
+			array_map(static fn(DocumentLockReason $r): array => $r->toArray(), $reasons),
+		);
+	}
+
+	/** Seam pro testy — registry providerů nad DB tohoto controlleru. */
+	protected function lockRegistry(): DocumentLockRegistry
+	{
+		return DocumentLockRegistry::forDocuments(
+			$this->documentRegistry,
+			$this->db->getDibiConnection(),
+			$this->config,
+		);
 	}
 
 	/**
@@ -324,6 +381,7 @@ class CrudController
 				$transitions,
 				$this->documentRegistry,
 				$this->db->getDibiConnection(),
+				$this->config,
 			);
 		}
 

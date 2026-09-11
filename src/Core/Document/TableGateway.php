@@ -17,8 +17,19 @@ use Shipard\Core\StructuredFields\StructuredSchema;
 
 class TableGateway
 {
+    /**
+     * Virtuální klíč payloadu: vědomé obejití zámku záznamu (#55 D27). Smí
+     * ho poslat jen CLI (`--force`) — HTTP allow-listy (FormController,
+     * CrudController) neznámé klíče zahazují. Gateway ho z dat strhne před
+     * SQL a použití zaloguje (warn).
+     */
+    public const FORCE_UNLOCK_KEY = '_forceUnlock';
+
     /** Lazy, sdílený všemi dokumenty gatewaye — viz injectDocServices(). */
     private ?SettingsStore $settings = null;
+
+    /** Lazy — providery zámku z DocumentRegistry s DB/konfigurací gatewaye. */
+    private ?DocumentLockRegistry $lockRegistry = null;
 
     /**
      * Schémata strukturovaných sloupců rozhodnutá v tomto save (sloupec =>
@@ -65,6 +76,54 @@ class TableGateway
         );
     }
 
+    private function lockRegistry(): DocumentLockRegistry
+    {
+        return $this->lockRegistry ??= DocumentLockRegistry::forDocuments(
+            $this->registry,
+            $this->db,
+            $this->config,
+            $this->dsConfig,
+        );
+    }
+
+    /**
+     * Vynucení zámku při uložení: každý důvod = chyba formuláře (`_form`,
+     * kód `locked`). Import mód (Document::isLockExempt) providery nevolá;
+     * force (CLI) je pustí, ale zaloguje.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed>|null $originalData
+     */
+    private function enforceLock(
+        Document $doc,
+        array $data,
+        ?array $originalData,
+        bool $force,
+        ValidationResult $validation,
+    ): void {
+        if (!$this->lockRegistry()->hasProviders($this->tableId) || $doc->isLockExempt($data)) {
+            return;
+        }
+        $reasons = $this->lockRegistry()->reasons($this->tableId, $data, $originalData);
+        if ($reasons === []) {
+            return;
+        }
+        if ($force) {
+            ErrorLogger::warn('document lock bypassed by force', [
+                'table'   => $this->tableId,
+                'id'      => $data['id'] ?? null,
+                'reasons' => array_map(
+                    static fn(DocumentLockReason $r): string => $r->source . ':' . (string) ($r->subjectRowId ?? ''),
+                    $reasons,
+                ),
+            ]);
+            return;
+        }
+        foreach ($reasons as $reason) {
+            $validation->addError(ValidationError::FIELD_FORM, $reason->title, DocumentLockRegistry::ERROR_CODE);
+        }
+    }
+
     /**
      * True = transakci vlastní volající gatewaye (TransactionlessTableGateway),
      * dokumenty si nesmí otevírat vlastní — viz Document::$externalTransaction.
@@ -103,6 +162,11 @@ class TableGateway
         $this->injectDocServices($doc);
         $data = $inputData;
 
+        // Force marker ven z dat hned — nikdy nesmí dojít do SQL. Rozhoduje
+        // se až po validate (enforceLock).
+        $forceUnlock = !empty($data[self::FORCE_UNLOCK_KEY]);
+        unset($data[self::FORCE_UNLOCK_KEY]);
+
         // Load original record (head + child rows) on update — Document hooks
         // need it to detect what changed (partner, docState, …). On insert: null.
         $originalData = null;
@@ -139,6 +203,17 @@ class TableGateway
         foreach ($structuredErrors as $error) {
             $validation->addError($error->column, $error->message, $error->code);
         }
+
+        // Zámek záznamu (documentLockProviders, #55 D24) — po validate, před
+        // beforeSave: providery vidí nový stav i originál, import marker je
+        // ještě v datech. Výjimka providera = zápis selže (fail-closed).
+        try {
+            $this->enforceLock($doc, $data, $originalData, $forceUnlock, $validation);
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'TableGateway::saveDocument lock providers for table ' . $this->tableId);
+            return DocumentResult::error($e->getMessage());
+        }
+
         if (!$validation->isValid()) {
             return DocumentResult::validationFailed($validation);
         }
@@ -261,6 +336,24 @@ class TableGateway
 
         $doc = $this->registry->getDocument($this->tableId, $data);
         $this->injectDocServices($doc);
+
+        // Zamčený záznam nejde smazat — stejné providery jako u uložení,
+        // nad uloženým řádkem. Výjimka providera = mazání selže.
+        try {
+            $reasons = $this->lockRegistry()->hasProviders($this->tableId) && !$doc->isLockExempt($data)
+                ? $this->lockRegistry()->reasons($this->tableId, $data, $data)
+                : [];
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'TableGateway::deleteDocument lock providers for table ' . $this->tableId);
+            return DocumentResult::error($e->getMessage());
+        }
+        if ($reasons !== []) {
+            return DocumentResult::domainError(
+                DocumentLockRegistry::summarize($reasons),
+                DocumentLockRegistry::DOMAIN_CODE,
+            );
+        }
+
         $doc->beforeDelete($data);
 
         $this->beginTransaction();

@@ -19,7 +19,30 @@ class DocumentLoader
         $errors          = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 
-        return new DocumentRegistry(self::mergeDocumentClasses($resolvedModules));
+        return new DocumentRegistry(
+            self::mergeDocumentClasses($resolvedModules),
+            self::collectLockProviders($resolvedModules),
+        );
+    }
+
+    /**
+     * `documentLockProviders` všech resolvovaných modulů v pořadí resolve
+     * (#55 D24). Jedou na DocumentRegistry, aby každá TableGateway měla
+     * stejnou sadu providerů — bez dalšího zapojování na 15 místech
+     * konstrukce gatewaye (fail-closed by construction).
+     *
+     * @param array<int, ModuleDefinition> $modules
+     * @return list<array{table: string, class: string}>
+     */
+    public static function collectLockProviders(array $modules): array
+    {
+        $out = [];
+        foreach ($modules as $module) {
+            foreach ($module->documentLockProviders as $reg) {
+                $out[] = ['table' => $reg['table'], 'class' => $reg['class']];
+            }
+        }
+        return $out;
     }
 
     /**

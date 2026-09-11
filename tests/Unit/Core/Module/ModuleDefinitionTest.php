@@ -629,4 +629,40 @@ class ModuleDefinitionTest extends TestCase
             'navigationProviders' => [['klass' => 'Foo\\Bar']],
         ]);
     }
+
+    // ── documentLockProviders (#55 D24) ─────────────────────────────────────
+
+    public function testDocumentLockProvidersParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.vat',
+            'name' => 'VAT',
+            'documentLockProviders' => [
+                ['table' => 'docs_core_heads', 'class' => 'Foo\\VatPeriodLockProvider', 'extra' => 'ignored'],
+            ],
+        ]);
+
+        $this->assertSame(
+            [['table' => 'docs_core_heads', 'class' => 'Foo\\VatPeriodLockProvider']],
+            $def->documentLockProviders,
+        );
+    }
+
+    public function testDocumentLockProvidersAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'base.persons', 'name' => 'Persons']);
+
+        $this->assertSame([], $def->documentLockProviders);
+    }
+
+    public function testDocumentLockProvidersMissingTableThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("documentLockProviders[0] requires 'table' and 'class'");
+        ModuleDefinition::fromArray([
+            'id'   => 'economy.vat',
+            'name' => 'VAT',
+            'documentLockProviders' => [['class' => 'Foo\\Bar']],
+        ]);
+    }
 }

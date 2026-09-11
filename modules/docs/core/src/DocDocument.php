@@ -419,6 +419,18 @@ abstract class DocDocument extends Document
         }
     }
 
+    /**
+     * Import mód (#55 D26) zrcadlí doklad z cizího systému, needituje ho —
+     * zámek období (documentLockProviders) obchází. Tentýž marker čte
+     * beforeSave; tady je v `$data` ještě přítomný, protože gateway se ptá
+     * před ním. Přiřazení ukazatelů do zamčené instance handlerem
+     * (DocsHeadsVatPeriodHandler) import mód nijak neomezuje.
+     */
+    public function isLockExempt(array $data): bool
+    {
+        return is_array($data['_importNumber'] ?? null);
+    }
+
     public function beforeSave(array &$data, ?array $originalData = null): void
     {
         // Import mode marker — virtual field, must be consumed + removed before

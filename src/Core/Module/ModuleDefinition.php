@@ -29,6 +29,7 @@ class ModuleDefinition
         public readonly array $navigationProviders = [],
         public readonly array $reports = [],
         public readonly array $attachmentGuards = [],
+        public readonly array $documentLockProviders = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -191,6 +192,25 @@ class ModuleDefinition
             }
         }
 
+        // documentLockProviders — zámek záznamu cizí tabulky (#55 D24).
+        // Tvar {table, class}; třída implementuje DocumentLockProvider,
+        // registrace nese DocumentRegistry, ptá se TableGateway (save/delete),
+        // generické CRUD, nabídka přechodů a UI meta.
+        $documentLockProviders = [];
+        if (isset($data['documentLockProviders']) && is_array($data['documentLockProviders'])) {
+            foreach ($data['documentLockProviders'] as $idx => $reg) {
+                if (!is_array($reg)
+                    || !isset($reg['table']) || !is_string($reg['table']) || $reg['table'] === ''
+                    || !isset($reg['class']) || !is_string($reg['class']) || $reg['class'] === ''
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': documentLockProviders[{$idx}] requires 'table' and 'class'",
+                    );
+                }
+                $documentLockProviders[] = ['table' => $reg['table'], 'class' => $reg['class']];
+            }
+        }
+
         // journalEventHandlers — hooky na zápis účetního deníku (journalWritten
         // po commitu (pře)zápisu/vymazání). Mirror documentEventHandlers, ale
         // registrace je {class, events} bez `table` (události nejsou per-tabulka);
@@ -307,6 +327,7 @@ class ModuleDefinition
             navigationProviders: $navigationProviders,
             reports: $reports,
             attachmentGuards: $attachmentGuards,
+            documentLockProviders: $documentLockProviders,
         );
     }
 

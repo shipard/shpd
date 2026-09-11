@@ -10,6 +10,24 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocumentLockProvider;
+use Shipard\Core\Document\DocumentLockReason;
+use Shipard\Core\Document\DocumentLockRegistry;
+use Shipard\Core\Document\DocumentRegistry;
+
+/** Zámek podle sloupce `locked_flag` řádku (nový stav) nebo originálu. */
+final class CrudTestLockProvider implements DocumentLockProvider
+{
+	/** @var array<int, array{data: array<string, mixed>, original: ?array<string, mixed>}> */
+	public static array $calls = [];
+
+	public function lockReasons(string $tableId, array $data, ?array $original): array
+	{
+		self::$calls[] = ['data' => $data, 'original' => $original];
+		$locked = !empty($original['locked_flag']) || !empty($data['locked_flag']);
+		return $locked ? [new DocumentLockReason('test', 'Záznam je uzamčený')] : [];
+	}
+}
 
 /**
  * In-memory CrudController for testing.
@@ -73,6 +91,14 @@ class TestableCrudController extends CrudController
 	protected function deleteRecord(string $tableName, int $id): void
 	{
 		unset($this->store[$tableName][$id]);
+	}
+
+	/** Registry zámku bez DB (seam CrudController::lockRegistry). */
+	public ?DocumentLockRegistry $locks = null;
+
+	protected function lockRegistry(): DocumentLockRegistry
+	{
+		return $this->locks ?? new DocumentLockRegistry();
 	}
 
 	private function applyFilters(array $rows, array $filters): array
@@ -724,5 +750,99 @@ class CrudControllerTest extends TestCase
 
 		$this->assertSame(400, $this->getStatus($resp));
 		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
+	}
+
+	// -------------------------------------------------------------------------
+	// Zámek záznamu — documentLockProviders (#55 D24)
+	// -------------------------------------------------------------------------
+
+	private function lockedCtrl(): TestableCrudController
+	{
+		CrudTestLockProvider::$calls = [];
+		$tables = ['items' => $this->makeTable('items', [
+			['id' => 'locked_flag', 'name' => 'Locked', 'type' => 'boolean', 'default' => 0],
+		])];
+		$providers = [['table' => 'items', 'class' => CrudTestLockProvider::class]];
+		$c = new TestableCrudController(
+			$this->db,
+			$tables,
+			null,
+			new AuthContext(false),
+			new DocumentRegistry([], $providers),
+		);
+		$c->locks = new DocumentLockRegistry($providers);
+		$c->seed('items', [
+			['id' => 1, 'name' => 'Free',   'locked_flag' => 0],
+			['id' => 2, 'name' => 'Locked', 'locked_flag' => 1],
+		]);
+		return $c;
+	}
+
+	public function testUpdateOfLockedRecordReturns422DocumentLocked(): void
+	{
+		$ctrl = $this->lockedCtrl();
+		$resp = $ctrl->update('items', 2, $this->req('PUT', body: '{"name":"Changed"}'));
+
+		$this->assertSame(422, $this->getStatus($resp));
+		$this->assertSame('DOCUMENT_LOCKED', $resp->getPayload()['error']['code']);
+		$this->assertSame('Záznam je uzamčený', $resp->getPayload()['error']['message']);
+		$this->assertSame('test', $resp->getPayload()['error']['details'][0]['source']);
+		// Nic se nezapsalo.
+		$this->assertSame('Locked', $ctrl->show('items', 2, $this->req())->getPayload()['data']['name']);
+	}
+
+	public function testPatchIntoLockedStateIsBlockedByNewStateToo(): void
+	{
+		$ctrl = $this->lockedCtrl();
+		// Volný záznam, ale patch ho posouvá do zamčeného stavu — provider vidí
+		// nový stav (originál + patch), ne jen uložený řádek.
+		$resp = $ctrl->patch('items', 1, $this->req('PATCH', body: '{"locked_flag":true}'));
+
+		$this->assertSame(422, $this->getStatus($resp));
+		$this->assertSame('DOCUMENT_LOCKED', $resp->getPayload()['error']['code']);
+		$this->assertSame(0, CrudTestLockProvider::$calls[0]['original']['locked_flag']);
+		$this->assertTrue(CrudTestLockProvider::$calls[0]['data']['locked_flag']);
+	}
+
+	public function testPatchOfFreeRecordPasses(): void
+	{
+		$ctrl = $this->lockedCtrl();
+		$resp = $ctrl->patch('items', 1, $this->req('PATCH', body: '{"name":"Renamed"}'));
+
+		$this->assertSame(200, $this->getStatus($resp));
+		$this->assertSame('Renamed', $resp->getPayload()['data']['name']);
+		$this->assertCount(1, CrudTestLockProvider::$calls);
+	}
+
+	public function testDeleteOfLockedRecordReturns422(): void
+	{
+		$ctrl = $this->lockedCtrl();
+		$resp = $ctrl->delete('items', 2);
+
+		$this->assertSame(422, $this->getStatus($resp));
+		$this->assertSame('DOCUMENT_LOCKED', $resp->getPayload()['error']['code']);
+		$this->assertSame(200, $this->getStatus($ctrl->show('items', 2, $this->req())));
+	}
+
+	public function testDeleteOfFreeRecordPasses(): void
+	{
+		$ctrl = $this->lockedCtrl();
+		$resp = $ctrl->delete('items', 1);
+
+		$this->assertSame(204, $this->getStatus($resp));
+	}
+
+	public function testTableWithoutProvidersNeverAsksRegistry(): void
+	{
+		CrudTestLockProvider::$calls = [];
+		$tables = ['items' => $this->makeTable('items')];
+		$c = new TestableCrudController($this->db, $tables, null, new AuthContext(false), new DocumentRegistry());
+		$c->locks = new DocumentLockRegistry([['table' => 'items', 'class' => CrudTestLockProvider::class]]);
+		$c->seed('items', [['id' => 1, 'name' => 'A']]);
+
+		$resp = $c->patch('items', 1, $this->req('PATCH', body: '{"name":"B"}'));
+
+		$this->assertSame(200, $this->getStatus($resp));
+		$this->assertSame([], CrudTestLockProvider::$calls);
 	}
 }

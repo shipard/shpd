@@ -836,7 +836,7 @@ class FormController
         $transitions = $cfg->getAvailableTransitions($currentState);
         if ($table !== '' && $documentRegistry !== null && $db !== null) {
             $transitions = \Shipard\Core\Document\DocStateTransitionFilter::apply(
-                $table, $data, $transitions, $documentRegistry, $db->getDibiConnection(),
+                $table, $data, $transitions, $documentRegistry, $db->getDibiConnection(), $config,
             );
         }
 

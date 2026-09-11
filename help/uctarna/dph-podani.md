@@ -2,7 +2,7 @@
 title: Podání DPH
 summary: Jak z živého výpočtu udělat podání, vyrobit soubor pro daňový portál a mít trvalý záznam toho, co jsi za období odevzdal.
 keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál, soubor pro EPO, vytvořit soubory, opis přiznání, obsah podání, hlavička podání, načíst hlavičku z profilu, elektronické podání]
-related: [uctarna/dph-zive-vystupy.md, co-dnes-nejde.md]
+related: [uctarna/dph-zive-vystupy.md, uctarna/uzamceni-obdobi.md, co-dnes-nejde.md]
 ---
 
 # Podání DPH
@@ -166,10 +166,10 @@ dodatečné přiznání vychází právě takhle.
 - **Když má doklad kód DPH, který Shipard neumí zařadit do výstupu**,
   sestavení se zastaví s chybou. Je to schválně: z podání nesmí nic tiše
   vypadnout. Oprav kód na dokladu a zkus to znovu.
-- **Období se podáním nezamkne.** Nic tě dnes nezastaví, když do už
-  podaného období dopíšeš doklad — uvidíš to pak v Rozdílech dalšího
-  podání. Zámek přijde později, viz
-  [Co Shipard dnes neumí](../co-dnes-nejde.md).
+- **Období se podáním nezamkne samo.** Po podání klikni v detailu podání
+  na **Uzamknout tvrzení** — od té chvíle doklady s DPH za to období
+  nejde měnit ani do něj dopisovat. Když na to zapomeneš, Shipard ti to
+  za tři dny připomene. Podrobně [Uzamčení období](uzamceni-obdobi.md).
 - **Soubor Shipard nikam neodešle.** Vyrobí ho a uloží k podání; na
   daňový portál nebo do datové schránky ho odesíláš ty.
 - **Soubor je snímek okamžiku sestavení.** Když se doklady později změní,
@@ -179,4 +179,5 @@ dodatečné přiznání vychází právě takhle.
 ## Souvisí
 
 - [Živé výstupy DPH](dph-zive-vystupy.md)
+- [Uzamčení období](uzamceni-obdobi.md)
 - [Co Shipard dnes neumí](../co-dnes-nejde.md)

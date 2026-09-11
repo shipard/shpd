@@ -1,6 +1,9 @@
 # Task: Zámek období — instance tvrzení DPH a fiskální měsíc, lock providery, kontrola zůstatků 343 (M1 Fáze 4a) — #55 D23–D27, D31
 
-**Stav:** k implementaci — 2026-09-11
+**Stav:** částečně — shpd hotové 2026-09-11 (6 commitů: jádro lock providerů, zámek instance,
+zámek měsíce, kontroly + alerty, UI/endpointy/CLI, dokumentace + help), `ds-upgrade` na 4l3j,
+smoke přes HTTP i CLI prošel. Zbývá `ds-upgrade` + proklik na alfě a reimport zdroje 689089
+po `old_shipard` tasku 36 (zámek importovaných instancí) — poslední bod „Hotovo když"
 **Issue:** #55 — komentář „Fáze 4 — Zámek a zaúčtování: rozhodnutí D23–D31 (2026-09-11)"
 **Návaznost:** staví na instancích tvrzení (`economy_vat_report_periods`,
 `tasks/vat-report-periods.md`), podáních (`economy_vat_filings`, `tasks/vat-filings.md`)
@@ -323,23 +326,76 @@ v import módu) do zamčené instance projde.
 
 ## Hotovo když
 
-- [ ] Testy zelené (registry, DocDocument lock, oba providery, recalculator,
-      kontroly).
-- [ ] `ds-upgrade` na dev DS projde (sloupce na instancích a měsících).
-- [ ] Dev DS 4l3j: zamčená instance `return` → doklad s DPH z ní nejde uložit,
-      opravit (40→80), stornovat ani smazat; formulář ukáže banner; přechody
-      v detailu chybí. Bezdaňový pokladní doklad ve stejném období jde uložit.
-      Nový doklad s DUZP v zamčeném rozsahu se neuloží a **nevznikne** koncept
-      instance.
-- [ ] Zamčený fiskální měsíc blokuje libovolný doklad (i koncept, i bezdaňový)
-      s `accounting_date` v měsíci; při zamykání měsíce s nenulovými 343 přijde warning.
-- [ ] Alerty: podaná instance bez zámku → `filed_unlocked_periods`; podaná instance
+- [x] Testy zelené (registry, gateway, filtr přechodů, CRUD guard, oba providery,
+      recalculator, kontroly, LockStamp) — Unit 5985 testů, integrační
+      `ClosedPeriodBalanceServiceTest` na 4l3j.
+- [x] `ds-upgrade` na dev DS projde (sloupce na instancích a měsících, indexy ukazatelů).
+- [x] Dev DS 4l3j (smoke 2026-09-11, KH 07/2026 zamčené přes endpoint): doklad s DPH
+      z instance nešel uložit přes formulář (`_form` `locked`), přechod 40→80 přes
+      form save ani CRUD PATCH (`DOCUMENT_LOCKED`), `doc-state-options` prázdné,
+      form meta `read_only` + `lock`, detail vieweru bez Otevřít; doklad z jiného
+      KH volný. Bezdaňový doklad a nový doklad do zamčeného rozsahu ověřeny
+      unit testy providera (find-only lookup, žádný koncept).
+- [x] Zamčený fiskální měsíc blokuje libovolný doklad (i koncept, i bezdaňový)
+      s `accounting_date` v měsíci; při zamykání měsíce s nenulovými 343 přijde
+      warning (unit testy providera a `FiscalMonthDocument`).
+- [x] Alerty: podaná instance bez zámku → `filed_unlocked_periods`; podaná instance
       bez zaúčtování → `closed_period_balance` per 343 analytika (F4b ho zhasne).
-- [ ] `reaccount` zamčeného dokladu odmítne; CLI s `--force` projde a zaloguje.
+- [x] `reaccount` zamčeného dokladu odmítne (HTTP 422); CLI `doc-reaccount --force`
+      projde a zaloguje (smoke na 4l3j).
 - [ ] Po reimportu zdroje 689089 s `old_shipard` taskem 36: instance kryté starým
       stavem 9000 mají `locked = 1`, import dokladů do nich prošel.
-- [ ] Dokumentace dle §7.
+- [x] Dokumentace dle §7 + help `uctarna/uzamceni-obdobi.md`.
 
 ## Odchylky od zadání
 
-(doplní implementace)
+Odsouhlaseno před implementací (plán 2026-09-11):
+
+- **Registry providerů nejede konstruktorem `TableGateway`, ale na
+  `DocumentRegistry`** (`DocumentLoader::load()` ji plní). Gateway má 15 míst
+  konstrukce, registr dokumentů 5 — zámek je tak fail-closed i v exchange
+  applieru (AI extrakce z pošty bez import módu) a v CLI.
+- **Vynucení dělá `TableGateway`, ne `DocDocument::validate`**: po
+  `validate()`, před `beforeSave()`, pro každou tabulku s providery.
+  `Document` má jen hook `isLockExempt()` (DocDocument → `_importNumber`);
+  `DocStateTransitionFilter` vrací zamčenému záznamu prázdnou nabídku
+  generically. Zámek tak funguje pro libovolnou tabulku bez znalosti
+  v Document třídě.
+- **Guard i v generickém REST CRUD** (`CrudController` update/patch/delete)
+  — přímý UPDATE/DELETE Document hooky obchází, bez guardu by zámek obešel
+  `PATCH /api/v1/docs_core_heads/{id}`. `deleteDocument()` gateway nemá
+  produkčního volajícího (mazání = přechod do 90), guard tam je pro
+  úplnost.
+- **`_forceUnlock` z HTTP nepřijde** už dnes — allow-listy
+  `FormController`/`CrudController` neznámé klíče zahazují; žádné explicitní
+  strhávání, jen test. Gateway marker strhne před SQL a zaloguje `warn`
+  (`ErrorLogger` level `notice` nemá).
+- **`locked_by` přes request-scoped `Core\Auth\CurrentUser`** (statický
+  držák, nastavuje `index.php` po autentizaci) — Document jinak uživatele
+  nezná. Sdílený `LockStamp::apply()` pro obě zamykatelné tabulky. Strojový
+  kontext nechává `locked_at/by` NULL → „Uzamčeno (import)".
+- **Checkbox „zároveň uzamknout" u přechodu 10→40 není** — přechodový dialog
+  volitelná pole neumí; zůstala akce **Uzamknout tvrzení** na podaném podání
+  (dle upřesnění D25).
+- **Zámek měsíce přes formulář měsíce** (checkbox `locked` v sub-tabulce
+  fiskálního roku) místo per-řádkových akcí v detailu a endpointu
+  `/_codebooks/fiscal-month-lock` — statická tabulka detailu per-řádkové
+  akce neumí, nový UI primitiv nevznikl. Detail roku má sloupec **Zámek**,
+  varování ze zůstatků 343 se ukáže v existujícím warning banneru formuláře.
+- **Varování při zamykání měsíce = měkká vazba codebooks → vat** přes
+  přítomnost tabulky `economy_vat_report_periods` (vzor `FeedCollector`);
+  `economy.codebooks` na `economy.vat` nezávisí.
+- **Guard přeúčtování jen v `AccountingController` a CLI**, ne v
+  `AccountingEngine` — engine běží i při přechodu do 40 v import módu.
+  Přeúčtovací CLI neexistovalo, vznikl nový `doc-reaccount <docId> [--force]`.
+- Čistá třída kontroly zůstatků se jmenuje `ClosedPeriodBalanceService`
+  (alertová obálka `Checks\ClosedPeriodBalanceCheck` dle zadání) — dvě
+  třídy téhož jména by mátly.
+- Alerty mají `interval: "1d"` (schéma alertů nemá „denně"); akce alertů
+  otevírají detail tvrzení (`open_viewer`), ne formulář.
+- Extension `docs_core_heads` dostala indexy `idx_vat_period` /
+  `idx_cs_period` / `idx_rs_period` — kontrola zůstatků, přepočet i guardy
+  instance filtrují per instance.
+- `willHaveVatRecap()` je statické pravidlo v `DocDocument` použité
+  providerem; `beforeSave` ho nevolá (staví rekapitulaci s částkami), shodu
+  hlídá dokumentace u obou metod + `DocDocumentWillHaveVatRecapTest`.

@@ -1,6 +1,6 @@
 # Task: Zaúčtování přiznání DPH — účetní doklad per podání, správce daně, akce Zaúčtovat (M1 Fáze 4b) — #55 D28–D31
 
-**Stav:** k implementaci po F4a — 2026-09-11
+**Stav:** naplánováno — k implementaci po F4a (`vat-period-lock.md`), 2026-09-11
 **Issue:** #55 — komentář „Fáze 4 — Zámek a zaúčtování: rozhodnutí D23–D31 (2026-09-11)"
 **Návaznost:** staví na podáních a jejich snapshotu (`economy_vat_filings`,
 `economy_vat_filing_items`, `economy_vat_filing_return_rows` — `tasks/vat-filings.md`),

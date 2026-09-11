@@ -61,7 +61,7 @@ class FiscalMonthLockProvider extends AbstractDocumentLockProvider
                 source: self::SOURCE,
                 title: "Fiskální měsíc {$label} je uzamčený",
                 message: 'Doklad má účetní datum v uzamčeném fiskálním měsíci — uložení, oprava, storno'
-                    . ' i smazání vyžadují jeho odemknutí (Fiskální roky → Měsíce).',
+                    . ' i smazání vyžadují jeho odemknutí (Fiskální období → Měsíce).',
                 subjectTableId: self::SUBJECT_TABLE_ID,
                 subjectRowId: $monthId,
                 params: ['year' => (int) $month['calendar_year'], 'month' => (int) $month['calendar_month'], 'label' => $label],

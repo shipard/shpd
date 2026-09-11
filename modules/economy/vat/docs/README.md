@@ -446,6 +446,70 @@ na něm staví — porovnává vygenerované soubory s podanými, které leží
 v `tests/Fixtures/vat-xml/689089/`; jeho tolerance proti starému podání
 (sloučený odpočet, bez ř. 52, bez `id_dats`) popisuje README fixtur.
 
+## Zámek instance a kontrola zůstatků (Fáze 4a, D23–D27, D31)
+
+Po podání musí být obsah období **neměnný**. Zámek žije na instanci
+tvrzení (`economy_vat_report_periods.locked` + `locked_at` / `locked_by`),
+vynucuje ho obecný mechanismus lock providerů v jádru
+(`documentLockProviders`, `docs/document-system.md` §16).
+
+### Co je zamčené (D23)
+
+`VatPeriodLockProvider` (registrace v `module.jsonc` pro `docs_core_heads`):
+doklad je zamčený, když má **neprázdnou rekapitulaci DPH v původním nebo
+novém stavu** a **kterýkoli** ze tří ukazatelů (`vat_period` / `cs_period` /
+`rs_period`, původní i nový) míří na zamčenou instanci. „Kterýkoli" kvůli
+měsíčnímu KH čtvrtletního plátce; „podle obsahu DPH" kvůli pokladním
+převodům bez DPH — ty patří pod zámek fiskálního měsíce.
+
+- Původní strana = uložený řádek + `docs_core_vat_recap`. Nová strana =
+  `DocDocument::willHaveVatRecap()` (čisté pravidlo zrcadlící
+  `buildVatRecapitulation` / `useDeclaredRecap`) a ukazatele stejným
+  pravidlem jako `DocsHeadsVatPeriodHandler` (ruční přepis, jinak
+  `VatPeriodAssigner::compute`), ale s **find-only** lookupem — validace
+  nikdy nezaloží koncept instance.
+- Blokuje se každý zápis vč. přechodů 40→80/30/90, tvrdé smazání, vznik
+  nového dokladu do zamčeného rozsahu, ruční přesun ukazatele do/ze zamčené
+  instance a přeúčtování. Přílohy zůstávají volné. Bez registrace, DUZP nebo
+  rekapitulace je doklad volný.
+- Import mód (`_importNumber`) providery nevolá (D26) — `DocsHeadsVatPeriodHandler`
+  přiřadí importovaný doklad i do zamčené instance.
+
+### Lifecycle zámku (D25)
+
+- Akce **Uzamknout** / **Odemknout** (s potvrzením) v detailu instance
+  (`ReportPeriodsViewer`), **Uzamknout tvrzení** v detailu podaného podání
+  (`FilingsViewer`) — „jeden klik po podání"; přechodový dialog volitelná
+  pole neumí, checkbox u 10→40 proto není. Endpoint
+  `POST /_vat/report-period-lock {periodId, locked}` ukládá přes
+  `TableGateway` + `ReportPeriodDocument` (stejné guardy jako formulář).
+  Checkbox `locked` ve formuláři instance funguje také.
+- `ReportPeriodDocument`: zamčená instance povolí jen přepnutí `locked`
+  a `name`; změna rozsahu, stavu, registrace nebo typu = chyba `locked`.
+  Zrušit ji nelze; sestavit nad ní podání **lze**. `locked_at`/`locked_by`
+  stampuje `LockStamp` z `CurrentUser` (strojový kontext → NULL, UI
+  „Uzamčeno (import)").
+- „Podáno" samo nezamyká (D18). Alert `economy.vat.filed_unlocked_periods`
+  (denně): podané řádné přiznání starší 3 dnů bez zámku.
+- `VatPeriodRecalculator` (D26): plán změn ukazatelů se ověří proti
+  `locked` dotčených instancí (odkud i kam); kolize = `DomainException`
+  s výčtem dokladů → uložení sousední instance se odroluje.
+
+### Kontrola zůstatků 343 (D31)
+
+`ClosedPeriodBalanceService`: pro instanci `return` s podaným podáním
+Σ deníku na `343%` (mimo 343801/343802) přes doklady instance
+(`vat_period`, `docState != 90`) per analytika; nenulové (|Σ| > 0,005) =
+nález. Konzumenti: alert `economy.vat.closed_period_balance` (denně,
+finding per instance × účet, akce otevřít tvrzení), sekce **Zůstatky DPH**
+v detailu instance, varování `FiscalMonthDocument` při zamykání měsíce
+(instance končící v měsíci). Do F4b (`tasks/vat-filing-accounting.md`)
+hlásí všechny podané instance s DPH — to je očekávané; F4b přidá do
+množiny účetní doklady podání (`acc_document`) a kontrolu „zhasne".
+
+Extension `docs_core_heads` dostala indexy `idx_vat_period` /
+`idx_cs_period` / `idx_rs_period`.
+
 ## Architektura
 
 ```

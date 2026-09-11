@@ -713,6 +713,11 @@ API volání: saveDocument({customer_id: 42, rows: [...]})
 │
 ├─ 2. document.validate(data)
 │     → ValidationResult
+│
+├─ 2b. zámek záznamu (documentLockProviders, sekce 16): providery tabulky
+│      nad (data, originál) — každý důvod = chyba `_form` s kódem `locked`;
+│      document.isLockExempt(data) (import mód) providery nevolá,
+│      `_forceUnlock` (jen CLI) pustí a zaloguje warn
 │     → pokud chyby → return DocumentResult::validationFailed(...)
 │
 ├─ 3. document.beforeSave(data)
@@ -830,3 +835,91 @@ Viz sekce 6. Přidává se do definice tabulky (`.jsonc`).
 Tyto změny je nutné promítnout do:
 - `ModuleDefinition.php` — nové pole `documentClasses`
 - `TableDefinition.php` — nové pole `childTables`
+
+---
+
+## 16. Zámek záznamu — `documentLockProviders` (#55 D24)
+
+Obecný mechanismus „záznam je uzamčený": modul, který o zámku rozhoduje,
+dodá **provider**, jádro ho vynucuje na všech zápisových cestách a posílá
+důvody do UI. `docs.core` o DPH ani fiskálních měsících neví — providery
+dodávají `economy.vat` (`VatPeriodLockProvider`, zamčená instance tvrzení)
+a `economy.codebooks` (`FiscalMonthLockProvider`, zamčený fiskální měsíc).
+
+### Rozhraní a registrace
+
+```php
+interface DocumentLockProvider
+{
+    /** @return list<DocumentLockReason> prázdné = volný */
+    public function lockReasons(string $tableId, array $data, ?array $original): array;
+}
+```
+
+- `$data` = nový stav záznamu (s injektovaným efektivním `docState`,
+  child sety z payloadu), `$original` = uložený řádek s child sety, null
+  u insertu. Provider rozhoduje sám, co je pro něj „obsah" (DPH provider
+  kouká na rekapitulaci a ukazatele, měsíční na `fiscal_month`).
+- `DocumentLockReason` (readonly VO): `source` (`vat_period` |
+  `fiscal_month` | …), `title` (věta pro uživatele), `message`,
+  `subjectTableId`/`subjectRowId` (zamykající entita), `params` (pro
+  lokalizaci na klientu), `unlockAction` (rezervováno pro průvodce
+  odemknutím). `AbstractDocumentLockProvider` dává settery `db`/`config`/
+  `dsConfig` jako u handlerů.
+- Registrace v `module.jsonc`: `documentLockProviders: [{table, class}]`.
+  `DocumentLoader::load()` je sebere ze všech resolvovaných modulů a
+  **připojí k `DocumentRegistry`** (`getLockProviders()`,
+  `hasLockProviders(table)`) — každá `TableGateway` tak má stejnou sadu
+  providerů bez zapojování na místech konstrukce (fail-closed by
+  construction; 15 call sites gatewaye vs. 5 konstrukce registru).
+- `DocumentLockRegistry::forDocuments($documents, $db, $config, $dsConfig)`
+  staví instance providerů (lazy, jedna per třída) s DB a konfigurací
+  volajícího; `reasons()` sjednotí důvody všech providerů tabulky
+  v pořadí registrace, `describe($table, $row)` vrací UI kontrakt.
+
+### Kde se zámek vynucuje
+
+| Cesta | Chování |
+|---|---|
+| `TableGateway::saveDocument` | po `validate()`, před `beforeSave()`: každý důvod = `addError('_form', title, 'locked')` → 422 `VALIDATION_ERROR`. Výjimka providera = zápis selže (`DocumentResult::error`) — nikdy tiché povolení |
+| `TableGateway::deleteDocument` | důvody nad uloženým řádkem → `DocumentResult::domainError(…, 'DOCUMENT_LOCKED')` před `beforeDelete` |
+| přechody stavů | tabulky se `stateTransitionsRunDocumentHooks` jdou přes `saveDocument` → totéž; `DocStateTransitionFilter` zamčenému záznamu vrátí **prázdnou** nabídku přechodů |
+| `CrudController` update/patch/delete | generické REST píše mimo gateway (přímý UPDATE/DELETE) → vlastní guard: důvody nad (řádek ⊕ patch, řádek) → 422 `DOCUMENT_LOCKED` s `details` |
+| `AccountingController::reaccount` | zamčený doklad → 422 `DOCUMENT_LOCKED`; deník je derivát dokladu |
+
+Import mód (`Document::isLockExempt($data)`, `DocDocument` → payload
+s `_importNumber`) providery **nevolá** — import zrcadlí cizí systém,
+needituje ho (D26). Virtuální klíč `_forceUnlock: true` zámek pustí a
+zaloguje `warn` (`document lock bypassed by force`); z HTTP nikdy nepřijde,
+allow-listy `FormController`/`CrudController` neznámé klíče zahazují.
+Gateway ho z dat strhne před SQL. Jediný CLI konzument je
+`shpd-ds doc-reaccount --force` (ten ale přes gateway nejde — guard
+obchází přímo a loguje sám).
+
+### UI kontrakt
+
+`GET /_ui/form/{table}/meta/{id}` → `doc_states.lock = {locked, reasons:
+[{source, title, message, params, subjectTableId, subjectRowId}]}` a
+`read_only = true`, když je zamčeno; `transitions` prázdné.
+`GET /_ui/viewer/{id}/detail/{recordId}` → `detail.lock` stejného tvaru a
+toolbar bez akce `edit`. Klient (`DocumentLockBanner.svelte`, sdílí
+FormEditor i ViewerDetail) lokalizuje důvody podle `source` + `params`
+(`lock.source.*`, `lock.message.*` v `i18n`), neznámý zdroj spadne na text
+ze serveru. Nový záznam do zamčeného období odmítne až save — meta zámek
+nemá (žádný `id`).
+
+### Zamykatelné entity
+
+Jednotný tvar: `locked` (boolean) + `locked_at` (datetime, nullable,
+system) + `locked_by` (int → `core_system_users`, nullable, system).
+`LockStamp::apply()` v `beforeSave` zamykatelné tabulky vyplní čas a
+uživatele z request-scoped `Core\Auth\CurrentUser` (nastavuje
+`public/index.php` po autentizaci; CLI/import = null → pole zůstanou NULL,
+UI ukáže „Uzamčeno (import)") a při odemknutí je vymaže. Dnes: instance
+tvrzení DPH (`economy_vat_report_periods`), fiskální měsíc
+(`economy_codebooks_fiscal_months`).
+
+Testy: `tests/Unit/Core/Document/DocumentLockRegistryTest`,
+`TableGatewayTest` (sekce zámek), `DocStateTransitionFilterTest`,
+`LockStampTest`, `tests/Unit/Api/Controller/CrudControllerTest` (guard),
+providery v `tests/Unit/Module/Economy/{Vat,Codebooks}`.

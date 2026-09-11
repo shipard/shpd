@@ -100,7 +100,7 @@ export default {
   'lock.source.vat_period': '{type, select, return {VAT return} cs {Control statement} rs {Recapitulative statement} other {Report period}} {name} is locked',
   'lock.message.vat_period': 'The document belongs to a locked VAT report period. Unlock the period first (Report periods → Unlock).',
   'lock.source.fiscal_month': 'Fiscal month {label} is locked',
-  'lock.message.fiscal_month': 'The document is dated within a locked fiscal month. Unlock the month first (Fiscal years → Months).',
+  'lock.message.fiscal_month': 'The document is dated within a locked fiscal month. Unlock the month first (Fiscal periods → Months).',
   'error.DOCUMENT_LOCKED': 'The record is locked',
   'app.selectMenuItem': 'Select an item from the menu',
   'app.unsupportedPanel': 'Unsupported panel type: {type}',

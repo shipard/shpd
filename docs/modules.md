@@ -370,6 +370,9 @@ ID modulu přímo odpovídá cestě v souborovém systému:
 | `attachmentGuards` | object[] | Ne | Ne | Ochrana příloh záznamu před změnou (viz níže) |
 | `attachmentGuards[].table` | string | Ano | Ne | ID cílové tabulky |
 | `attachmentGuards[].class` | string | Ano | Ne | FQCN guardu (implements `AttachmentGuard`) |
+| `documentLockProviders` | object[] | Ne | Ne | Zámek záznamů cizí tabulky — providery důvodů (viz níže) |
+| `documentLockProviders[].table` | string | Ano | Ne | ID cílové tabulky |
+| `documentLockProviders[].class` | string | Ano | Ne | FQCN providera (implements `DocumentLockProvider`) |
 
 ### Pole `attachmentGuards`
 
@@ -395,6 +398,35 @@ bez omezení (migrace, úklid).
     }
 ]
 ```
+
+
+### Pole `documentLockProviders`
+
+Zámek záznamů **cizí** tabulky (#55 D24): modul dodá provider důvodů, proč
+záznam nejde uložit, změnit stav ani smazat, a jádro ho vynucuje ve všech
+zápisových cestách (`TableGateway`, generické CRUD, nabídka přechodů,
+přeúčtování) a posílá důvody do UI (banner, read-only formulář). Registrace
+se čtou za běhu (`DocumentLoader` → `DocumentRegistry::getLockProviders()`),
+instance staví `DocumentLockRegistry`. Vlastník tabulky na modulu
+s providerem nezávisí — `docs.core` o DPH ani fiskálních měsících neví.
+
+```jsonc
+"documentLockProviders": [
+    {
+        "table": "docs_core_heads",
+        "class": "Shipard\\Module\\Economy\\Vat\\VatPeriodLockProvider"
+    }
+]
+```
+
+Provider implementuje `Shipard\Core\Document\DocumentLockProvider`
+(`lockReasons(string $tableId, array $data, ?array $original): list<DocumentLockReason>`),
+typicky dědí z `AbstractDocumentLockProvider` (settery `db`/`config`/
+`dsConfig`). Výjimka providera zápis **odmítne** (fail-closed). Import mód
+(`Document::isLockExempt`) providery nevolá. Dnešní providery:
+`economy.vat` → `VatPeriodLockProvider` (zamčená instance tvrzení),
+`economy.codebooks` → `FiscalMonthLockProvider` (zamčený fiskální měsíc).
+Detaily: `docs/document-system.md` sekce 16.
 
 ### Pole `documentEventHandlers`
 

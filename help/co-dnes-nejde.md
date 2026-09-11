@@ -33,9 +33,13 @@ zboží (§ 90), oprava u nedobytné pohledávky (§ 46) a poměrný nárok na
 odpočet (§ 75) se v kontrolním hlášení vyplní jako „běžné plnění" bez
 příznaku. Když je používáš, soubor před odevzdáním zkontroluj.
 
-**Období DPH se nedá uzamknout.** Nic tě dnes nezastaví, když do už
-odevzdaného období dopíšeš doklad — uvidíš to pak jako rozdíl v dalším
-podání, ale zabráněno tomu není.
+**Zámek období je ruční a po měsících.** Podané tvrzení ani fiskální měsíc
+se nezamknou samy — klikneš **Uzamknout tvrzení** u podání, nebo zaškrtneš
+**Uzamčeno** u měsíce (viz [Uzamčení období](uctarna/uzamceni-obdobi.md)).
+Zaškrtnutí **Uzamčeno** u celého fiskálního roku doklady zatím neblokuje,
+přehled zámků přes celý rok (rok × měsíc) neexistuje a ze zamčeného dokladu
+se k odemknutí musíš proklikat sám. Přeúčtovat zamčený doklad umí jen
+správce z konzole.
 
 **Roční vypořádání koeficientu odpočtu (řádek 53) a úpravu odpočtu
 (řádek 60) živé přiznání nespočítá.** Krácený odpočet přes zálohový

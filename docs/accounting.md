@@ -854,6 +854,22 @@ budoucí bankovní výpisy). Místo toho:
 | účet dle masky existuje v rozvrhu | účtování | měkká |
 | MD = DAL, neprázdný deník | účtování | měkká |
 
+### 7.6 Přegenerování deníku vs. zámek období (#55 D27)
+
+Deník je **derivát dokladu** — bez změny dokladu se přegenerováním nesmí
+změnit. Zamčený doklad (`documentLockProviders`: zamčená instance tvrzení
+DPH nebo zamčený fiskální měsíc, `docs/document-system.md` §16) proto
+`POST /_accounting/reaccount` odmítne 422 `DOCUMENT_LOCKED` s výčtem
+důvodů. Účtování při přechodu do 40 (`DocsHeadsEventHandler`) guard nemá —
+uložení zamčeného dokladu odmítne už gateway, a import mód (zámek obchází)
+musí účtovat dál.
+
+Vědomé obejití má jen CLI: `shpd-ds doc-reaccount <docId> --force`
+přeúčtuje i zamčený doklad a použití zaloguje (`warn`,
+`document lock bypassed by force (doc-reaccount)`). Slouží k opravě rozvrhu
+nebo předpisu nad uzavřeným obdobím — výsledek je stále jen derivát téhož
+dokladu.
+
 ---
 
 ## 8. Měny a přepočty

@@ -595,6 +595,22 @@ HTTP: `suspended` / maintenance / `pending_deletion` → 503 `DS_UNAVAILABLE`
 stav řídit hosting (`hosting-sync`, fáze 3); lokální CLI je pro nehostované
 DS a nouzové zásahy.
 
+#### `doc-reaccount <docId> [--force]`
+
+```bash
+cd /opt/shipard/data-sources/<id>
+shpd-ds doc-reaccount 4711            # přegeneruje deník dokladu ve stavu 40
+shpd-ds doc-reaccount 4711 --force    # i přes zámek období — zaloguje se
+```
+
+Totéž co `POST /_accounting/reaccount` (akce **Přeúčtovat** v detailu
+dokladu). Doklad mimo stav 40 → FAILURE. Zamčený doklad (zamčená instance
+tvrzení DPH nebo fiskální měsíc, `documentLockProviders`) příkaz odmítne
+s výčtem důvodů; `--force` zámek vědomě obejde a zapíše `warn` do
+`shipard.log` (`document lock bypassed by force (doc-reaccount)`). Deník je
+derivát dokladu — force slouží k opravě rozvrhu nebo předpisu nad uzavřeným
+obdobím, obsah dokladu se nemění. Viz [accounting.md](accounting.md) §7.6.
+
 ### Users
 
 #### `user-create`

@@ -79,6 +79,7 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | [Podání DPH](uctarna/dph-podani.md) | Jak z živého výpočtu udělat podání, vyrobit soubor pro daňový portál a mít trvalý záznam toho, co jsi za období odevzdal. |
 | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) | Jak si přečíst živé přiznání k DPH, kontrolní hlášení a souhrnné hlášení za zvolené období a co znamenají upozornění pod tabulkou. |
 | [Když se doklad nezaúčtuje](uctarna/kdyz-se-doklad-nezauctuje.md) | Co znamenají hlášky u chyby účtování, kde se která spravuje a proč doklad nemusíš rozebírat. |
+| [Uzamčení období](uctarna/uzamceni-obdobi.md) | Jak po podání DPH uzamknout tvrzení nebo celý fiskální měsíc, co zámek zastaví, jak vypadá zamčený doklad a jak zámek zase sundat. |
 
 <!-- OBSAH:END -->
 

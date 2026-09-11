@@ -109,7 +109,7 @@ export default {
   'lock.source.vat_period': '{type, select, return {Přiznání k DPH} cs {Kontrolní hlášení} rs {Souhrnné hlášení} other {Tvrzení}} {name} je uzamčené',
   'lock.message.vat_period': 'Doklad spadá do uzamčeného tvrzení DPH. Změna vyžaduje odemknutí tvrzení (Daňová tvrzení → Odemknout).',
   'lock.source.fiscal_month': 'Fiskální měsíc {label} je uzamčený',
-  'lock.message.fiscal_month': 'Doklad má účetní datum v uzamčeném fiskálním měsíci. Změna vyžaduje odemknutí měsíce (Fiskální roky → Měsíce).',
+  'lock.message.fiscal_month': 'Doklad má účetní datum v uzamčeném fiskálním měsíci. Změna vyžaduje odemknutí měsíce (Fiskální období → Měsíce).',
   'error.DOCUMENT_LOCKED': 'Záznam je uzamčený',
   'app.selectMenuItem': 'Vyberte položku v menu',
   'app.unsupportedPanel': 'Nepodporovaný typ panelu: {type}',

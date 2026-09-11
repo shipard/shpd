@@ -120,11 +120,32 @@ rok a měsíc z `date_begin`. Ve formu jsou readOnly.
 
 ## Dělení dokladů
 
-Až se začne dělat dokladový systém, každý doklad podle účetního data
-„spadne" do konkrétního fiskálního roku a měsíce — proto jsou tyto
-tabulky posledním číselníkem před spuštěním dokladové fáze. Samotné
-mapování doklad → fiskální období a validace `locked = true` přijde
-s dokladovým modulem.
+Každý doklad podle účetního data „spadne" do konkrétního fiskálního roku
+a měsíce (`docs_core_heads.fiscal_year` / `fiscal_month`, dopočítává
+`DocDocument::resolveAccountingPeriods`). Měsíc hledá sdílený
+`FiscalMonthLookup::monthIdForDate()` — jen běžné měsíce (`period_type`
+1); tentýž dotaz používá zámek měsíce pro nový stav dokladu, aby se
+pravidlo nerozjelo.
+
+## Zámek fiskálního měsíce (#55 D27)
+
+`economy_codebooks_fiscal_months.locked` (+ `locked_at`, `locked_by`, stejný
+tvar jako instance tvrzení DPH) přepíná uživatel ve formuláři měsíce
+(sub-tabulka fiskálního roku, checkbox **Uzamčeno**); detail roku ukazuje
+sloupec **Zámek**. Zamknout lze jen běžný měsíc. `FiscalMonthLockProvider`
+(registrace `documentLockProviders` pro `docs_core_heads`) blokuje
+**každý** doklad, jehož původní `fiscal_month` nebo nový měsíc
+z `accounting_date` míří na zamčený měsíc — bez ohledu na obsah a stav,
+koncepty i bezdaňové převody včetně. Vynucení a UI kontrakt jsou věcí jádra
+(`docs/document-system.md` §16). Zamčený měsíc nemění rozsah, typ ani rok.
+
+Při zamykání `FiscalMonthDocument` **varuje** (neblokuje), když kontrola
+zůstatků 343 (`economy.vat`, `ClosedPeriodBalanceService`) najde za podané
+přiznání končící v měsíci nevypořádanou DPH — vazba je měkká přes
+přítomnost tabulky instancí, codebooks na vat nezávisí.
+
+Roční `economy_codebooks_fiscal_years.locked` se **nevynucuje** — sémantika
+uzavřeného roku přijde s uzávěrkou.
 
 ## Registrace DPH a období DPH
 

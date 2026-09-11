@@ -1,9 +1,11 @@
 # Task: Podání DPH — XML pro EPO (DPHDP3 / DPHKH1 / DPHSHV), hlavička, PDF opis (M1 Fáze 3) — #55
 
-**Stav:** částečně — implementace hotová 2026-09-10 (commity 1–7): XSD + mapování,
-hlavička per typ, generátory DP3/KH1/SHV, validace, soubory jako přílohy s guardem,
-PDF opis a obsah, `EpoXmlDiff` + CLI. Zbývá **zlatý test** (čeká na podané soubory
-zdroje 689089 v `tests/Fixtures/vat-xml/689089/`), ruční proklik UI a nasazení na alfě
+**Stav:** částečně — implementace hotová 2026-09-10 (commity 1–7), nálezy prvního běhu
+zlatého testu opravené 2026-09-11 (F3-3 číselník zemí, F3-4 nula ≡ chybějící, F3-5 akce
+Načíst hlavičku z profilu, F3-6 (a) v porovnávači; F3-1 je chyba importu v `old_shipard`,
+F3-2 zaniklo se strukturou). **Zlatý test DP3 01–04/2026 sedí** až na prohozená jména
+oprávněné osoby v profilu (data). Zbývá zlatý test KH (reimport po opravě importu + #77),
+ruční proklik UI a nasazení na alfě
 **Issue:** #55 (Fáze 3), návaznost D19 (#74 hotovo), D20 (přílohy na podání), D17 (zaokrouhlení)
 **Návaznost:** staví na Fázi 2 (`tasks/vat-filings.md` — snapshot `economy_vat_filings`
 + výstupní řádky `_return_rows` / `_cs_rows` / `_rs_rows`), na strukturovaných polích
@@ -319,34 +321,51 @@ Věta C součty; SHV řádek per (stát, DIČ, kód plnění).
 
 ## Zbývá
 
-- Ruční proklik v prohlížeči (tab Hlavička, akce Vytvořit soubory, Přílohy).
-- Zlatý test po dodání referenčních souborů; při něm ověřit dvě otevřené věci:
-  zápis atributu `stat` (kód země vs. název) a to, jestli zdroj vykazuje
-  třístranný obchod v souhrnném hlášení (`k_pln_eu` = 2, dnes nemapované).
-- Nasazení na alfu: `ds-upgrade` (nové cfgItems, jinak generování skončí na
-  chybějícím `valueScale`) a kontrola, že render služba běží.
+- Ruční proklik v prohlížeči (tab Hlavička, akce Vytvořit soubory, Načíst hlavičku
+  z profilu, Přílohy).
+- Zlatý test KH: oprava importu `partner_doc_number` v `old_shipard` (F3-1) + #77
+  (`kh_mode`) → reimport `btpg-p` → přepočet konceptů → nový běh. Souhrnné hlášení
+  zdroj 689089 nepodává, třístranný obchod (`k_pln_eu` = 2) zůstává neověřený.
+- Opravit prohozená jména oprávněné osoby v profilu `btpg-p` a načíst hlavičku
+  u konceptů #6–#10 (data, ne kód).
+- Nasazení na alfu: `ds-upgrade` (nové cfgItems vč. `world.cz.epoCountries`, jinak
+  generování skončí na chybějícím `valueScale` / chybě `header.stat`) a kontrola, že
+  render služba běží.
 
 ## Zlatý test — první běh (2026-09-11, dev DS `btpg-p`, podání #6–#10 z opraveného profilu)
 
 Porovnání `vat-filing-files --xml-only` proti podaným XML zdroje 689089 (fixtury lokálně,
 gitignorované). Hodnoty ř. 62/63/64 sedí ve všech čtyřech DP3; rozdíly:
 
-**Chyby k opravě (nová strana):**
-- **F3-1 KH `c_evid_dd` v sekcích B** — dáváme naše číslo dokladu (`doc_number`), patří tam
-  evidenční číslo daňového dokladu **dodavatele** (`partner_doc_number`, tak je v podaném).
-  Kvůli tomu `EpoXmlDiff` nespáruje ani jeden řádek B2. Sekce A (naše doklady) správně.
-- **F3-2 KH hlavička bez `id_dats`** — `filingHeaderCzKh1.jsonc` pole nemá, profil ho má,
-  podaný KH ho nese. Doplnit do schématu KH (DP3 ho oficiálně nemá).
-- **F3-3 `stat` jako kód** — vypisujeme `cz`; oficiální popis: název z číselníku zemí
-  (`naz_zeme_c25`, „Česká republika"). Writer musí mapovat kód → název (číselník
-  `world.base.countries` má název, nebo statická mapa pro EPO).
-- **F3-4 nulové atributy** — starý Shipard vypisoval `0` u řádků, které jeho výpočet znal
-  (ř. 45, 61, 65, 66, `odp_tuz5`, `dan3`/`zakl_dane3`, `rez_pren5`); my je vynecháváme.
-  EPO bere chybějící = 0, takže je to ekvivalentní — **`EpoXmlDiff` má brát „—" ≡ „0"**
-  u číselných atributů (README fixtur tvrdí, že na zápisu čísla nezáleží; na přítomnosti
-  nuly by nemělo taky).
-- **F3-5 chybí akce „Načíst hlavičku z profilu"** (§ 2, composer na ni v komentáři odkazuje) —
-  bez ní jde změna profilu do existujícího konceptu jen ručně přes tab Hlavička.
+**Chyby k opravě (nová strana) — stav 2026-09-11:**
+- **F3-1 KH `c_evid_dd` v sekcích B — není chyba kódu, ale importu.**
+  `ControlStatementCalculator` u přijatých sekcí (A2, B1–B3) bere `partner_doc_number`
+  a test to hlídá. Na `btpg-p` má ale všech 8 850 přijatých faktur `partner_doc_number`
+  totožné s naším `doc_number`: import (`old_shipard` `DocsRunner`, kanonické `docNumber`)
+  posílá staré `docNumber`, zatímco starý KH psal do `c_evid_dd` sloupec `heads.docId`
+  („Ev. číslo dokladu"). Podané hodnoty B2 sedí na `payment_reference` (VS) u 16 ze 17
+  řádků, na `partner_doc_number` ani jednou. **Oprava v `old_shipard`** (`docId` →
+  `partner_doc_number` u přijatých dokladů, David) + reimport `btpg-p`; v shpd beze změny.
+  Totéž platí pro A2 a B1.
+- **F3-2 KH hlavička bez `id_dats` — zaniklo.** Aktuální popis struktury DPHKH1
+  (03.01.14 z 9. 3. 2026) i XSD v repu mají ve větě P 30 atributů a `id_dats` mezi nimi
+  není; podané KH ho nese ze starší verze struktury. Přidání do schématu by shodilo
+  `testHeaderSchemaFieldsMatchVetaP` i XSD validaci. Zlatý test ho **ignoruje**
+  (`GoldenFilingXmlTest::comparisonOptions()`), profil pole dál nese.
+- **F3-3 `stat` jako kód — hotovo.** Nový cfgItem `world.cz.epoCountries` generovaný
+  z exportu číselníku Země (`modules/world/cz/data/zeme.txt`, `scripts/epo-countries.py`,
+  250 zemí platných k 2026-09-11); `VatXmlMapping::countryName()` překládá pole
+  z `header.countryNameFields`, kód bez názvu = chyba `header.stat`. Popis struktury
+  chce `naz_zeme_c25`, což je v číselníku **velkými písmeny** („ČESKÁ REPUBLIKA");
+  starý Shipard psal „Česká republika" (= `naz_zeme_c60`). Držíme se popisu, zlatý test
+  `stat` ignoruje (rozdíl jen ve velikosti písmen). `world.base.countries` nestačí
+  („Česko"); každý jeho kód má u úřadu název (test `EpoCountriesTest`).
+- **F3-4 nulové atributy — hotovo.** `EpoXmlDiff` zahazuje číselné nuly na obou stranách
+  před porovnáním (i celé věty, kterým nic nezůstane); nula proti jiné hodnotě je pořád
+  rozdíl.
+- **F3-5 akce „Načíst hlavičku z profilu" — hotovo.** `FilingComposer::resetHeader()`,
+  `POST /_vat/filing-header-from-profile`, akce v detailu konceptu s potvrzením (přepíše
+  i ruční úpravy), help Podání DPH § Hlavička podání.
 
 **K rozhodnutí (David):**
 - **F3-6 krácený odpočet vs. podané** — podaná DP3 mají všechen odpočet ve sloupci „v plné výši"
@@ -361,8 +380,21 @@ gitignorované). Hodnoty ř. 62/63/64 sedí ve všech čtyřech DP3; rozdíly:
   chybějící vlastnost, **#77** (`kh_mode` na hlavičce + import z `vatCS`). Čtvrtý je FPB
   s nulovou částkou a prázdným DIČ, kterou starý do B2 dal chybně — nový správně
   nevykazuje; známá výjimka zlatého testu. Zlatý test KH se uzavře až po #77 a reimportu.
-- **F3-6 — rozhodnuto (a):** nechat krácený sloupec + ř. 52; zlatý test porovnává ř. 40–47
-  jako součet „plný + krácený" proti podanému plnému sloupci a ř. 52 / `koef_p20_nov`
-  ignoruje. Koeficienty lze nastavit v Nastavení → koeficienty odpočtu (D13).
+- **F3-6 — rozhodnuto (a), hotovo:** nechat krácený sloupec + ř. 52; zlatý test porovnává
+  ř. 40–48 jako součet „plný + krácený" proti podanému plnému sloupci (`foldAttributes`
+  v `EpoXmlDiff`, odvozené z mapovací konfigurace) a ř. 52 / `koef_p20_nov` ignoruje.
+  Koeficienty lze nastavit v Nastavení → koeficienty odpočtu (D13).
 
 **Data profilu (ne kód):** `opr_jmeno`/`opr_prijmeni` zadáno v profilu prohozeně.
+Po opravě profilu použít na konceptech #6–#10 akci **Načíst hlavičku z profilu**.
+
+## Zlatý test — druhý běh (2026-09-11, po opravách F3-3…F3-6)
+
+Zlatý test bere i koncept, když podané podání za období není (rekonstrukce na `btpg-p`
+jsou koncepty schválně — jdou přepočítat), a hlásí rozdíly všech souborů najednou.
+
+- **DP3 01–04/2026:** jediný rozdíl `opr_jmeno`/`opr_prijmeni` (prohozená data profilu).
+  Řádky vět 1–6 včetně sloučeného odpočtu sedí ve všech čtyřech měsících.
+- **KH 01/2026:** A2 (2 řádky), B1 (1) a B2 se liší jen v `c_evid_dd` — F3-1 (import);
+  tři řádky B2 navíc v podaném = #77; jeden nulový doklad = známá výjimka. Uzavře se
+  po reimportu a #77.

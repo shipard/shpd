@@ -47,6 +47,15 @@ abstract class DocsHeadsFormBase extends TableForm
         . 'Z řádků = součet řádkových daní (historický režim).';
 
     /**
+     * Ruční zařazení do kontrolního hlášení (`cs_mode`, extension
+     * economy.vat, #77): automatika = limit 10 000 Kč vč. daně; ruční režim
+     * je pro opakovaná či dílčí plnění a pro doklady mimo hlášení.
+     */
+    protected const CS_MODE_HINT =
+        'Automaticky = podle limitu 10 000 Kč vč. daně. Ručně u opakovaných '
+        . 'či dílčích plnění (vždy jednotlivě) nebo u dokladu mimo hlášení.';
+
+    /**
      * Hint u selectu `vat_recap_source` — vysvětluje, co znamená převzít
      * rekapitulaci (docs/vat-calculation.md § 5).
      */

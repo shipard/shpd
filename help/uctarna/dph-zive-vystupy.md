@@ -1,7 +1,7 @@
 ---
 title: Živé výstupy DPH
 summary: Jak si přečíst živé přiznání k DPH, kontrolní hlášení a souhrnné hlášení za zvolené období a co znamenají upozornění pod tabulkou.
-keywords: [DPH, přiznání k DPH, kontrolní hlášení, souhrnné hlášení, DPHDP3, DPHKH1, DPHSHV, daňová povinnost, vlastní daň, nadměrný odpočet, období DPH, daňové tvrzení, daňová tvrzení, registrace DPH, kolik zaplatím DPH, sekce A4, sekce B2, kód plnění, souhlasí s deníkem, přesunout doklad do jiného měsíce, koncept tvrzení, koeficient, koeficient odpočtu, krácený odpočet, krácený nárok, zálohový koeficient, vypořádací koeficient, řádek 52, osvobozená plnění, koeficient 1,00]
+keywords: [DPH, přiznání k DPH, kontrolní hlášení, souhrnné hlášení, DPHDP3, DPHKH1, DPHSHV, daňová povinnost, vlastní daň, nadměrný odpočet, období DPH, daňové tvrzení, daňová tvrzení, registrace DPH, kolik zaplatím DPH, sekce A4, sekce B2, kód plnění, souhlasí s deníkem, přesunout doklad do jiného měsíce, koncept tvrzení, koeficient, koeficient odpočtu, krácený odpočet, krácený nárok, zálohový koeficient, vypořádací koeficient, řádek 52, osvobozená plnění, koeficient 1,00, do kontrolního hlášení, ručně do kontrolního hlášení, vždy jednotlivě, vždy souhrnně, nevykazovat v kontrolním hlášení, opakovaná plnění, dílčí plnění, limit 10 000]
 related: [uctarna/dph-podani.md, uctarna/kdyz-se-doklad-nezauctuje.md, faktury-prijate/dokonceni-dokladu.md, co-dnes-nejde.md]
 ---
 
@@ -84,6 +84,31 @@ osvobozených plnění. Pokud v období nějaký krácený odpočet je, přizná
 pod tabulkou vždy řekne, jaký koeficient použilo a odkud ho vzalo; bez
 záznamu ti navíc doporučí koeficient nastavit.
 
+## Ruční zařazení do kontrolního hlášení
+
+Kontrolní hlášení dělí doklady podle částky: nad **10 000 Kč včetně daně**
+jde doklad jednotlivě do sekce A4 nebo B2, pod limit se sčítá v souhrnných
+sekcích A5 a B3. Někdy to nestačí — třeba u **opakovaných nebo dílčích
+plnění** (měsíční fakturace, splátky), kde je každý doklad pod limitem, ale
+plnění jako celek nad ním, a patří proto do detailu. Nebo doklad do hlášení
+nepatří vůbec.
+
+Na faktuře vydané i přijaté je proto v záložce **Nastavení** pole
+**Do kontrolního hlášení**:
+
+- **Automaticky** — podle limitu, tak je nastavený každý nový doklad.
+- **Vždy jednotlivě (A4/B2)** — do detailu i pod limitem. U vydané faktury
+  musí mít odběratel české DIČ; bez něj hlášení varuje a soubor pro portál
+  nevznikne.
+- **Vždy souhrnně (A5/B3)** — do souhrnu i nad limitem.
+- **Nevykazovat** — doklad v kontrolním hlášení není vůbec, v přiznání
+  k DPH ale zůstává. Použij jen tam, kde to zákon dovoluje; živé hlášení
+  ti pod tabulkou řekne, kolik dokladů jsi takhle vyřadil.
+
+Ruční zařazení se v živém hlášení pozná ve sloupci **Zařazení** u řádku
+dokladu. Doklady převedené ze starého Shipardu si své zařazení přinesly
+s sebou.
+
 ## Na co narazíš
 
 - **Tvrzení nejde smazat**, dokud na něj míří nějaký doklad nebo je
@@ -112,8 +137,9 @@ záznamu ti navíc doporučí koeficient nastavit.
   [Podání DPH](dph-podani.md). Hlavička reportu ti připomene poslední
   podání a jeho podanou daňovou povinnost; ta se od živého výpočtu může
   lišit o jednotky korun (zaokrouhlení po řádcích).
-- **XML pro daňový portál ani uzamčení období z Shipardu zatím
-  neuděláš** — viz [Co Shipard dnes neumí](../co-dnes-nejde.md).
+- **Uzamčení období z Shipardu zatím neuděláš** — viz
+  [Co Shipard dnes neumí](../co-dnes-nejde.md). Soubor pro daňový portál
+  vyrobíš z podání, viz [Podání DPH](dph-podani.md).
 
 ## Souvisí
 

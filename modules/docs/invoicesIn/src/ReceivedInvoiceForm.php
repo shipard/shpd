@@ -205,6 +205,13 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 options: $this->resolveCfgItemOptions('docs.core.vatRoundingModes'),
                 hidden: !$hasVat,
             )
+            // Ruční zařazení do KH (#77) — u přijaté faktury B2/B3.
+            ->select(
+                'cs_mode',
+                options: $this->resolveCfgItemOptions('economy.vat.controlStatementModes'),
+                hidden: !$hasVat,
+                hint: self::CS_MODE_HINT,
+            )
 
             ->section(title: 'Bankovní spojení')
             ->col()

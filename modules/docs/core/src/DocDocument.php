@@ -115,6 +115,16 @@ abstract class DocDocument extends Document
         if (empty($data['accounting_date'])) {
             $result->addError('accounting_date', 'Účetní datum je povinné', 'required');
         }
+        // Ruční zařazení do kontrolního hlášení (extension economy.vat,
+        // cfgItem economy.vat.controlStatementModes, #77): enumInt se při
+        // uložení proti číselníku nekontroluje, hodnoty 0–3 jsou 1:1 se
+        // starým vatCS. docs.core na economy.vat nezávisí — proto rozsah
+        // natvrdo, ne konstanta kalkulátoru.
+        if (isset($data['cs_mode']) && $data['cs_mode'] !== ''
+            && !in_array((int) $data['cs_mode'], [0, 1, 2, 3], true)
+        ) {
+            $result->addError('cs_mode', 'Neplatný režim zařazení do kontrolního hlášení', 'invalid_value');
+        }
 
         // validate() běží před beforeSave — typ, pokladna z řady a směr se
         // kontrolují nad denormalizovanými hodnotami (idempotentní, 1 SELECT).

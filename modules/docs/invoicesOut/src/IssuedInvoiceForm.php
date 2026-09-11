@@ -213,6 +213,14 @@ class IssuedInvoiceForm extends DocsHeadsFormBase
                 options: $this->resolveCfgItemOptions('docs.core.vatRoundingModes'),
                 hidden: !$hasVat,
             )
+            // Ruční zařazení do KH (#77) — u vydané faktury A4/A5; vždy
+            // jednotlivě bez CZ DIČ odběratele hlásí kontrolní hlášení chybu.
+            ->select(
+                'cs_mode',
+                options: $this->resolveCfgItemOptions('economy.vat.controlStatementModes'),
+                hidden: !$hasVat,
+                hint: self::CS_MODE_HINT,
+            )
             ->input('constant_symbol')
             ->build();
     }

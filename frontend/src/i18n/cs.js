@@ -462,6 +462,11 @@ export default {
   'exchange.preview.actions.applyRegistry': 'Zařadit',
   'exchange.preview.actions.skip': 'Přeskočit',
   'exchange.preview.queuePosition': '{i} / {n}',
+  'exchange.preview.decisions.saveError': 'Rozhodnutí se nepodařilo uložit',
+  'exchange.preview.decisions.unsavedTitle': 'Neuložená rozhodnutí',
+  'exchange.preview.decisions.unsavedMessage': 'Poslední rozhodnutí se ještě neuložilo nebo uložení selhalo. Zavřít a rozhodnutí zahodit?',
+  'exchange.preview.decisions.discard': 'Zahodit',
+  'exchange.preview.decisions.stay': 'Zůstat',
 
   // ── Resolve decision panel ───────────────────────────────────────────────
   'exchange.preview.decide.create': 'Vytvořit nového',

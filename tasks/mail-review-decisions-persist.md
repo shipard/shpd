@@ -1,6 +1,6 @@
 # Task: Review modal — průběžné ukládání rozhodnutí z resolve panelu (Issue #76)
 
-**Stav:** částečně
+**Stav:** hotovo
 
 ## Status / cíl
 

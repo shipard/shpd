@@ -67,9 +67,10 @@ na každém řádku.
    - **Vynechat řádek**, ale jen u řádku faktury.
 
    Rozhodnutí se pak ukáže jako **Vybráno: …** a vezmeš ho zpět
-   tlačítkem **Zrušit výběr**. Dokud něco zůstává nerozhodnuté, obě
-   tlačítka **Vystavit…** jsou zašedlá — bez vysvětlení, takže když
-   nejde kliknout, hledej nedořešenou referenci.
+   tlačítkem **Zrušit výběr**. Každé rozhodnutí se hned uloží — když
+   náhled zavřeš a otevřeš znovu, máš ho předvyplněné. Dokud něco
+   zůstává nerozhodnuté, obě tlačítka **Vystavit…** jsou zašedlá — bez
+   vysvětlení, takže když nejde kliknout, hledej nedořešenou referenci.
 
 6. **Vystav doklad, nebo návrh zamítni.**
    - **Vystavit a uzavřít** — **Faktura přijatá** vznikne rovnou ve
@@ -188,6 +189,15 @@ zakládá k někomu.
 který ten dosavadní nahradí; starší běhy zůstávají u zprávy vidět na
 záložce **Analýzy**. Zprávu s návrhem, který jsi už **použil**, znovu
 analyzovat nejde — nejdřív by ses musel dokladu zbavit přes podporu.
+
+**Rozhodnutí v náhledu se ukládají průběžně.** Náhled můžeš kdykoli
+zavřít, rozhodnutí u dodavatele, položek nebo účtů zůstanou a při dalším
+otevření jsou předvyplněná. Jen **Znovu analyzovat** je smaže — nový
+návrh začíná bez rozhodnutí. Dotaz **Neuložená rozhodnutí** při zavírání
+uvidíš pouze tehdy, když se poslední rozhodnutí ještě neuložilo nebo
+uložení selhalo (v patičce pak svítí *Rozhodnutí se nepodařilo uložit*):
+**Zůstat** nechá náhled otevřený a další změna uložení zopakuje,
+**Zahodit** náhled zavře.
 
 **Co udělá Zamítnout.** Návrh dostane stav **Zamítnuto**, důvod se uloží k němu a v **Došlé poště** ho u zprávy pak vidíš jako
 *Důvod zamítnutí*. Karta z Dashboardu zmizí. Zpráva a přílohy zůstávají —

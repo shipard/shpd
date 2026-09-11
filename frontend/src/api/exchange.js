@@ -33,9 +33,13 @@ import { API_BASE_URL } from './config.js';
  *     confidence: number|null,
  *     resolution: number|null,
  *     target?: string,
+ *     userActions: object,
  *   },
  *   error?: object,
  * }>}
+ *
+ * `userActions` = rozhodnutí uložená k poslední analýze přes saveDecisions()
+ * (flat {path: action} mapa, `{}` když nic) — modal jimi inicializuje stav.
  */
 export async function previewMessage(messageNdx) {
   return await get(`/_mail/messages/${messageNdx}/preview`);
@@ -76,6 +80,25 @@ export async function applyMessage(messageNdx, userActions = null, applyOptions 
   if (userActions !== null) body._resolve = userActions;
   if (applyOptions !== null) body.applyOptions = applyOptions;
   return await post(`/_mail/messages/${messageNdx}/apply`, body);
+}
+
+/**
+ * Průběžné uložení rozhodnutí z review modalu na server
+ * (tasks/mail-review-decisions-persist.md, #76). Ukládá se na řádek
+ * poslední úspěšné analýzy zprávy (`user_actions_json`).
+ *
+ * Vždy **celá** mapa, ne delta — last-write-wins. Prázdná mapa `{}` = smazat
+ * všechna rozhodnutí. Server mapu sanitizuje (whitelist cest jako u apply)
+ * a vrací ji tak, jak byla uložena: `{messageNdx, analysisNdx, userActions}`.
+ * Chyby: 409 INVALID_STATE (návrh už má verdikt / zpráva v Archivu či Koši),
+ * 404, 422 (chybí `_resolve`), 403 v read-only stavu DS.
+ *
+ * @param {number} messageNdx
+ * @param {object} userActions  Flat {path: action} map (stejný tvar jako
+ *                              `_resolve` v applyMessage).
+ */
+export async function saveDecisions(messageNdx, userActions) {
+  return await post(`/_mail/messages/${messageNdx}/decisions`, { _resolve: userActions });
 }
 
 /**

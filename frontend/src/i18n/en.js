@@ -449,6 +449,11 @@ export default {
   'exchange.preview.actions.applyRegistry': 'File',
   'exchange.preview.actions.skip': 'Skip',
   'exchange.preview.queuePosition': '{i} / {n}',
+  'exchange.preview.decisions.saveError': 'Decisions could not be saved',
+  'exchange.preview.decisions.unsavedTitle': 'Unsaved decisions',
+  'exchange.preview.decisions.unsavedMessage': 'The last decision has not been saved yet or saving failed. Close and discard it?',
+  'exchange.preview.decisions.discard': 'Discard',
+  'exchange.preview.decisions.stay': 'Stay',
 
   // ── Resolve decision panel ───────────────────────────────────────────────
   'exchange.preview.decide.create': 'Create new',

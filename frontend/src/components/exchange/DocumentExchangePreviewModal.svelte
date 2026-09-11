@@ -25,14 +25,31 @@
   //     „Vystavit a uzavřít“ adds applyOptions {targetDocState: 40} as the
   //     4th argument (document goes directly to V pořádku, no FormDialog).
   //
+  // Persistence rozhodnutí (tasks/mail-review-decisions-persist.md, #76):
+  //   - Každá změna `userActions` (handleUserActionsChange, včetně „Zrušit
+  //     výběr") se okamžitě uloží na server — POST /decisions s celou mapou,
+  //     na pozadí, bez debounce (hromadné rozhodnutí = jeden callback).
+  //   - previewMessage vrací `userActions` uložené k poslední analýze;
+  //     loadPreview jimi inicializuje stav místo {}.
+  //   - Modal se zavírá volně. ConfirmDialog „Neuložená rozhodnutí" se ukáže
+  //     JEN když uložení právě běží nebo selhalo (pendingSave || saveError)
+  //     — pro Esc, overlay, „×", Zavřít i Přeskočit. Zamítnout a apply se
+  //     neguardují: apply posílá mapu v `_resolve` nezávisle na persistenci.
+  //   - Jediné místo, které volá persist(), je handleUserActionsChange.
+  //     Reset stavu při zavření / změně zprávy ukládat NESMÍ (poslal by {}
+  //     a smazal rozhodnutí na serveru).
+  //   - saveSeq (ne-reaktivní čítač) řeší závod odpovědí: starší pomalejší
+  //     odpověď nesmí přepsat pendingSave / saveError.
+  //
   // Mobile (<768px): single column with PDF/Preview tab switcher.
 
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import ConfirmDialog from '../ui/ConfirmDialog.svelte';
   import DocumentExchangePreview from './DocumentExchangePreview.svelte';
   import RegistryExtractedPreview from './RegistryExtractedPreview.svelte';
   import PdfViewerPanel from './PdfViewerPanel.svelte';
-  import { previewMessage } from '../../api/exchange.js';
+  import { previewMessage, saveDecisions } from '../../api/exchange.js';
   import { t } from '../../i18n/index.js';
 
   let {
@@ -58,6 +75,16 @@
   // {path: action} map — see api/exchange.js applyMessage.
   let userActions = $state({});
 
+  // Persistence rozhodnutí (#76) — viz hlavička.
+  let pendingSave = $state(false);
+  let saveError = $state(false);
+  // Akce čekající na potvrzení „Neuložená rozhodnutí" (vzor FormDialog).
+  // Non-null = ConfirmDialog otevřený; Zahodit ji spustí, Zůstat zruší.
+  let pendingAction = $state(null);
+  // Sekvence POST /decisions — poslední odpověď vyhrává, starší se ignorují.
+  // Ne-reaktivní: nic se na něj nevykresluje.
+  let saveSeq = 0;
+
   $effect(() => {
     if (open && messageNdx !== null && messageNdx !== undefined) {
       void loadPreview(messageNdx);
@@ -65,18 +92,33 @@
       data = null;
       error = null;
       userActions = {};
+      resetDecisionState();
     }
   });
+
+  // Reset persistence při zavření i při změně zprávy. Batch mód: `open`
+  // zůstává true a mění se jen messageNdx → větev else efektu neproběhne,
+  // proto i na začátku loadPreview. saveSeq++ zneplatní dobíhající odpověď
+  // předchozí zprávy. Nikdy neukládá.
+  function resetDecisionState() {
+    pendingSave = false;
+    saveError = false;
+    pendingAction = null;
+    saveSeq++;
+  }
 
   async function loadPreview(ndx) {
     loading = true;
     error = null;
     data = null;
     userActions = {};
+    resetDecisionState();
     try {
       const result = await previewMessage(ndx);
       if (result?.success) {
         data = result.data;
+        // Uložená rozhodnutí z poslední analýzy — předvyplní badge (D8).
+        userActions = result.data.userActions ?? {};
       } else {
         error = result?.error?.message ?? 'Unknown error';
       }
@@ -89,7 +131,52 @@
 
   function handleUserActionsChange(next) {
     userActions = next;
+    void persist(next);
   }
+
+  // Autosave celé mapy na pozadí. Klient drží správnou mapu i při selhání —
+  // apply ji pošle v `_resolve` nezávisle na persistenci; další změna
+  // uložení zopakuje.
+  async function persist(map) {
+    const seq = ++saveSeq;
+    const ndx = messageNdx;
+    pendingSave = true;
+    let result;
+    try {
+      result = await saveDecisions(ndx, map);
+    } catch {
+      result = null;
+    }
+    if (seq !== saveSeq) return; // překonáno novějším uložením nebo resetem
+    pendingSave = false;
+    saveError = !result?.success;
+  }
+
+  // Guard zavření / přeskočení — jen když uložení běží nebo selhalo.
+  let unsafeToClose = $derived(pendingSave || saveError);
+
+  function guardClose(then) {
+    if (!unsafeToClose) {
+      then();
+      return;
+    }
+    pendingAction = then;
+  }
+
+  function discardPending() {
+    const run = pendingAction;
+    pendingAction = null;
+    saveError = false;
+    run?.();
+  }
+
+  function stayPending() {
+    pendingAction = null;
+  }
+
+  // Modal volá onClose pro Esc, overlay i „×" — guard stačí na jednom místě.
+  const handleClose = () => guardClose(onClose);
+  const handleSkip = () => guardClose(onSkip);
 
   // Walk `_resolve` and verify every non-matched reference has a decision.
   // unit/vatCode badges are excluded — applier falls back to defaults.
@@ -136,7 +223,7 @@
   </span>
 {/snippet}
 
-<Modal title={t('exchange.preview.title')} {open} {onClose} width="full" testid="review-modal" headerExtra={queue ? queueBadge : undefined}>
+<Modal title={t('exchange.preview.title')} {open} onClose={handleClose} width="full" testid="review-modal" headerExtra={queue ? queueBadge : undefined}>
   {#if loading}
     <div class="shpd-exchange-modal__loading">
       {t('exchange.preview.loading')}
@@ -189,21 +276,28 @@
   {/if}
 
   {#snippet footer()}
+    {#if saveError}
+      <!-- Záchranná síť (#76): autosave selhal — klient mapu drží, další
+           změna uložení zopakuje; apply funguje nezávisle. -->
+      <span class="shpd-exchange-modal__save-error" role="status" data-testid="review-save-error">
+        {t('exchange.preview.decisions.saveError')}
+      </span>
+    {/if}
     <Button
       label={t('exchange.preview.actions.close')}
       variant="secondary"
       testid="review-close"
-      onclick={onClose}
+      onclick={handleClose}
     />
     {#if queue}
       <!-- Jen batch mód (D4) — posun na další zprávu bez verdiktu,
-           karta zůstává ve feedu. -->
+           karta zůstává ve feedu. Guard jako u zavření (#76). -->
       <Button
         label={t('exchange.preview.actions.skip')}
         variant="secondary"
         testid="review-skip"
         disabled={loading}
-        onclick={onSkip}
+        onclick={handleSkip}
       />
     {/if}
     <Button
@@ -241,6 +335,20 @@
   {/snippet}
 </Modal>
 
+<!-- Guard „Neuložená rozhodnutí" — jen při pendingSave || saveError (#76).
+     Další Modal na stacku: Esc v něm zavře jen dialog (= Zůstat). -->
+<ConfirmDialog
+  open={pendingAction !== null}
+  title={t('exchange.preview.decisions.unsavedTitle')}
+  message={t('exchange.preview.decisions.unsavedMessage')}
+  confirmLabel={t('exchange.preview.decisions.discard')}
+  cancelLabel={t('exchange.preview.decisions.stay')}
+  variant="danger"
+  onConfirm={discardPending}
+  onCancel={stayPending}
+  testid="review-unsaved-dialog"
+/>
+
 <style>
   /* Počítadlo pozice ve frontě („3 / 8") — nenápadný badge v hlavičce. */
   .shpd-exchange-modal__queue-pos {
@@ -252,6 +360,15 @@
     font-size: var(--shpd-font-size-sm);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+
+  /* Autosave rozhodnutí selhal (#76) — nenápadný text vlevo v patičce;
+     margin-right: auto drží tlačítka na místě. */
+  .shpd-exchange-modal__save-error {
+    margin-right: auto;
+    align-self: center;
+    color: var(--shpd-color-danger);
+    font-size: var(--shpd-font-size-sm);
   }
 
   .shpd-exchange-modal__loading,

@@ -42,7 +42,9 @@ Před implementací **přečti**:
   `ResolveDecisionPanel` (od ~ř. 250).
 - `frontend/src/components/exchange/DocumentExchangePreviewModal.svelte`
   — drží `userActions` state a `canApply` derived. Funkce `allDecided`
-  zůstává beze změn.
+  zůstává beze změn. (Persistenci `userActions` na server — autosave
+  a předvyplnění při dalším otevření — řeší navazující
+  `tasks/mail-review-decisions-persist.md`, #76.)
 - `frontend/src/components/exchange/ResolveDecisionPanel.svelte` —
   **bude celý nahrazen** novou implementací (viz §2.1).
 - `frontend/src/components/ui/EntityPicker.svelte` — **bude smazán**.

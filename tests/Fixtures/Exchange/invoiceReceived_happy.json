@@ -98,7 +98,7 @@
 
     "vatRecap": [
         {
-            "vatCode": "highEU",
+            "vatCode": "cz-110",
             "vatPct": 21,
             "base": 10330.58,
             "tax": 2169.42,

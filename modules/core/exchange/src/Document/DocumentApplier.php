@@ -578,19 +578,7 @@ class DocumentApplier
                 }
             }
             if (is_array($row['vat'] ?? null) && !empty($row['vat']['code'])) {
-                // Země pro resolve DPH kódu — kaskáda: explicitní
-                // vat.registrationCountry → prefix z kódu (konvence
-                // „{země}-{číslo}“, např. cz-110; nese registraci přímo,
-                // proto vyhrává nad zemí dodavatele) → supplier.country.
-                // Model smí top-level "vat" vynechat (nullable od v2.3.0),
-                // bez fallbacku by pak KAŽDÝ řádek skončil vat_code_unknown.
-                $rowVatCountry = $vatCountry;
-                if ($rowVatCountry === '' && preg_match('/^([a-z]{2})-/i', (string) $row['vat']['code'], $m) === 1) {
-                    $rowVatCountry = strtolower($m[1]);
-                }
-                if ($rowVatCountry === '') {
-                    $rowVatCountry = $supplierCountry;
-                }
+                $rowVatCountry = $this->vatCountryForCode((string) $row['vat']['code'], $vatCountry, $supplierCountry);
                 $vatR = $this->vatCodeResolver->resolve(
                     (string) $row['vat']['code'],
                     $rowVatCountry !== '' ? $rowVatCountry : null,
@@ -1321,6 +1309,26 @@ class DocumentApplier
         return $snap;
     }
 
+    /**
+     * Země pro resolve DPH kódu — kaskáda: explicitní `vat.registrationCountry`
+     * → prefix z kódu (konvence „{země}-{číslo}“, např. cz-110; nese
+     * registraci přímo, proto vyhrává nad zemí dodavatele) → `supplier.country`.
+     * Model smí top-level "vat" vynechat (nullable od v2.3.0), bez fallbacku
+     * by pak KAŽDÝ řádek skončil `vat_code_unknown`. Sdílí řádky i
+     * rekapitulace, aby se kód rekapitulace hledal ve stejném číselníku
+     * jako kódy řádků. Prázdný řetězec = země neznámá.
+     */
+    private function vatCountryForCode(string $code, string $vatCountry, string $supplierCountry): string
+    {
+        if ($vatCountry !== '') {
+            return $vatCountry;
+        }
+        if (preg_match('/^([a-z]{2})-/i', $code, $m) === 1) {
+            return strtolower($m[1]);
+        }
+        return $supplierCountry;
+    }
+
     // ── Autorita rekapitulace DPH (vat.recapSource) ─────────────────────────
 
     /**
@@ -1340,6 +1348,12 @@ class DocumentApplier
      *   tehdy, když rekapitulace je neprázdná, každý řádek projde
      *   aritmetickou kontrolou a kódy jsou dohledatelné. Jinak přepočítaná.
      *   U vystavených dokladů vždy přepočítaná — rekapitulaci děláme my.
+     *
+     * „Dohledatelný kód" (I7) = existuje v číselníku země registrace, ověřuje
+     * se stejným `VatCodeResolver` a stejnou kaskádou země jako kódy řádků.
+     * Kód, který resolver nezná, by `DocDocument::takeOverVatRecapitulation`
+     * odmítl `DomainException` a apply by skončil 500 — místo toho se
+     * rekapitulace přepočítá z řádků a uživatel dostane info issue s důvodem.
      *
      * @param array<string, mixed> $canonical
      * @return array{source: int, recap: array<int, array<string, mixed>>, fallback: ?string}
@@ -1367,6 +1381,9 @@ class DocumentApplier
         }
 
         $codesByPct = $this->recapCodesFromRows($canonical);
+        $vatCountry = strtolower((string) ($canonical['vat']['registrationCountry'] ?? ''));
+        $supplierCountry = strtolower((string) ($canonical['supplier']['country'] ?? ''));
+        $taxPointDate = $canonical['dates']['taxPointDate'] ?? ($canonical['dates']['issueDate'] ?? null);
         $recap = [];
         foreach ($entries as $entry) {
             if (!is_array($entry)) {
@@ -1384,6 +1401,26 @@ class DocumentApplier
                     'source'   => 0,
                     'recap'    => [],
                     'fallback' => sprintf('řádek se sazbou %s %% nemá DPH kód', (string) $pct),
+                ];
+            }
+            // I7: kód musí existovat v číselníku země registrace. Neznámý kód
+            // (AI si ho vymyslela, import s jiným mapováním) → přepočítaná.
+            $country = $this->vatCountryForCode($code, $vatCountry, $supplierCountry);
+            $codeR = $this->vatCodeResolver->resolve(
+                $code,
+                $country !== '' ? $country : null,
+                is_string($taxPointDate) ? $taxPointDate : null,
+                $pct,
+            );
+            if ($codeR->status === ResolveStatus::NotFound) {
+                return [
+                    'source'   => 0,
+                    'recap'    => [],
+                    'fallback' => sprintf(
+                        'DPH kód %s není v číselníku%s',
+                        $code,
+                        $country !== '' ? ' země ' . strtoupper($country) : '',
+                    ),
                 ];
             }
             if (!$explicit && !$this->recapEntryIsConsistent($entry, $pct)) {

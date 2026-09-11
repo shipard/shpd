@@ -254,3 +254,17 @@ B4. Dokumentace (B7).
   ř. 62/63 rovněž shodné s podanými XML (01: 414 636 / 153 772; 04: 274 601 / 131 018), křížová kontrola 0.
 - Neověřeno: počty warningů `vat_recap_inconsistent` / `rows_recap_mismatch` — applier je vrací v `_resolve.issues`,
   runner ne-failed odpovědi neloguje; očekávání z pre-flightu 354 / 13 (koeficient do 2019, `taxManual`).
+
+## Follow-up (2026-09-11) — I7 v applieru chyběla
+
+- `DocumentApplier::resolveRecapSource` kontroloval jen přítomnost kódu a
+  aritmetiku; „dohledatelný kód" z I7 neověřoval. Neznámý kód rekapitulace
+  tak prošel do `DocDocument::takeOverVatRecapitulation`, `DomainException`
+  applier chytil jako obecnou výjimku a apply skončil 500 `internal_error`.
+- Oprava: kód rekapitulace jde stejným `VatCodeResolver`em a stejnou kaskádou
+  země jako kódy řádků (sdílený `vatCountryForCode`); `NotFound` → přepočítaná
+  + `recap_source_computed_fallback` „DPH kód X není v číselníku země Y".
+  Platí i pro explicitní `declared`.
+- Odhalila to fixtura `invoiceReceived_happy.json`: řádky `cz-110`, rekapitulace
+  `highEU` (z doby před #75) — pět integračních testů exchange padalo na 500.
+  Fixtura sjednocena na `cz-110`.

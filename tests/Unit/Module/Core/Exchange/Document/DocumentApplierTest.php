@@ -82,7 +82,22 @@ class DocumentApplierTest extends TestCase
         $party ??= $this->createMock(PartyResolver::class);
         $item ??= $this->createMock(ItemResolver::class);
         $unit ??= $this->createMock(UnitResolver::class);
-        $vat ??= $this->createMock(VatCodeResolver::class);
+        if ($vat === null) {
+            // Default: kódy s prefixem cz- jsou v číselníku, cokoli jiného ne.
+            // Rekapitulace jde přes resolver i v transform() (I7), takže
+            // nekonfigurovaný mock by vrátil neinicializovaný ResolveResult.
+            $vat = $this->createMock(VatCodeResolver::class);
+            $vat->method('resolve')->willReturnCallback(
+                static fn (?string $code): ResolveResult => str_starts_with((string) $code, 'cz-')
+                    ? new ResolveResult(
+                        ResolveStatus::Matched,
+                        matchedId: 0,
+                        matchedBy: 'cfgItem',
+                        createPayload: ['code' => $code, 'pct' => null, 'reverseVatCode' => null, 'noPayTax' => false],
+                    )
+                    : ResolveResult::notFound(),
+            );
+        }
         $bank ??= $this->createMock(BankAccountResolver::class);
         $heads ??= $this->createMock(TransactionlessTableGateway::class);
         $persons ??= $this->createMock(TransactionlessTableGateway::class);
@@ -1087,6 +1102,74 @@ class DocumentApplierTest extends TestCase
         $this->assertSame('vat.recapSource', $issues[0]['path']);
     }
 
+    /**
+     * I7: kód, který resolver v číselníku země nenajde, znamená přepočítanou
+     * + info issue s důvodem — ne DomainException z DocDocument a 500.
+     */
+    public function testReceivedDocumentWithUnknownRecapCodeFallsBackToComputed(): void
+    {
+        $recap = [
+            'vatRecap' => [
+                ['vatCode' => 'xx-999', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ];
+        $data = $this->transformWithRecap($recap);
+
+        $this->assertSame(0, $data['vat_recap_source']);
+        $this->assertArrayNotHasKey('vatRecap', $data);
+
+        $issues = $this->recapIssues($recap);
+        $this->assertCount(1, $issues);
+        $this->assertSame('recap_source_computed_fallback', $issues[0]['code']);
+        $this->assertStringContainsString('xx-999', $issues[0]['message']);
+        $this->assertStringContainsString('země XX', $issues[0]['message']);
+    }
+
+    /** I7 platí i pro explicitní `declared` — bez kódu nejdou určit flagy sčítání. */
+    public function testDeclaredRecapWithUnknownCodeFallsBackToComputed(): void
+    {
+        $recap = [
+            'vat'      => ['recapSource' => 'declared'],
+            'vatRecap' => [
+                ['vatCode' => 'highEU', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+            'supplier' => ['country' => 'CZ'],
+        ];
+        $data = $this->transformWithRecap($recap);
+
+        $this->assertSame(0, $data['vat_recap_source']);
+        $this->assertArrayNotHasKey('vatRecap', $data);
+        $this->assertStringContainsString('highEU', $this->recapIssues($recap)[0]['message']);
+    }
+
+    /** Kaskáda země pro kód rekapitulace: bez prefixu v kódu země dodavatele. */
+    public function testRecapCodeResolvesWithSupplierCountryWhenNoPrefix(): void
+    {
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->expects($this->once())->method('resolve')
+            ->with('special110', 'sk', '2026-07-01', 21.0)
+            ->willReturn(new ResolveResult(
+                ResolveStatus::Matched,
+                matchedId: 0,
+                matchedBy: 'cfgItem',
+                createPayload: ['code' => 'special110', 'pct' => 21.0, 'reverseVatCode' => null, 'noPayTax' => false],
+            ));
+        $applier = $this->buildApplier(vat: $vat);
+
+        $data = $this->invokeTransform($applier, [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2026-07-01'],
+            'supplier'  => ['country' => 'SK'],
+            'vatRecap'  => [
+                ['vatCode' => 'special110', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ]);
+
+        $this->assertSame(1, $data['vat_recap_source']);
+        $this->assertSame('special110', $data['vatRecap'][0]['vat_code']);
+    }
+
     /** Vystavený doklad rekapitulaci nepřebírá — počítáme ji my. */
     public function testIssuedDocumentKeepsComputedRecap(): void
     {
@@ -1732,7 +1815,7 @@ class DocumentApplierTest extends TestCase
         $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
 
         $vat = $this->createMock(VatCodeResolver::class);
-        $vat->expects($this->once())->method('resolve')
+        $vat->expects($this->atLeastOnce())->method('resolve')
             ->with('cz-110', 'cz', $this->anything(), $this->anything())
             ->willReturn(new ResolveResult(
                 ResolveStatus::Matched,
@@ -1771,7 +1854,7 @@ class DocumentApplierTest extends TestCase
         $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
 
         $vat = $this->createMock(VatCodeResolver::class);
-        $vat->expects($this->once())->method('resolve')
+        $vat->expects($this->atLeastOnce())->method('resolve')
             ->with('special110', 'sk', $this->anything(), $this->anything())
             ->willReturn(ResolveResult::notFound());
 
@@ -1784,6 +1867,8 @@ class DocumentApplierTest extends TestCase
         unset($payload['vat']);
         $payload['supplier']['country'] = 'SK';
         $payload['rows'][0]['vat']['code'] = 'special110';
+        // Rekapitulace jde stejnou kaskádou — bez prefixu také země dodavatele.
+        $payload['vatRecap'][0]['vatCode'] = 'special110';
         $applier->preview($payload);
     }
 
@@ -1801,7 +1886,7 @@ class DocumentApplierTest extends TestCase
         $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
 
         $vat = $this->createMock(VatCodeResolver::class);
-        $vat->expects($this->once())->method('resolve')
+        $vat->expects($this->atLeastOnce())->method('resolve')
             ->with('cz-110', 'de', $this->anything(), $this->anything())
             ->willReturn(ResolveResult::notFound());
 

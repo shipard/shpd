@@ -111,6 +111,10 @@ dle režimu) — signál neúplných nebo špatně zadaných řádků.
   když ho vstup nenese, `id` řádku se zachovává (child sync `TableGateway`
   aktualizuje na místě, sub-tabulka ve formuláři neztratí identitu).
   Neznámý DPH kód je `DomainException` — stejně jako u přepočítané.
+  Z výměnného formátu se k ní ale nedostane: applier každý kód rekapitulace
+  ověří `VatCodeResolver`em (stejná kaskáda země jako u řádků) a
+  nedohledatelný kód znamená přepočítanou + `recap_source_computed_fallback`
+  s důvodem (I7), ne 500.
 - **Součty hlavičky** se u převzaté berou **jen z rekapitulace**
   (`headTotalsIncludeRowsOutsideRecap()` = false): řádek s kódem, který
   v rekapitulaci není (import s jiným mapováním kódů), by se jinak započítal

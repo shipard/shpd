@@ -81,6 +81,37 @@
             "interval": "15m",
             "navSection": "accounting",
             "tags": ["vat", "periods"]
+        },
+        {
+            // Podané řádné přiznání starší než 3 dny bez zámku instance (#55 D25).
+            "id": "economy.vat.filed_unlocked_periods",
+            "name": "Filed VAT returns without lock",
+            "name:cs": "Podaná přiznání bez zámku",
+            "name:en": "Filed VAT returns without lock",
+            "description": "A regular VAT return was filed more than 3 days ago but its report period is not locked — lock it so the filed content can no longer change.",
+            "description:cs": "Řádné přiznání bylo podáno před více než 3 dny, ale tvrzení není uzamčené — uzamkněte ho, aby se podaný obsah už neměnil.",
+            "description:en": "A regular VAT return was filed more than 3 days ago but its report period is not locked — lock it so the filed content can no longer change.",
+            "class": "Shipard\\Module\\Economy\\Vat\\Checks\\FiledUnlockedPeriodsCheck",
+            "severity": "warning",
+            "interval": "1d",
+            "navSection": "accounting",
+            "tags": ["vat", "periods"]
+        },
+        {
+            // Nenulový zůstatek 343 analytiky za podané přiznání (#55 D31) —
+            // chybí zaúčtování přiznání (F4b), nebo se DPH po podání změnila.
+            "id": "economy.vat.closed_period_balance",
+            "name": "Unsettled VAT balances of filed returns",
+            "name:cs": "Nevypořádaná DPH za podaná přiznání",
+            "name:en": "Unsettled VAT balances of filed returns",
+            "description": "Journal balance on a 343 analytical account across the documents of a filed VAT return is not zero — the return is not posted, or VAT changed after filing.",
+            "description:cs": "Součet deníku na analytice 343 přes doklady podaného přiznání není nula — chybí zaúčtování přiznání, nebo se DPH po podání změnila.",
+            "description:en": "Journal balance on a 343 analytical account across the documents of a filed VAT return is not zero — the return is not posted, or VAT changed after filing.",
+            "class": "Shipard\\Module\\Economy\\Vat\\Checks\\ClosedPeriodBalanceCheck",
+            "severity": "warning",
+            "interval": "1d",
+            "navSection": "accounting",
+            "tags": ["vat", "periods", "accounting"]
         }
     ],
 

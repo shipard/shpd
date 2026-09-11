@@ -15,10 +15,20 @@ final class TestableFiscalMonthDocument extends FiscalMonthDocument
     public array $rows = [];
     public ?int $userId = null;
     public string $nowValue = '2026-09-11 10:00:00';
+    /** @var list<array{period_id: int, period_name: string, date_end: string, account: string, balance: float}> */
+    public array $balances = [];
+    /** @var list<array{0: string, 1: string}> dotazované rozsahy */
+    public array $balanceQueries = [];
 
     protected function loadCurrent(int $id): ?array
     {
         return $this->rows[$id] ?? null;
+    }
+
+    protected function closedPeriodBalancesForRange(string $begin, string $end): array
+    {
+        $this->balanceQueries[] = [$begin, $end];
+        return $this->balances;
     }
 
     protected function currentUserId(): ?int
@@ -268,5 +278,56 @@ class FiscalMonthDocumentTest extends TestCase
 
         $this->assertNull($data['locked_at']);
         $this->assertNull($data['locked_by']);
+    }
+
+    // ── Varování ze zůstatků 343 při zamykání (#55 D27/D31) ────────────
+
+    public function testLockingWarnsAboutUnsettledVatButDoesNotBlock(): void
+    {
+        $doc = $this->doc();
+        $doc->rows[3] = $this->lockedMarch(['locked' => 0]);
+        $doc->balances = [
+            ['period_id' => 9, 'period_name' => '03/2026', 'date_end' => '2026-03-31', 'account' => '343210', 'balance' => -1234.5],
+        ];
+        $data = $this->lockedMarch();
+
+        $result = $doc->validate($data);
+
+        $this->assertTrue($result->isValid());
+        $warnings = $result->getWarnings();
+        $this->assertCount(1, $warnings);
+        $this->assertSame('locked', $warnings[0]->column);
+        $this->assertSame('closed_period_balance', $warnings[0]->code);
+        $this->assertStringContainsString('03/2026', $warnings[0]->message);
+        $this->assertStringContainsString('343210', $warnings[0]->message);
+        $this->assertStringContainsString('-1 234,50 Kč', $warnings[0]->message);
+        $this->assertSame([['2026-03-01', '2026-03-31']], $doc->balanceQueries);
+    }
+
+    public function testAlreadyLockedOrUnlockingDoesNotQueryBalances(): void
+    {
+        $doc = $this->doc();
+        $doc->rows[3] = $this->lockedMarch();
+        $doc->balances = [['period_id' => 9, 'period_name' => 'x', 'date_end' => '2026-03-31', 'account' => '343210', 'balance' => 1.0]];
+
+        $data = $this->lockedMarch();
+        $doc->validate($data);
+        $data = $this->lockedMarch(['locked' => 0]);
+        $doc->validate($data);
+
+        $this->assertSame([], $doc->balanceQueries);
+    }
+
+    public function testLockingWithSettledVatHasNoWarning(): void
+    {
+        $doc = $this->doc();
+        $doc->rows[3] = $this->lockedMarch(['locked' => 0]);
+        $data = $this->lockedMarch();
+
+        $result = $doc->validate($data);
+
+        $this->assertTrue($result->isValid());
+        $this->assertSame([], $result->getWarnings());
+        $this->assertCount(1, $doc->balanceQueries);
     }
 }

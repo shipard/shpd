@@ -6,6 +6,7 @@ namespace Shipard\Module\Economy\Vat;
 
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Form\EnumOptionsHelper;
+use Shipard\Core\Form\SubtableCellFormatter;
 use Shipard\Core\Viewer\TableViewer;
 
 /**
@@ -167,9 +168,19 @@ class ReportPeriodsViewer extends TableViewer
             $items[] = ['label' => 'Přiřazené doklady', 'value' => (string) $count];
         }
 
-        $content = [['type' => 'properties', 'groups' => [['title' => 'Tvrzení', 'items' => $items]]]];
+        $groups = [['title' => 'Tvrzení', 'items' => $items]];
 
         $filings = $this->filings($recordId);
+
+        // Zůstatky DPH (#55 D31): jen u přiznání s podaným podáním — Σ deníku
+        // na 343 analytikách (mimo 801/802) přes doklady instance musí být
+        // nula; nenulový = chybí zaúčtování přiznání, nebo se DPH po podání
+        // změnila.
+        if ($type === VatPeriodAssigner::TYPE_RETURN && $this->hasFiledFiling($filings)) {
+            $groups[] = ['title' => 'Zůstatky DPH', 'items' => $this->balanceItems($recordId)];
+        }
+
+        $content = [['type' => 'properties', 'groups' => $groups]];
         if ($filings !== []) {
             $content[] = $this->filingsTable($filings);
         }
@@ -222,6 +233,40 @@ class ReportPeriodsViewer extends TableViewer
             . ' ORDER BY `sequence` DESC, `id` DESC',
             $periodId,
         );
+    }
+
+    /** @param list<array<string, mixed>> $filings */
+    private function hasFiledFiling(array $filings): bool
+    {
+        foreach ($filings as $filing) {
+            if ((int) ($filing['docState'] ?? 0) === FilingDocument::DOC_STATE_FILED) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Položky sekce „Zůstatky DPH": účet → zůstatek; bez nálezu jediná
+     * položka „Vypořádáno".
+     *
+     * @return list<array{label: string, value: string}>
+     */
+    private function balanceItems(int $recordId): array
+    {
+        $balances = (new ClosedPeriodBalanceService($this->db))->balancesForPeriod($recordId);
+        if ($balances === []) {
+            return [['label' => 'Analytiky 343', 'value' => 'Vypořádáno — zůstatky jsou nulové']];
+        }
+        $items = [];
+        foreach ($balances as $b) {
+            $items[] = [
+                'label' => (string) $b['account'],
+                'value' => (SubtableCellFormatter::money($b['balance']) ?? '0,00') . ' Kč',
+            ];
+        }
+        $items[] = ['label' => 'Stav', 'value' => 'Nevypořádáno — chybí zaúčtování přiznání, nebo se DPH po podání změnila'];
+        return $items;
     }
 
     /**

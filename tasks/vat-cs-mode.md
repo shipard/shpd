@@ -1,6 +1,9 @@
 # Task: Kontrolní hlášení — ruční režim zařazení dokladu (`cs_mode`) — #77
 
-**Stav:** naplánováno — 2026-09-11, rozhodnutí R1–R4 potvrzená
+**Stav:** částečně — shpd hotové 2026-09-11 (4 commity: sloupec + kalkulátor, formuláře
++ help, živé KH, canonical import/export), `ds-upgrade` na 4l3j i btpg-p. Zbývá `old_shipard`
+`DocsRunner` (`vatCS` → `vat.controlStatementMode`, David), reimport `btpg-p`, přepočet
+konceptů KH a zlatý test; ruční proklik formuláře v prohlížeči
 **Issue:** #77
 **Návaznost:** `economy.vat` živé KH (`ControlStatementCalculator`, `tasks/taxes-phase01.md`),
 snapshot podání (`economy_vat_filing_items.kh_section`, `tasks/vat-filings.md`), canonical
@@ -58,8 +61,22 @@ jako starý Shipard (`heads.vatCS`), aby import migrovaných dokladů dal stejn�
 
 ## Hotovo když
 
-- [ ] Testy zelené; `ds-upgrade` na 4l3j a btpg-p; režim vidět a nastavit ve formuláři FVB/FPB.
-- [ ] Živé KH i snapshot podání respektují režim 1/2/3, A4 bez DIČ varuje.
-- [ ] Dataset dump → seed zachová režim; canonical `exclude` → `cs_mode = 3`.
+- [x] Testy zelené (5 849 unit, integrační `FilingComposerTest` na 4l3j); `ds-upgrade`
+      na 4l3j a btpg-p; select je ve formuláři FVB/FPB (ověřeno přes `/_ui/form` meta,
+      **proklik v prohlížeči zbývá**).
+- [x] Živé KH i snapshot podání respektují režim 1/2/3, A4 bez DIČ varuje
+      (`ControlStatementCalculatorTest`, `FilingComposerTest`, sloupec Zařazení ověřen
+      přes `report-run`).
+- [x] Dataset dump → seed zachová režim; canonical `exclude` → `cs_mode = 3`
+      (`DocumentExporterTest`, `DocumentApplierTest`).
 - [ ] Po reimportu `btpg-p` zlatý test KH 01/2026 bez rozdílů mimo F3-1 a známou výjimku
-      (nulový doklad).
+      (nulový doklad) — čeká na `old_shipard`.
+
+## Poznámky z implementace
+
+- Číselník `economy.vat.controlStatementModes` je nový cfgItem → bez `ds-upgrade` formulář
+  ukáže select bez options a živé KH vypíše místo popisku číslo režimu.
+- `DocumentApplier` posílá `cs_mode` jen u ručního režimu; `auto` nechává default sloupce,
+  aby import na DS bez `economy.vat` nespadl na neznámém sloupci.
+- `EpoXmlDiff` v zlatém testu spáruje řádky B2 vynucené režimem 1 až po reimportu — do té
+  doby zůstávají tři „přebývající" řádky z podaného souboru (F3-7).

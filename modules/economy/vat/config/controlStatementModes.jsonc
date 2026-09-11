@@ -1,0 +1,33 @@
+{
+    // economy.vat.controlStatementModes — ruční zařazení dokladu do
+    // kontrolního hlášení (`docs_core_heads.cs_mode`, #77). Hodnoty jsou
+    // 1:1 se starým Shipardem (`heads.vatCS`), aby import migrovaných
+    // dokladů dal stejné hlášení.
+    //
+    //   0 = automaticky podle limitu 10 000 Kč vč. daně (detail nad, souhrn pod)
+    //   1 = vždy jednotlivě (A4/B2) — opakovaná či dílčí plnění, která jsou
+    //       jako celek nad limitem; bez CZ DIČ odběratele A4 hlásí chybu
+    //   2 = vždy souhrnně (A5/B3) i nad limitem
+    //   3 = nevykazovat — doklad v kontrolním hlášení není (v přiznání zůstává)
+
+    "0": {
+        "name": "Automatically",
+        "name:cs": "Automaticky",
+        "name:en": "Automatically"
+    },
+    "1": {
+        "name": "Always itemised (A4/B2)",
+        "name:cs": "Vždy jednotlivě (A4/B2)",
+        "name:en": "Always itemised (A4/B2)"
+    },
+    "2": {
+        "name": "Always aggregated (A5/B3)",
+        "name:cs": "Vždy souhrnně (A5/B3)",
+        "name:en": "Always aggregated (A5/B3)"
+    },
+    "3": {
+        "name": "Not reported",
+        "name:cs": "Nevykazovat",
+        "name:en": "Not reported"
+    }
+}

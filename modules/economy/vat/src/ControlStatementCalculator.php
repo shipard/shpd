@@ -20,7 +20,11 @@ namespace Shipard\Module\Economy\Vat;
  *   DPPD — tak to má formulář i XML (atributy `duzp` vs. `dppd`); druhé
  *   datum slouží jako fallback, když chybí,
  * - doklad se dvěma PDP kódy (kodPredPl 4 i 5) = dva řádky A1/B1,
- * - A5/B3 = jeden agregátní součtový řádek (pásma ve sloupcích).
+ * - A5/B3 = jeden agregátní součtový řádek (pásma ve sloupcích),
+ * - ruční zařazení `cs_mode` (#77, 1:1 se starým `vatCS`): 1 vynutí detail
+ *   i pod limitem a i bez CZ DIČ (A4 pak dostane měkkou chybu
+ *   `missingVatId`), 2 vynutí souhrn i nad limitem, 3 doklad z hlášení
+ *   vyřadí úplně — včetně A1/A2/B1 (v přiznání zůstává).
  *
  * Čistá třída bez DB — vstup připravuje VatDocumentSelection, měkké chyby
  * vrací jako data (builder z nich dělá lokalizované ReportMessage).
@@ -29,6 +33,15 @@ final class ControlStatementCalculator
 {
     /** Limit rozpadu A4/A5 a B2/B3 — strict `>`, vč. daně, domácí měna. */
     public const LIMIT = 10000.0;
+
+    /**
+     * Ruční zařazení dokladu (`docs_core_heads.cs_mode`, cfgItem
+     * `economy.vat.controlStatementModes`).
+     */
+    public const MODE_AUTO      = 0;
+    public const MODE_DETAIL    = 1;
+    public const MODE_AGGREGATE = 2;
+    public const MODE_EXCLUDE   = 3;
 
     public const SECTIONS = ['A1', 'A2', 'A4', 'A5', 'B1', 'B2', 'B3'];
 
@@ -79,6 +92,9 @@ final class ControlStatementCalculator
         $errors     = [];
 
         foreach ($docs as $doc) {
+            if (self::isExcluded($doc)) {
+                continue;
+            }
             foreach ($this->groupRecap($doc) as $group) {
                 $section = $this->resolveSection($group['group'], $doc);
                 if (in_array($section, self::AGGREGATE_SECTIONS, true)) {
@@ -129,8 +145,28 @@ final class ControlStatementCalculator
      */
     public function sectionForCode(array $doc, string $vatCode): ?string
     {
+        if (self::isExcluded($doc)) {
+            return null;
+        }
         $kh = $this->mapping->kh($vatCode);
         return $kh === null ? null : $this->resolveSection((string) $kh['group'], $doc);
+    }
+
+    /**
+     * Ručně vyřazený doklad (`cs_mode` 3) — v hlášení není, ať má jakékoli
+     * kódy; v přiznání zůstává (ř. DP3 řeší VatReturnCalculator).
+     *
+     * @param array<string, mixed> $doc
+     */
+    public static function isExcluded(array $doc): bool
+    {
+        return self::mode($doc) === self::MODE_EXCLUDE;
+    }
+
+    /** Ručně nastavený režim, jinak automatika. */
+    public static function mode(array $doc): int
+    {
+        return (int) ($doc['cs_mode'] ?? self::MODE_AUTO);
     }
 
     /**
@@ -173,13 +209,28 @@ final class ControlStatementCalculator
         };
     }
 
-    /** @param array<string, mixed> $doc */
+    /**
+     * Rozpad skupin A4A5 / B2B3: ruční režim má přednost před limitem
+     * (a u A4 i před požadavkem na CZ DIČ — chybějící DIČ pak hlásí
+     * `detailRow()`), pevné sekce A1/A2/B1 režim 1/2 nemění.
+     *
+     * @param array<string, mixed> $doc
+     */
     private function resolveSection(string $group, array $doc): string
     {
+        $mode = self::mode($doc);
         return match ($group) {
-            'A4A5'  => $this->overLimit($doc) && $this->hasCzVatId((string) ($doc['customer_vat_id'] ?? ''))
-                ? 'A4' : 'A5',
-            'B2B3'  => $this->overLimit($doc) ? 'B2' : 'B3',
+            'A4A5'  => match ($mode) {
+                self::MODE_DETAIL    => 'A4',
+                self::MODE_AGGREGATE => 'A5',
+                default              => $this->overLimit($doc)
+                    && $this->hasCzVatId((string) ($doc['customer_vat_id'] ?? '')) ? 'A4' : 'A5',
+            },
+            'B2B3'  => match ($mode) {
+                self::MODE_DETAIL    => 'B2',
+                self::MODE_AGGREGATE => 'B3',
+                default              => $this->overLimit($doc) ? 'B2' : 'B3',
+            },
             default => $group,
         };
     }
@@ -214,7 +265,10 @@ final class ControlStatementCalculator
             ? (string) ($doc['partner_doc_number'] ?? '')
             : (string) ($doc['doc_number'] ?? '');
 
-        if ($section === 'B2' && $vatId === '') {
+        // B2 DIČ netestuje (chybějící je měkká chyba); A4 ho automatika
+        // vyžaduje, takže bez CZ DIČ tam doklad dojde jen ručně (režim 1)
+        // — a `dic_odb` je v podání povinný, proto stejná měkká chyba.
+        if (($section === 'B2' && $vatId === '') || ($section === 'A4' && !$this->hasCzVatId($vatId))) {
             $errors[] = [
                 'code'      => 'missingVatId',
                 'docId'     => (int) $doc['id'],

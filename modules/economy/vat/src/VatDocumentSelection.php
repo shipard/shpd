@@ -25,8 +25,8 @@ final class VatDocumentSelection
      * @return list<array<string, mixed>> Doklady s klíči: id, doc_type,
      *         doc_number, partner_doc_number, total_amount_dom, vat_duzp,
      *         vat_dppd (ISO string|null), customer_vat_id, supplier_vat_id,
-     *         recap (list řádků: vat_code, vat_pct, base_dom, tax_dom,
-     *         is_reverse_pair).
+     *         cs_mode (ruční zařazení do KH, #77), recap (list řádků:
+     *         vat_code, vat_pct, base_dom, tax_dom, is_reverse_pair).
      */
     /**
      * @param int $periodId id instance `economy_vat_report_periods`
@@ -40,7 +40,7 @@ final class VatDocumentSelection
         }
         $heads = $this->db->fetchAll(
             'SELECT [h].[id], [h].[doc_type], [h].[doc_number], [h].[partner_doc_number],'
-            . ' [h].[total_amount_dom], [h].[vat_duzp], [h].[vat_dppd],'
+            . ' [h].[total_amount_dom], [h].[vat_duzp], [h].[vat_dppd], [h].[cs_mode],'
             . ' [h].[customer_snapshot], [h].[supplier_snapshot]'
             . ' FROM [docs_core_heads] [h]'
             . ' WHERE %n = %i AND [h].[docState] = %i'
@@ -81,6 +81,7 @@ final class VatDocumentSelection
                 'vat_dppd'           => $this->isoDate($head['vat_dppd']),
                 'customer_vat_id'    => $this->vatIdFromSnapshot($head['customer_snapshot']),
                 'supplier_vat_id'    => $this->vatIdFromSnapshot($head['supplier_snapshot']),
+                'cs_mode'            => (int) ($head['cs_mode'] ?? ControlStatementCalculator::MODE_AUTO),
                 'recap'              => $recapByHead[(int) $head['id']] ?? [],
             ];
         }

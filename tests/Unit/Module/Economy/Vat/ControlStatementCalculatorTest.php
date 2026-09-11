@@ -68,6 +68,97 @@ class ControlStatementCalculatorTest extends TestCase
         ];
     }
 
+    // ── Ruční zařazení (`cs_mode`, #77, 1:1 se starým vatCS) ───────────────
+
+    public function testForcedDetailPutsSmallOutputIntoA4(): void
+    {
+        $result = $this->calculator()->calculate([$this->doc([
+            'total_amount_dom' => 4356.0,
+            'cs_mode'          => ControlStatementCalculator::MODE_DETAIL,
+            'recap'            => [['vat_code' => 'cz-120', 'base_dom' => 3600.0, 'tax_dom' => 756.0]],
+        ])]);
+
+        $this->assertCount(1, $result['sections']['A4']);
+        $this->assertSame([], $result['sections']['A5']);
+        $this->assertSame([], $result['errors']);
+    }
+
+    public function testForcedDetailPutsSmallInputIntoB2(): void
+    {
+        $result = $this->calculator()->calculate([$this->doc([
+            'total_amount_dom' => 4590.0,
+            'cs_mode'          => ControlStatementCalculator::MODE_DETAIL,
+            'recap'            => [['vat_code' => 'cz-110', 'base_dom' => 3793.39, 'tax_dom' => 796.61]],
+        ])]);
+
+        $this->assertCount(1, $result['sections']['B2']);
+        $this->assertSame('DOD-99', $result['sections']['B2'][0]['evidNumber']);
+        $this->assertSame([], $result['sections']['B3']);
+    }
+
+    /** Starý engine vynutil A4 i bez CZ DIČ; podání pak `dic_odb` chybí — proto měkká chyba. */
+    public function testForcedDetailWithoutCzVatIdGoesToA4WithSoftError(): void
+    {
+        $result = $this->calculator()->calculate([$this->doc([
+            'customer_vat_id' => '',
+            'cs_mode'         => ControlStatementCalculator::MODE_DETAIL,
+        ])]);
+
+        $this->assertCount(1, $result['sections']['A4']);
+        $this->assertSame([['code' => 'missingVatId', 'docId' => 1, 'docNumber' => 'FV-001', 'section' => 'A4']], $result['errors']);
+    }
+
+    public function testForcedAggregateKeepsLargeDocumentsOutOfDetail(): void
+    {
+        $result = $this->calculator()->calculate([
+            $this->doc(['id' => 1, 'cs_mode' => ControlStatementCalculator::MODE_AGGREGATE]),
+            $this->doc([
+                'id'      => 2,
+                'cs_mode' => ControlStatementCalculator::MODE_AGGREGATE,
+                'recap'   => [['vat_code' => 'cz-110', 'base_dom' => 10000.0, 'tax_dom' => 2100.0]],
+            ]),
+        ]);
+
+        $this->assertSame([], $result['sections']['A4']);
+        $this->assertSame([], $result['sections']['B2']);
+        $this->assertSame(10000.0, $result['sections']['A5'][0]['base1']);
+        $this->assertSame(10000.0, $result['sections']['B3'][0]['base1']);
+    }
+
+    public function testExcludedDocumentIsMissingFromEverySectionIncludingFixedOnes(): void
+    {
+        $calculator = $this->calculator();
+        $excluded   = $this->doc([
+            'cs_mode' => ControlStatementCalculator::MODE_EXCLUDE,
+            'recap'   => [
+                ['vat_code' => 'cz-120', 'base_dom' => 10000.0, 'tax_dom' => 2100.0],
+                ['vat_code' => 'cz-150', 'base_dom' => 5000.0, 'tax_dom' => 0.0],
+                ['vat_code' => 'cz-115', 'base_dom' => 5000.0, 'tax_dom' => 1050.0],
+            ],
+        ]);
+
+        $result = $calculator->calculate([$excluded]);
+        foreach (ControlStatementCalculator::SECTIONS as $section) {
+            $this->assertSame([], $result['sections'][$section], "sekce {$section} má být prázdná");
+        }
+        $this->assertSame([], $result['errors']);
+
+        // Totéž vidí snapshot podání přes sectionForCode — kh_section NULL.
+        $this->assertNull($calculator->sectionForCode($excluded, 'cz-120'));
+        $this->assertNull($calculator->sectionForCode($excluded, 'cz-150'));
+        $this->assertSame('A4', $calculator->sectionForCode($this->doc(), 'cz-120'));
+    }
+
+    public function testManualModeDoesNotTouchFixedSections(): void
+    {
+        $result = $this->calculator()->calculate([$this->doc([
+            'cs_mode' => ControlStatementCalculator::MODE_AGGREGATE,
+            'recap'   => [['vat_code' => 'cz-150', 'base_dom' => 5000.0, 'tax_dom' => 0.0]],
+        ])]);
+
+        $this->assertCount(1, $result['sections']['A1'], 'A1 nemá souhrnnou variantu, režim 2 ji nevyrobí');
+    }
+
     // ── A4/A5: limit + DIČ ──────────────────────────────────────────────────
 
     public function testOutputOverLimitWithCzVatIdGoesToA4(): void

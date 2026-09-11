@@ -96,7 +96,9 @@
         { "id": "economy.vat.filingHeaderCzKh1", "file": "config/filingHeaderCzKh1.jsonc" },
         { "id": "economy.vat.filingHeaderCzShv", "file": "config/filingHeaderCzShv.jsonc" },
         { "id": "economy.vat.filingPayerTypes", "file": "config/filingPayerTypes.jsonc" },
-        { "id": "economy.vat.filingNextPeriodCodes", "file": "config/filingNextPeriodCodes.jsonc" }
+        { "id": "economy.vat.filingNextPeriodCodes", "file": "config/filingNextPeriodCodes.jsonc" },
+        // Ruční zařazení dokladu do KH (`docs_core_heads.cs_mode`, #77).
+        { "id": "economy.vat.controlStatementModes", "file": "config/controlStatementModes.jsonc" }
     ],
 
     // Koeficienty odpočtu patří do Nastavení vedle Registrací DPH; stejný

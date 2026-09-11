@@ -17,11 +17,27 @@ odpovídajícího typu:
 | Report | Výstup |
 |---|---|
 | `economy.vat.returnLive` | Přiznání k DPH (DPHDP3) — řádky formuláře + dopočty 46/62–65, operativní stav (ř. 64/65) a křížová kontrola proti deníku v messages |
-| `economy.vat.controlStatementLive` | Kontrolní hlášení (DPHKH1) — sekce A1/A2/A4/A5/B1/B2/B3, detailní řádky s ev. číslem / DIČ / DPPD, agregáty A5/B3 |
+| `economy.vat.controlStatementLive` | Kontrolní hlášení (DPHKH1) — sekce A1/A2/A4/A5/B1/B2/B3, detailní řádky s ev. číslem / DIČ / DPPD, agregáty A5/B3; ruční zařazení dokladu přes `cs_mode` (níže) |
 | `economy.vat.recapitulativeStatementLive` | Souhrnné hlášení (DPHSHV) — agregace per (kód plnění, DIČ odběratele) |
 
 Nic se nepersistuje (D1) — persistence přijde až s Podáním (Fáze 2,
 doména `filing`).
+
+### Ruční zařazení do kontrolního hlášení (`cs_mode`, #77)
+
+Rozpad A4/A5 a B2/B3 je automatika podle limitu 10 000 Kč vč. daně; praxe
+potřebuje přepis — opakovaná či dílčí plnění pod limitem, která jako celek
+patří do detailu, nebo doklad, který do hlášení nepatří vůbec. Sloupec
+`docs_core_heads.cs_mode` (extension tohoto modulu vedle `cs_period`,
+cfgItem `economy.vat.controlStatementModes`, hodnoty 1:1 se starým
+`heads.vatCS`): 0 automaticky · 1 vždy jednotlivě (A4/B2) · 2 vždy souhrnně
+(A5/B3) · 3 nevykazovat. Čte ho `VatDocumentSelection`, rozhoduje
+`ControlStatementCalculator` — režim 1 vynutí detail i bez CZ DIČ (A4 pak
+nese měkkou chybu `missingVatId`, podání soubor nevygeneruje), režim 3
+vyřadí doklad **včetně pevných sekcí A1/A2/B1** (tak to dělal starý Shipard,
+import musí být věrný); v přiznání doklad zůstává, snapshot podání má
+`kh_section = NULL`. Pole je ve formulářích FVB/FPB, ostatní doklady
+zůstávají na 0. Zadání: `tasks/vat-cs-mode.md`.
 
 ## Mapovací konfigurace
 

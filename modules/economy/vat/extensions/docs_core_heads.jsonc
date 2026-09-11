@@ -42,6 +42,20 @@
             "nullable": true,
             "reference": "economy_vat_report_periods",
             "group": "accounting"
+        },
+        // Ruční zařazení dokladu do kontrolního hlášení (#77): 0 automaticky
+        // podle limitu 10 000 Kč, 1 vždy detail (A4/B2), 2 vždy souhrn
+        // (A5/B3), 3 nevykazovat. Hodnoty 1:1 se starým `heads.vatCS`.
+        // Čte ControlStatementCalculator (živé KH i snapshot podání).
+        {
+            "id": "cs_mode",
+            "name": "Control statement placement",
+            "name:cs": "Do kontrolního hlášení",
+            "name:en": "Control statement placement",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "economy.vat.controlStatementModes",
+            "group": "accounting"
         }
     ]
 }

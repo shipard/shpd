@@ -315,6 +315,36 @@ class FilingComposerTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(21000.0, $result['cs']['dp3Base']['1'], 0.001);
     }
 
+    /**
+     * Ruční zařazení do KH (#77): snapshot jde přes `sectionForCode()`, takže
+     * režim 1 dá detail pod limitem a režim 3 doklad z hlášení vyřadí
+     * (kh_section NULL), ale v položkách i v přiznání zůstává.
+     */
+    public function testManualControlStatementModeDrivesSnapshotSections(): void
+    {
+        $periodId = $this->insertPeriod('cs', '01/2029 KH režim');
+        // 4 590 Kč vč. daně, tedy pod limitem — ručně do detailu B2.
+        $forced = $this->insertDoc('invni', $periodId, 'cs_period', 'cz-110', 3793.39, 796.61, 'CZ11111111', 1);
+        // Nad limitem, ale ručně vyřazená z hlášení.
+        $excluded = $this->insertDoc('invni', $periodId, 'cs_period', 'cz-110', 20000.0, 4200.0, 'CZ22222222', 3);
+
+        $filingId = $this->createFiling($periodId, 'regular');
+
+        $items = $this->items($filingId);
+        $this->assertSame('B2', $items[$forced]['kh_section'], 'režim 1 → detail i pod limitem');
+        $this->assertNull($items[$excluded]['kh_section'], 'režim 3 → mimo hlášení');
+        $this->assertSame(40, (int) $items[$excluded]['dp3_row'], 'v přiznání vyřazený doklad zůstává');
+
+        $csRows = $this->db->fetchAll(
+            'SELECT section, doc_head FROM economy_vat_filing_cs_rows WHERE filing = %i ORDER BY id',
+            $filingId,
+        );
+        $this->assertSame([['section' => 'B2', 'doc_head' => $forced]], array_map(
+            static fn (array $row): array => ['section' => (string) $row['section'], 'doc_head' => (int) $row['doc_head']],
+            $csRows,
+        ), 'jediný řádek hlášení je vynucený detail; B3 agregát pro vyřazený doklad nevznikne');
+    }
+
     // ── Hlavička podání (#55 Fáze 3) ────────────────────────────────────────
 
     public function testHeaderIsPrefilledFromFilingProfile(): void
@@ -464,6 +494,7 @@ class FilingComposerTest extends IntegrationTestCase
         float $base,
         float $tax,
         string $partnerVatId,
+        int $csMode = 0,
     ): int {
         $series = $this->db->fetchRow(
             'SELECT id FROM docs_core_number_series WHERE doc_type = %s AND docState = 40 ORDER BY id LIMIT 1',
@@ -488,6 +519,7 @@ class FilingComposerTest extends IntegrationTestCase
             'vat_duzp'           => self::DUZP,
             'vat_dppd'           => self::DUZP,
             'vat_mode'           => 1,
+            'cs_mode'            => $csMode,
             'vat_registration'   => $this->registrationId,
             $periodColumn        => $periodId,
             'customer_snapshot'  => $isIssued ? $snapshot : null,

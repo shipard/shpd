@@ -404,6 +404,15 @@
     flex-direction: column;
     gap: var(--shpd-space-xs);
     font-size: 0.875rem;
+    /* Když Popover omezí výšku (shpd-popover--constrained je flex sloupec),
+       panel se zmenší místo něj a zmenšení nese seznam výsledků — tlačítka
+       Vytvořit / Vynechat zůstávají viditelná bez scrollování popoveru. */
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .shpd-resolve > * {
+    flex-shrink: 0;
   }
 
   .shpd-resolve__current {
@@ -495,9 +504,19 @@
     display: flex;
     flex-direction: column;
     max-height: 280px;
+    /* Jediný pružný prvek panelu — zmenšuje se, když je popover omezený
+       výškou (viz .shpd-resolve). */
+    flex: 1 1 auto;
     overflow-y: auto;
     border: 1px solid var(--shpd-color-border);
     border-radius: var(--shpd-radius-sm);
+  }
+
+  /* V omezeném popoveru nepustit seznam pod ≈ 3 řádky výsledků. V běžném
+     stavu min-height nenastavujeme, aby stav „Načítám…“ / „Nic nenalezeno“
+     zůstal kompaktní. */
+  :global(.shpd-popover--constrained) .shpd-resolve__results {
+    min-height: 6rem;
   }
 
   .shpd-resolve__status {

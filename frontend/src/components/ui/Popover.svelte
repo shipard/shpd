@@ -27,42 +27,98 @@
 
   let panelEl = $state(null);
   let position = $state({ top: 0, left: 0 });
+  // max-height v px, když se panel nevejde do viewportu ani na jednu stranu
+  // od kotvy; null = bez omezení. Viz reposition().
+  let maxHeight = $state(null);
 
-  // Reposition when open / anchor / placement changes.
-  $effect(() => {
+  const GAP = 8; // mezera mezi kotvou a panelem
+  const MARGIN = 8; // minimální odstup od okraje viewportu
+  const MIN_HEIGHT = 160; // pod tuto výšku panel nestlačujeme
+
+  // Spočítá pozici (a případně max-height) panelu vůči kotvě a viewportu.
+  //
+  // Volá se při otevření, při změně velikosti panelu (ResizeObserver) a při
+  // změně velikosti okna. Obsah popoveru se často načítá asynchronně
+  // (např. ResolveDecisionPanel: „Načítám…“ → seznam výsledků), takže
+  // jednorázové měření při otevření nestačí — panel po doplnění obsahu
+  // doroste přes spodní okraj a flip se nikdy neprovede.
+  //
+  // Pro 'bottom' / 'top': když se přirozená výška panelu nevejde na
+  // požadovanou stranu, flipne se na stranu s větším volným prostorem.
+  // Když se nevejde ani tam, dostane panel max-height podle dostupného
+  // místa a stane se scrollovatelným (modifikátor --constrained), aby
+  // spodní část nebyla useknutá bez možnosti se k ní dostat.
+  function reposition() {
     if (!open || !anchor || !panelEl) return;
     const r = anchor.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+
+    // Přirozená výška = bez aktuálního omezení. Dočasné vypnutí max-height je
+    // synchronní (bez překreslení), ResizeObserver mezistav nevidí.
+    panelEl.style.maxHeight = '';
     const pr = panelEl.getBoundingClientRect();
+    const natural = pr.height;
+
     let top;
     let left;
-    switch (placement) {
-      case 'top':
-        top = r.top - pr.height - 8;
-        left = r.left;
-        break;
-      case 'right':
-        top = r.top;
-        left = r.right + 8;
-        break;
-      case 'left':
-        top = r.top;
-        left = r.left - pr.width - 8;
-        break;
-      case 'bottom':
-      default:
-        top = r.bottom + 8;
-        left = r.left;
-        break;
+    let maxH = null;
+
+    if (placement === 'bottom' || placement === 'top') {
+      const spaceBelow = vh - r.bottom - GAP - MARGIN;
+      const spaceAbove = r.top - GAP - MARGIN;
+      let side = placement;
+      if (side === 'bottom' && natural > spaceBelow && spaceAbove > spaceBelow) side = 'top';
+      if (side === 'top' && natural > spaceAbove && spaceBelow > spaceAbove) side = 'bottom';
+      const avail = side === 'bottom' ? spaceBelow : spaceAbove;
+      if (natural > avail) maxH = Math.max(MIN_HEIGHT, Math.floor(avail));
+      const h = maxH === null ? natural : Math.min(natural, maxH);
+      top = side === 'bottom' ? r.bottom + GAP : r.top - GAP - h;
+      left = r.left;
+    } else {
+      // 'right' / 'left' — zarovnat horní hranu s kotvou; když přesahuje
+      // spodní okraj, posunout nahoru; když je vyšší než viewport, omezit.
+      top = r.top;
+      left = placement === 'right' ? r.right + GAP : r.left - pr.width - GAP;
+      const availTotal = vh - 2 * MARGIN;
+      if (natural > availTotal) maxH = Math.max(MIN_HEIGHT, Math.floor(availTotal));
+      const h = maxH === null ? natural : Math.min(natural, maxH);
+      if (top + h > vh - MARGIN) top = vh - MARGIN - h;
     }
-    // Basic viewport flip: bottom-overflow → flip to top.
-    if (placement === 'bottom' && top + pr.height > window.innerHeight) {
-      top = r.top - pr.height - 8;
-    }
-    // Clamp horizontally — keep at least 8px margin from each viewport edge.
-    left = Math.max(8, Math.min(left, window.innerWidth - pr.width - 8));
-    // Clamp top too — if even the flipped position would overflow, pin to 8px.
-    top = Math.max(8, top);
+
+    // Vodorovně držet odstup od okrajů viewportu.
+    left = Math.max(MARGIN, Math.min(left, vw - pr.width - MARGIN));
+    // Nikdy nad horní okraj.
+    top = Math.max(MARGIN, top);
+
+    panelEl.style.maxHeight = maxH === null ? '' : `${maxH}px`;
+    maxHeight = maxH;
     position = { top, left };
+  }
+
+  // Přepočet při otevření / změně kotvy / umístění + sledování velikosti
+  // panelu a okna po dobu otevření.
+  $effect(() => {
+    if (!open || !anchor || !panelEl) return;
+    reposition(); // čte placement → efekt na jeho změnu reaguje
+    // Přepočet z ResizeObserveru odložit do rAF — reposition() mění rozměr
+    // pozorovaného prvku a synchronní změna v callbacku by vyvolala
+    // „ResizeObserver loop completed with undelivered notifications“.
+    let raf = 0;
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(reposition);
+          })
+        : null;
+    ro?.observe(panelEl);
+    window.addEventListener('resize', reposition);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+      window.removeEventListener('resize', reposition);
+    };
   });
 
   // Document-level click + Escape, only while open.
@@ -106,6 +162,7 @@
 {#if open}
   <div
     class="shpd-popover"
+    class:shpd-popover--constrained={maxHeight !== null}
     bind:this={panelEl}
     style:top="{position.top}px"
     style:left="{position.left}px"
@@ -130,5 +187,17 @@
     border-radius: 6px;
     box-shadow: var(--shpd-shadow-lg, 0 4px 12px rgba(0, 0, 0, 0.15));
     padding: var(--shpd-space-sm);
+    box-sizing: border-box;
+  }
+
+  /* Panel omezený max-height (viz reposition()): flex sloupec, aby si
+     obsah mohl sám rozhodnout, co zmenšit (např. seznam výsledků), a
+     overflow jako záchrana pro obsah, který se zmenšit neumí. Ve
+     výchozím stavu zůstává display: block — nemění layout ostatních
+     konzumentů popoveru. */
+  .shpd-popover--constrained {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
   }
 </style>

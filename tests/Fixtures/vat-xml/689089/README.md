@@ -27,9 +27,22 @@ Příklad: `DPHDP3-12345678-2026-01.xml`, `DPHKH1-12345678-2026-01.xml`.
 ## Co se porovnává
 
 `EpoXmlDiff` porovnává **věty a atributy po normalizaci** — na pořadí
-atributů, pořadí řádků v sekci ani na zápisu čísla nezáleží. Neporovnávají
-se atributy, které se legitimně liší: `nazevSW`, `verzeSW`, `d_poddp`,
-`sest_*`, `c_telef`, `email`.
+atributů, pořadí řádků v sekci, na zápisu čísla ani na tom, jestli je nula
+vypsaná nebo vynechaná, nezáleží (EPO bere chybějící hodnotu jako nulu).
+Neporovnávají se atributy, které se legitimně liší: `nazevSW`, `verzeSW`,
+`d_poddp`, `sest_*`, `c_telef`, `email`.
+
+Zlatý test k tomu přidává tolerance proti tomu, jak podával starý Shipard
+(`GoldenFilingXmlTest::comparisonOptions()`, odvozené z mapovací
+konfigurace):
+
+- **odpočet v plné výši + krácený** (ř. 40–48) se porovnává jako součet
+  proti plnému sloupci podaného — starý všechno sléval do plného, nový dělí
+  dle § 76 (rozhodnutí F3-6 (a) v `tasks/vat-filing-xml.md`);
+- **ř. 52** (`odp_uprav_kf`, `koef_p20_nov`) se neporovnává — starý ho
+  nepodával;
+- **`id_dats`** — ze struktury DPHKH1 zmizel (verze 03.01.14), podané KH ho
+  nese ze starší verze.
 
 ## Data v repozitáři
 

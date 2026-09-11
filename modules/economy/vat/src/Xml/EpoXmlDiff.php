@@ -17,6 +17,15 @@ namespace Shipard\Module\Economy\Vat\Xml;
  * - datumy podle dne (`4.5.2026` = `04.05.2026`),
  * - ostatní jako trimnutý řetězec.
  *
+ * **Nulový atribut je totéž co chybějící** (#55 F3-4): EPO bere
+ * nevyplněnou hodnotu jako nulu, takže `odp_rezim="0"` a vynechaný
+ * `odp_rezim` je totéž podání — starý Shipard nuly vypisoval u řádků, které
+ * jeho výpočet znal, nový je vynechává. Nula se proto zahodí na obou
+ * stranách ještě před porovnáním; věta, které tím nezůstane žádný atribut,
+ * zmizí celá. Platí to i pro kódy s hodnotou `0` (`kod_rezim_pl`,
+ * `k_pln_eu`) — jiná hodnota kódu rozdíl pořád udělá, jen chybějící kód
+ * proti nulovému ne.
+ *
  * Věty, kterých je víc (řádky hlášení), se párují **podle obsahu**, ne
  * podle pořadí: ze souboru se pro každou větu udělá multimnožina
  * normalizovaných řádků. Přeházené řádky téže sekce tedy rozdíl nedělají,
@@ -24,6 +33,12 @@ namespace Shipard\Module\Economy\Vat\Xml;
  *
  * `ignoreAttributes` vynechá atributy, které se legitimně liší (jméno
  * a verze software, datum podání, kontaktní údaje, kdo sestavil).
+ *
+ * `foldAttributes` (cíl → zdroje) před porovnáním **sečte** číselné
+ * atributy do cíle a zdroje zahodí, na obou stranách. Zlatý test tím
+ * srovnává odpočet rozdělený na plný a krácený sloupec s podáním, které
+ * měl celý v plném (#55 F3-6 (a)); hodnota, která má jen zdroj, se do cíle
+ * přesune.
  */
 final class EpoXmlDiff
 {
@@ -39,14 +54,20 @@ final class EpoXmlDiff
 
     /**
      * @param list<string> $ignoreAttributes
+     * @param array<string, list<string>> $foldAttributes cílový atribut → atributy,
+     *        které se do něj před porovnáním přičtou (jen číselné)
      * @return list<array{sentence: string, kind: string, attribute?: string,
      *     expected?: string, actual?: string, row?: string}>
      *     prázdné pole = soubory se shodují
      */
-    public static function compare(string $expected, string $actual, array $ignoreAttributes = self::DEFAULT_IGNORED): array
-    {
-        $left  = self::sentences($expected, $ignoreAttributes);
-        $right = self::sentences($actual, $ignoreAttributes);
+    public static function compare(
+        string $expected,
+        string $actual,
+        array $ignoreAttributes = self::DEFAULT_IGNORED,
+        array $foldAttributes = [],
+    ): array {
+        $left  = self::sentences($expected, $ignoreAttributes, $foldAttributes);
+        $right = self::sentences($actual, $ignoreAttributes, $foldAttributes);
 
         $differences = [];
         foreach (array_unique([...array_keys($left), ...array_keys($right)]) as $sentence) {
@@ -101,12 +122,14 @@ final class EpoXmlDiff
     // ── Rozbor ──────────────────────────────────────────────────────────────
 
     /**
-     * Věty souboru → seznamy normalizovaných map atributů.
+     * Věty souboru → seznamy normalizovaných map atributů (bez ignorovaných,
+     * po sloučení a bez nul).
      *
      * @param list<string> $ignoreAttributes
+     * @param array<string, list<string>> $foldAttributes
      * @return array<string, list<array<string, string>>>
      */
-    private static function sentences(string $xml, array $ignoreAttributes): array
+    private static function sentences(string $xml, array $ignoreAttributes, array $foldAttributes): array
     {
         $dom = new \DOMDocument();
         $dom->preserveWhiteSpace = false;
@@ -126,12 +149,45 @@ final class EpoXmlDiff
                 }
                 $attributes[$attribute->name] = self::normalize($attribute->value);
             }
+            $attributes = self::fold($attributes, $foldAttributes);
+            // Nula ≡ chybějící atribut — až po sloučení, aby se nula, která
+            // vznikla součtem, zahodila taky.
+            $attributes = array_filter($attributes, static fn (string $value): bool => $value !== '0');
             if ($attributes !== []) {
                 ksort($attributes);
                 $out[$element->nodeName][] = $attributes;
             }
         }
         return $out;
+    }
+
+    /**
+     * Sečte zdrojové atributy do cílového a zdroje odstraní. Cíl vznikne
+     * i tehdy, když ho věta neměla a měla jen zdroj (odpočet celý
+     * v kráceném sloupci proti podání, které ho měl v plném).
+     *
+     * @param array<string, string> $attributes normalizované hodnoty
+     * @param array<string, list<string>> $foldAttributes
+     * @return array<string, string>
+     */
+    private static function fold(array $attributes, array $foldAttributes): array
+    {
+        foreach ($foldAttributes as $target => $sources) {
+            $present = false;
+            $sum     = 0.0;
+            foreach ([(string) $target, ...$sources] as $attribute) {
+                if (!array_key_exists($attribute, $attributes)) {
+                    continue;
+                }
+                $present = true;
+                $sum    += (float) $attributes[$attribute];
+                unset($attributes[$attribute]);
+            }
+            if ($present) {
+                $attributes[(string) $target] = self::number($sum);
+            }
+        }
+        return $attributes;
     }
 
     /**
@@ -213,12 +269,19 @@ final class EpoXmlDiff
     {
         $value = trim($value);
 
-        if (preg_match('/^-?\d+(\.\d+)?$/', $value) === 1) {
-            return rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.') ?: '0';
+        if (preg_match('/^[-+]?\d+(\.\d+)?$/', $value) === 1) {
+            return self::number((float) $value);
         }
         if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $value, $m) === 1) {
             return sprintf('%04d-%02d-%02d', (int) $m[3], (int) $m[2], (int) $m[1]);
         }
         return $value;
+    }
+
+    /** Kanonický zápis čísla; nula (i záporná) je vždy `0`. */
+    private static function number(float $value): string
+    {
+        $text = rtrim(rtrim(number_format($value, 4, '.', ''), '0'), '.');
+        return $text === '' || $text === '-0' || $text === '-' ? '0' : $text;
     }
 }

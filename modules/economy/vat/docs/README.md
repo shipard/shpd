@@ -410,9 +410,14 @@ vendor/bin/shpd-ds vat-filing-xml-diff podano.xml /tmp/epo/DPHDP3-…xml
 
 `EpoXmlDiff` porovnává **věty a atributy po normalizaci**: pořadí atributů,
 pořadí řádků v sekci ani zápis čísla (`210` vs. `210.00`) rozdíl nedělají,
-jiná hodnota a chybějící či přebývající řádek ano. Zlatý test
-(`GoldenFilingXmlTest`) na něm staví — porovnává vygenerované soubory
-s podanými, které leží v `tests/Fixtures/vat-xml/689089/`.
+jiná hodnota a chybějící či přebývající řádek ano. **Nulový atribut je
+totéž co chybějící** — EPO bere nevyplněnou hodnotu jako nulu a starý
+Shipard nuly u známých řádků vypisoval, nový je vynechává. Volitelné
+sloučení atributů (`foldAttributes`, cíl → zdroje) sečte před porovnáním
+třeba plný a krácený sloupec odpočtu. Zlatý test (`GoldenFilingXmlTest`)
+na něm staví — porovnává vygenerované soubory s podanými, které leží
+v `tests/Fixtures/vat-xml/689089/`; jeho tolerance proti starému podání
+(sloučený odpočet, bez ř. 52, bez `id_dats`) popisuje README fixtur.
 
 ## Architektura
 

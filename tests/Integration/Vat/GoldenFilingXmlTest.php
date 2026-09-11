@@ -8,6 +8,7 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Module\Economy\Vat\FilingDocument;
 use Shipard\Module\Economy\Vat\Xml\EpoXmlDiff;
 use Shipard\Module\Economy\Vat\Xml\FilingFilesService;
+use Shipard\Module\Economy\Vat\Xml\VatXmlMapping;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
 /**
@@ -22,6 +23,13 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  * Test se **přeskočí**, když soubory nejsou nebo když zdroj dat nemá
  * odpovídající podání: běží nad migrovaným zdrojem (`btpg-p`), ne nad
  * ukázkovým.
+ *
+ * Porovnání má vedle výchozích ignorovaných atributů (`EpoXmlDiff`) pár
+ * **vědomých tolerancí** proti tomu, co starý Shipard podával
+ * (`comparisonOptions()`): krácený odpočet sloučený do plného sloupce
+ * a bez ř. 52 (rozhodnutí F3-6 (a) v tasks/vat-filing-xml.md), `id_dats`,
+ * který ze struktury DPHKH1 mezitím zmizel (F3-2). Nulový atribut proti
+ * chybějícímu neřeší test, ale porovnávač sám (F3-4).
  *
  * ```bash
  * SHIPARD_INTEGRATION_DS_PATH=/opt/shipard/data-sources/btpg-… \
@@ -59,8 +67,10 @@ class GoldenFilingXmlTest extends IntegrationTestCase
     public function testGeneratedXmlMatchesWhatWasActuallyFiled(): void
     {
         $service  = new FilingFilesService($this->db->getDibiConnection(), $this->config);
+        $options  = $this->comparisonOptions();
         $compared = 0;
         $skipped  = [];
+        $failures = [];
 
         foreach ($this->fixtures() as $file) {
             $name     = basename($file);
@@ -80,12 +90,12 @@ class GoldenFilingXmlTest extends IntegrationTestCase
             $differences = EpoXmlDiff::compare(
                 (string) file_get_contents($file),
                 $generated->content,
+                $options['ignore'],
+                $options['fold'],
             );
-            $this->assertSame(
-                [],
-                $differences,
-                "{$name} (podání #{$filingId}):\n" . EpoXmlDiff::format($differences),
-            );
+            if ($differences !== []) {
+                $failures[] = "{$name} (podání #{$filingId}):\n" . EpoXmlDiff::format($differences);
+            }
             $compared++;
         }
 
@@ -94,10 +104,46 @@ class GoldenFilingXmlTest extends IntegrationTestCase
                 'Zdroj dat nemá podání pro žádný referenční soubor (' . implode(', ', $skipped) . ')',
             );
         }
-        $this->assertGreaterThan(0, $compared);
+        // Všechny soubory najednou — u zlatého testu je seznam rozdílů
+        // výsledek, ne jen první zádrhel.
+        $this->assertSame([], $failures, implode("\n\n", $failures));
     }
 
     // ── Pomocné ─────────────────────────────────────────────────────────────
+
+    /**
+     * Tolerance zlatého testu odvozené z mapovací konfigurace, ne z jmen
+     * atributů v testu — když se formulář změní, změní se config a test
+     * s ním.
+     *
+     * @return array{ignore: list<string>, fold: array<string, list<string>>}
+     */
+    private function comparisonOptions(): array
+    {
+        $cfg    = $this->config?->cfgItem(VatXmlMapping::CFG_ITEM_CZ);
+        $rows   = is_array($cfg) ? ($cfg['dp3']['rows'] ?? []) : [];
+        $ignore = EpoXmlDiff::DEFAULT_IGNORED;
+        $fold   = [];
+
+        foreach ($rows as $definition) {
+            // F3-6 (a): starý Shipard vykazoval celý odpočet „v plné výši";
+            // nový dělí dle § 76 na plný a krácený. Součet musí sedět.
+            if (isset($definition['full'], $definition['reduced'])) {
+                $fold[(string) $definition['full']] = [(string) $definition['reduced']];
+            }
+            // Ř. 52 (krácený odpočet × zálohový koeficient) starý nepodával.
+            if (($definition['percent']['source'] ?? null) === 'coefficient') {
+                $ignore[] = (string) $definition['percent']['attr'];
+                $ignore[] = (string) $definition['full'];
+            }
+        }
+
+        // F3-2: `id_dats` zmizel ze struktury DPHKH1 (03.01.14), podané KH
+        // ho nese ze starší verze; aktuální XSD by ho odmítlo.
+        $ignore[] = 'id_dats';
+
+        return ['ignore' => $ignore, 'fold' => $fold];
+    }
 
     /** @return list<string> */
     private function fixtures(): array
@@ -106,9 +152,14 @@ class GoldenFilingXmlTest extends IntegrationTestCase
     }
 
     /**
-     * Podané podání odpovídající referenčnímu souboru. Název nese typ,
-     * DIČ, období a u neřádných podání i druh a pořadí — tedy přesně to,
-     * čím je podání identifikované.
+     * Podání odpovídající referenčnímu souboru. Název nese typ, DIČ,
+     * období a u neřádných podání i druh a pořadí — tedy přesně to, čím je
+     * podání identifikované.
+     *
+     * Přednost má **podané** podání; když žádné není, bere se poslední
+     * koncept. Na migrovaném zdroji jsou rekonstrukce podání koncepty
+     * schválně — po opravě profilu nebo reimportu jdou přepočítat, podané
+     * by zmrzly i s chybou.
      */
     private function findFiling(string $fileName): ?int
     {
@@ -127,7 +178,7 @@ class GoldenFilingXmlTest extends IntegrationTestCase
             'p.report_type = %s' => $reportType,
             'YEAR(p.date_begin) = %i' => (int) $year,
             'f.filing_kind = %s' => $kind ?? FilingDocument::KIND_REGULAR,
-            'f.docState = %i' => FilingDocument::DOC_STATE_FILED,
+            'f.docState IN %in' => [FilingDocument::DOC_STATE_COMPOSED, FilingDocument::DOC_STATE_FILED],
         ];
         if (str_starts_with($period, 'Q')) {
             $conditions['QUARTER(p.date_begin) = %i'] = (int) substr($period, 1);
@@ -140,7 +191,8 @@ class GoldenFilingXmlTest extends IntegrationTestCase
 
         $sql    = 'SELECT f.id FROM economy_vat_filings f'
             . ' JOIN economy_vat_report_periods p ON p.id = f.report_period WHERE '
-            . implode(' AND ', array_keys($conditions)) . ' ORDER BY f.id LIMIT 1';
+            . implode(' AND ', array_keys($conditions))
+            . ' ORDER BY f.docState DESC, f.sequence DESC, f.id DESC LIMIT 1';
         $id = $this->db->fetchSingle($sql, ...array_values($conditions));
 
         return $id !== null && $id !== false ? (int) $id : null;

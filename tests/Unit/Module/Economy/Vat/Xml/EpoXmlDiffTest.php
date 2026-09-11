@@ -118,6 +118,118 @@ class EpoXmlDiffTest extends TestCase
         $this->assertSame(['VetaB2'], array_column($differences, 'sentence'));
     }
 
+    // ── Nula ≡ chybějící atribut (#55 F3-4) ────────────────────────────────
+
+    public function testZeroAttributeEqualsMissingAttribute(): void
+    {
+        $expected = $this->dp3('<Veta4 odp_rezim="0" odp_sum_nar="100"/>');
+        $actual   = $this->dp3('<Veta4 odp_sum_nar="100"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $actual));
+        $this->assertSame([], EpoXmlDiff::compare($actual, $expected));
+    }
+
+    public function testSentenceWithOnlyZerosEqualsMissingSentence(): void
+    {
+        $expected = $this->dp3('<Veta1 obrat23="1000"/><Veta6 dano="0" dano_no="0.00"/>');
+        $actual   = $this->dp3('<Veta1 obrat23="1000"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $actual));
+    }
+
+    public function testZeroAgainstNonZeroValueIsStillReported(): void
+    {
+        // Věta jen s nulami zmizí celá, takže proti ní stojí věta navíc.
+        $differences = EpoXmlDiff::compare(
+            $this->dp3('<Veta6 dano="0"/>'),
+            $this->dp3('<Veta6 dano="5"/>'),
+        );
+
+        $this->assertCount(1, $differences);
+        $this->assertSame(['Veta6', 'extra'], [$differences[0]['sentence'], $differences[0]['kind']]);
+        $this->assertStringContainsString('dano="5"', $differences[0]['row']);
+
+        // Uvnitř věty s dalšími hodnotami je to rozdíl hodnoty proti „—".
+        $differences = EpoXmlDiff::compare(
+            $this->dp3('<Veta6 dan_zocelk="100" dano="0"/>'),
+            $this->dp3('<Veta6 dan_zocelk="100" dano="5"/>'),
+        );
+
+        $this->assertCount(1, $differences);
+        $this->assertSame(['Veta6', 'dano', '—', '5'], [
+            $differences[0]['sentence'],
+            $differences[0]['attribute'],
+            $differences[0]['expected'],
+            $differences[0]['actual'],
+        ]);
+    }
+
+    public function testRowsPairEvenWhenOneSideWritesZeroBands(): void
+    {
+        $expected = $this->kh1(
+            '<VetaB2 dic_dod="5" zakl_dane1="50.00" dan1="10.50" zakl_dane2="0" dan2="0" zakl_dane3="0.00" dan3="0.00"/>',
+        );
+        $actual = $this->kh1('<VetaB2 dic_dod="5" zakl_dane1="50.00" dan1="10.50"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $actual));
+    }
+
+    public function testNegativeZeroIsZero(): void
+    {
+        $expected = $this->dp3('<Veta6 dano="-0"/>');
+        $actual   = $this->dp3('<Veta6 dano="0.00"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $actual));
+        $this->assertSame([], EpoXmlDiff::compare($expected, $this->dp3('')));
+    }
+
+    // ── Sloučené atributy (#55 F3-6 (a)) ───────────────────────────────────
+
+    public function testFoldedAttributesCompareAsTheirSum(): void
+    {
+        $fold     = ['odp_tuz23_nar' => ['odp_tuz23']];
+        $expected = $this->dp3('<Veta4 pln23="500000" odp_tuz23_nar="106109"/>');
+        $actual   = $this->dp3('<Veta4 pln23="500000" odp_tuz23_nar="105624" odp_tuz23="485"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $actual, EpoXmlDiff::DEFAULT_IGNORED, $fold));
+        $this->assertNotSame([], EpoXmlDiff::compare($expected, $actual), 'bez sloučení jsou to dva rozdíly');
+    }
+
+    public function testFoldWithOnlySourcePresentMovesValueToTarget(): void
+    {
+        $fold     = ['odp_sum_nar' => ['odp_sum_kr']];
+        $expected = $this->dp3('<Veta4 odp_sum_nar="485"/>');
+        $actual   = $this->dp3('<Veta4 odp_sum_kr="485"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $actual, EpoXmlDiff::DEFAULT_IGNORED, $fold));
+    }
+
+    public function testFoldedSumThatDiffersIsReportedOnTarget(): void
+    {
+        $fold        = ['odp_tuz23_nar' => ['odp_tuz23']];
+        $differences = EpoXmlDiff::compare(
+            $this->dp3('<Veta4 odp_tuz23_nar="106109"/>'),
+            $this->dp3('<Veta4 odp_tuz23_nar="105624" odp_tuz23="500"/>'),
+            EpoXmlDiff::DEFAULT_IGNORED,
+            $fold,
+        );
+
+        $this->assertCount(1, $differences);
+        $this->assertSame(['odp_tuz23_nar', '106109', '106124'], [
+            $differences[0]['attribute'],
+            $differences[0]['expected'],
+            $differences[0]['actual'],
+        ]);
+    }
+
+    public function testFoldedZeroSumDisappearsLikeAnyZero(): void
+    {
+        $fold     = ['odp_tuz5_nar' => ['odp_tuz5']];
+        $expected = $this->dp3('<Veta4 odp_tuz5_nar="0" odp_tuz5="0"/>');
+
+        $this->assertSame([], EpoXmlDiff::compare($expected, $this->dp3(''), EpoXmlDiff::DEFAULT_IGNORED, $fold));
+    }
+
     // ── Ignorované atributy ─────────────────────────────────────────────────
 
     public function testSoftwareAndContactDifferencesAreIgnoredByDefault(): void

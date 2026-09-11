@@ -79,6 +79,19 @@ class DocumentApplier
         'rows'   => 1,
     ];
 
+    /**
+     * Canonical `vat.controlStatementMode` → docs_core_heads.cs_mode
+     * (extension economy.vat, cfgItem economy.vat.controlStatementModes, #77).
+     * `auto` se do payloadu nedává — sloupec má default 0 a na DS bez
+     * economy.vat by neexistoval; ruční režim tam naopak selhat má.
+     */
+    private const CS_MODE_MAP = [
+        'auto'      => 0,
+        'detail'    => 1,
+        'aggregate' => 2,
+        'exclude'   => 3,
+    ];
+
     private const VAT_PLACE_MAP = [
         'domestic'    => 0,
         'intracom'    => 1,
@@ -1112,6 +1125,7 @@ class DocumentApplier
         // do docs_core_vat_recap.
         $recapSource = $this->resolveRecapSource($canonical);
         $calcSource = self::VAT_CALC_SOURCE_MAP[(string) ($canonical['vat']['calcSource'] ?? 'header')] ?? 0;
+        $csMode = self::CS_MODE_MAP[(string) ($canonical['vat']['controlStatementMode'] ?? 'auto')] ?? 0;
         // Pokladní doklad bez způsobu úhrady = Hotovost (ostatní Převodem).
         $defaultPaymentMethod = $isCashDeskBound ? 'cash' : 'bankTransfer';
         $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? $defaultPaymentMethod)]
@@ -1184,6 +1198,7 @@ class DocumentApplier
             'vat_calc_source'      => $calcSource,
             'vat_recap_source'     => $recapSource['source'],
             'vat_place'            => $vatPlace,
+            'cs_mode'              => $csMode !== 0 ? $csMode : null,
             'vat_registration'    => $vatRegistrationId,
             'doc_currency'         => isset($canonical['currency'])
                                        ? strtolower((string) $canonical['currency'])

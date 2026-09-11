@@ -130,7 +130,7 @@ class DocumentExporterTest extends TestCase
         $this->assertSame(
             [
                 'mode' => 'fromBase', 'place' => 'domestic', 'registrationCountry' => 'cz',
-                'recapSource' => 'computed', 'calcSource' => 'header',
+                'recapSource' => 'computed', 'calcSource' => 'header', 'controlStatementMode' => 'auto',
             ],
             $c['vat'],
             'autorita rekapitulace i metoda výpočtu musí přežít round-trip',
@@ -168,6 +168,18 @@ class DocumentExporterTest extends TestCase
         $this->assertSame([], $schema, 'exported canonical must validate against the docs schema');
         $errors = array_filter((new DocumentValidator())->validate($c), static fn(array $i): bool => $i['severity'] === 'error');
         $this->assertSame([], array_values($errors), 'exported canonical must pass DocumentValidator');
+    }
+
+    /** Ruční zařazení do KH musí přežít dump → seed (#77). */
+    public function testManualControlStatementModeIsExported(): void
+    {
+        $exporter = new DocumentExporter($this->db(rows: [$this->itemRowRow()]));
+
+        $record = $exporter->exportDocument($this->headRow(['cs_mode' => 3]));
+        $this->assertSame('exclude', $record->data['vat']['controlStatementMode']);
+
+        $record = $exporter->exportDocument($this->headRow(['cs_mode' => 1]));
+        $this->assertSame('detail', $record->data['vat']['controlStatementMode']);
     }
 
     public function testIssuedInvoicePutsPartnerOnCustomerSide(): void

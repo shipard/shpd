@@ -356,6 +356,15 @@
                                                         "rows",
                                                         null
                                                     ]
+                                                },
+                                                "controlStatementMode": {
+                                                    "enum": [
+                                                        "auto",
+                                                        "detail",
+                                                        "aggregate",
+                                                        "exclude",
+                                                        null
+                                                    ]
                                                 }
                                             }
                                         },

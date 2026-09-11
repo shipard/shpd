@@ -114,7 +114,14 @@
                 // (docs.core.vatCalcSources): "header" = daň jednou ze součtu
                 // cen ve sazbě (norma), "rows" = součet řádkových daní
                 // (historický režim). null → default 0 (z hlavičky).
-                "calcSource":          { "enum": ["header", "rows", null] }
+                "calcSource":          { "enum": ["header", "rows", null] },
+
+                // Ruční zařazení do kontrolního hlášení
+                // (economy.vat.controlStatementModes, sloupec cs_mode, #77):
+                // "auto" podle limitu 10 000 Kč, "detail" vždy A4/B2,
+                // "aggregate" vždy A5/B3, "exclude" mimo hlášení. Hodnoty
+                // 1:1 se starým vatCS 0–3; null → auto.
+                "controlStatementMode": { "enum": ["auto", "detail", "aggregate", "exclude", null] }
             }
         },
 

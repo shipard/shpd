@@ -211,12 +211,23 @@ Top-level struktura:
                                    //   declared = vatRecap je fakt z dokladu
                                    //   a DocDocument ho nepřepočítá.
                                    //   null → applier odvodí.
-    "calcSource": "header"        // header | rows | null
+    "calcSource": "header",       // header | rows | null
                                    //   Metoda výpočtu PŘEPOČÍTANÉ
                                    //   rekapitulace (docs.core.vatCalcSources):
                                    //   header = daň jednou ze součtu cen
                                    //   ve sazbě (norma), rows = součet
                                    //   řádkových daní. null → header.
+    "controlStatementMode": "auto" // auto | detail | aggregate | exclude | null
+                                   //   Ruční zařazení do kontrolního hlášení
+                                   //   (docs_core_heads.cs_mode, cfgItem
+                                   //   economy.vat.controlStatementModes, #77):
+                                   //   auto = podle limitu 10 000 Kč, detail =
+                                   //   vždy A4/B2, aggregate = vždy A5/B3,
+                                   //   exclude = mimo hlášení (v přiznání
+                                   //   zůstává). 1:1 se starým vatCS 0–3;
+                                   //   null → auto. Applier auto do payloadu
+                                   //   nedává (default sloupce), exporter
+                                   //   hodnotu vypisuje vždy (round-trip).
   },
 
   // ── Payment ──────────────────────────────────────────────────────────────

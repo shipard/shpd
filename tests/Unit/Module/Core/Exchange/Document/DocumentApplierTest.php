@@ -522,6 +522,52 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(1234, $result->savedId);
     }
 
+    /**
+     * Ruční zařazení do KH (#77): canonical `vat.controlStatementMode` →
+     * `cs_mode`; `auto` a chybějící hodnota klíč do payloadu nedají
+     * (default sloupce 0, na DS bez economy.vat sloupec ani neexistuje).
+     */
+    public function testControlStatementModeMapsToCsModeOnlyWhenManual(): void
+    {
+        $cases = [['exclude', 3], ['detail', 1], ['aggregate', 2], ['auto', null], [null, null]];
+        foreach ($cases as [$mode, $expected]) {
+            $resolvers = $this->buildAutoCreateResolvers(['full_name' => 'X', 'company_id' => '12345678']);
+            $persons   = $this->createMock(TransactionlessTableGateway::class);
+            $persons->method('saveDocument')->willReturn(\Shipard\Core\Document\DocumentResult::ok(['id' => 99]));
+
+            $saved = null;
+            $heads = $this->createMock(TransactionlessTableGateway::class);
+            $heads->method('saveDocument')->willReturnCallback(static function (array $data) use (&$saved) {
+                $saved = $data;
+                return \Shipard\Core\Document\DocumentResult::ok(['id' => 1234]);
+            });
+
+            $db = $this->createMock(Connection::class);
+            $db->method('fetch')->willReturn(null);
+            $db->method('getInsertId')->willReturn(0);
+
+            $applier = $this->buildApplier(
+                db: $db, party: $resolvers['party'], item: $resolvers['item'], unit: $resolvers['unit'],
+                vat: $resolvers['vat'], bank: $resolvers['bank'],
+                heads: $heads, persons: $persons,
+            );
+
+            $payload = $this->payloadWithCanCreateSupplier([], applyOptions: ['autoCreateMode' => 'safe']);
+            if ($mode !== null) {
+                $payload['vat']['controlStatementMode'] = $mode;
+            }
+            $result = $applier->apply($payload);
+
+            $this->assertTrue($result->success, "mode '{$mode}': {$result->errorCode} {$result->errorMessage}");
+            $this->assertIsArray($saved);
+            if ($expected === null) {
+                $this->assertArrayNotHasKey('cs_mode', $saved, "mode '{$mode}' nemá do payloadu dávat cs_mode");
+            } else {
+                $this->assertSame($expected, $saved['cs_mode'] ?? null, "mode '{$mode}'");
+            }
+        }
+    }
+
     public function testSafeModeRejectsPartyWithoutCompanyId(): void
     {
         $resolvers = $this->buildAutoCreateResolvers([

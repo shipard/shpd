@@ -40,6 +40,8 @@ final class DocumentExporter implements RecordExporter
     private const VAT_PLACE_NAMES = [0 => 'domestic', 1 => 'intracom', 2 => 'thirdCountry'];
     private const VAT_RECAP_SOURCE_NAMES = [0 => 'computed', 1 => 'declared'];
     private const VAT_CALC_SOURCE_NAMES = [0 => 'header', 1 => 'rows'];
+    /** docs_core_heads.cs_mode → canonical vat.controlStatementMode (#77). */
+    private const CS_MODE_NAMES = [0 => 'auto', 1 => 'detail', 2 => 'aggregate', 3 => 'exclude'];
     private const PAYMENT_METHOD_NAMES = [0 => 'cash', 1 => 'bankTransfer', 2 => 'card', 3 => 'cashOnDelivery', 4 => 'setOff'];
     private const PRICE_CALC_MODE_NAMES = [0 => 'fromUnitPrice', 1 => 'fromTotal'];
     private const ROW_KIND_NAMES = [0 => 'text', 1 => 'item', 2 => 'section'];
@@ -209,6 +211,9 @@ final class DocumentExporter implements RecordExporter
                 // rekapitulací na přepočítaný a přepsal částky z dokladu.
                 'recapSource'         => self::VAT_RECAP_SOURCE_NAMES[(int) ($h['vat_recap_source'] ?? 0)] ?? null,
                 'calcSource'          => self::VAT_CALC_SOURCE_NAMES[(int) ($h['vat_calc_source'] ?? 0)] ?? null,
+                // Ruční zařazení do KH — bez něj by seed vrátil doklad
+                // do automatiky a hlášení by vyšlo jinak než podané.
+                'controlStatementMode' => self::CS_MODE_NAMES[(int) ($h['cs_mode'] ?? 0)] ?? null,
             ],
             'payment'       => [
                 'method'           => self::PAYMENT_METHOD_NAMES[(int) ($h['payment_method'] ?? 1)] ?? null,

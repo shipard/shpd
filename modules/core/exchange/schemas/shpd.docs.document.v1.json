@@ -57,7 +57,8 @@
                 "place":               { "type": ["string", "null"] },
                 "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Za-z]{2}$" },
                 "recapSource":         { "enum": ["computed", "declared", null] },
-                "calcSource":          { "enum": ["header", "rows", null] }
+                "calcSource":          { "enum": ["header", "rows", null] },
+                "controlStatementMode": { "enum": ["auto", "detail", "aggregate", "exclude", null] }
             }
         },
         "payment": {

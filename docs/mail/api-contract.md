@@ -510,8 +510,37 @@ confidence, resolution, attachments, … }` + `aiFailed`/`wrapper` (nevalidní
 výstup), nebo `canonical` (docs: s fresh enrichmentem a `_resolve`
 z `applier->preview()`; registry: passthrough + `target: "registry"`).
 `attachments` = **všechny** obsahové přílohy zprávy
-(`{ndx, filename, mime_type, size_bytes}`). Chyby: `404 NOT_FOUND` /
+(`{ndx, filename, mime_type, size_bytes}`). `userActions` = rozhodnutí
+uložená z review modalu (§9.13): flat mapa `{cesta: userAction}`, nebo `{}`
+— klíč je ve všech větvích odpovědi (i `aiFailed` a registry), na DS bez
+sloupce `user_actions_json` vždy `{}`. Chyby: `404 NOT_FOUND` /
 `NO_ANALYSIS` / `NO_PROPOSAL`, `500 CORRUPTED_DATA`.
+
+### 9.13 `POST /_mail/messages/{ndx}/decisions`
+
+Průběžné ukládání rozhodnutí z review modalu (resolve badge popovery,
+issue #76). Auth: běžný uživatelský token. Body **povinně**
+`{ "_resolve": {cesta: userAction} }` — vždy **celá** mapa, ne delta;
+last-write-wins bez ETagu. Tvar shodný s `_resolve` v §9.8, např.
+`{"supplier": "useExisting:42", "rows[0].item": "skip"}`; prázdný objekt =
+smazat všechna rozhodnutí.
+
+Guardy shodné s reject (§9.9): zpráva existuje a je mimo Archiv/Koš,
+poslední úspěšná analýza + `analysis_state=30`, `resolution IS NULL`.
+Server mapu **sanitizuje** — ponechá jen cesty z whitelistu
+`supplier|customer|supplierBank|customerBank` a `rows[N].(item|unit|vatCode)`
+s neprázdnou string hodnotou, zbytek tiše zahodí — a uloží ji jako JSON do
+`core_mail_message_analyses.user_actions_json` na řádek **poslední
+analýzy** (prázdná mapa po sanitizaci = `NULL`). Vazba na analýzu, ne na
+zprávu: reanalýza vytvoří nový řádek bez rozhodnutí. Po verdiktu
+(apply/reject) se sloupec nemaže; po unapply se modal otevře s původními
+rozhodnutími.
+
+Vrací `{ messageNdx, analysisNdx, userActions }` s mapou tak, jak byla
+uložena (po sanitizaci; prázdná jako `{}`). Chyby: `422 VALIDATION_ERROR`
+(`_resolve` chybí nebo není objekt, `details[0].field = "_resolve"`),
+`404 NOT_FOUND`, `409 INVALID_STATE`, `500 INTERNAL_ERROR`; v read-only
+stavu DS `403 DS_READ_ONLY`.
 
 ## 10. Známé limity
 

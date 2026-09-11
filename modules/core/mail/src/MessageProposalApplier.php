@@ -55,6 +55,15 @@ final class MessageProposalApplier
     private const DOC_STATE_TRASH_MAIN = 5;
 
     /**
+     * Whitelist cest flat `userActions` mapy (klient → `_resolve`): top-level
+     * strany + řádková pole. Sdílí {@see expandUserActions} i
+     * {@see sanitizeUserActions} — kdo rozšíří jen jedno místo, rozbije buď
+     * apply, nebo persistenci rozhodnutí (#76).
+     */
+    private const USER_ACTION_TOP_PATHS = ['supplier', 'customer', 'supplierBank', 'customerBank'];
+    private const USER_ACTION_ROW_PATH_RE = '/^rows\[(\d+)\]\.(item|unit|vatCode)$/';
+
+    /**
      * `$applier` je nullable kvůli konstrukci pro unapply-only / registry-only
      * použití (docs apply bez něj vrací INTERNAL_ERROR). `$headsGateway`
      * potřebuje jen docs větev unapply — staví ho controller (se všemi
@@ -379,6 +388,92 @@ final class MessageProposalApplier
     }
 
     /**
+     * Průběžné uložení rozhodnutí z review modalu (resolve badge popovery)
+     * na řádek poslední úspěšné analýzy — `user_actions_json` (#76,
+     * tasks/mail-review-decisions-persist.md). Vždy **celá** mapa,
+     * last-write-wins; prázdná mapa po sanitizaci = NULL. Guardy 1:1
+     * s {@see reject} (zpráva mimo Archiv/Koš, analysis_state=30,
+     * resolution IS NULL). Po verdiktu se sloupec nemaže — je to záznam,
+     * co uživatel rozhodl; reanalýza vytvoří nový řádek bez rozhodnutí.
+     *
+     * `$userId` se zatím nezapisuje (sloupec autora není) — parametr kvůli
+     * symetrii s ostatními akcemi.
+     *
+     * @param array<mixed, mixed> $flat  flat {path: userAction}; metoda sanitizuje sama
+     */
+    public function saveUserActions(int $messageNdx, ?int $userId, array $flat): ProposalApplyOutcome
+    {
+        $message = $this->db->fetchRow(
+            'SELECT * FROM %n WHERE id = %i',
+            self::MESSAGES_TABLE, $messageNdx,
+        );
+        if ($message === null) {
+            return ProposalApplyOutcome::error(
+                $messageNdx, null, 'NOT_FOUND',
+                "Message {$messageNdx} not found", 404,
+            );
+        }
+
+        $docState = (int) ($message['docState'] ?? 0);
+        if ($docState === self::MSG_STATE_ARCHIVED || $docState === self::MSG_STATE_TRASH) {
+            return ProposalApplyOutcome::error(
+                $messageNdx, null, 'INVALID_STATE',
+                'Message is archived or trashed', 409,
+            );
+        }
+
+        $analysis = $this->latestSuccessfulAnalysis($messageNdx);
+        if ($analysis === null || (int) ($message['analysis_state'] ?? 0) !== self::ANALYSIS_ANALYZED) {
+            return ProposalApplyOutcome::error(
+                $messageNdx, null, 'INVALID_STATE',
+                'Message has no completed analysis (analysis_state != 30)', 409,
+            );
+        }
+        $analysisNdx = (int) $analysis['id'];
+
+        if ($analysis['resolution'] !== null) {
+            return ProposalApplyOutcome::error(
+                $messageNdx, $analysisNdx, 'INVALID_STATE',
+                'Proposal is already resolved (applied or rejected)', 409,
+            );
+        }
+
+        $sanitized = self::sanitizeUserActions($flat);
+        $json = null;
+        if ($sanitized !== []) {
+            $encoded = json_encode($sanitized, JSON_UNESCAPED_UNICODE);
+            if ($encoded === false) {
+                return ProposalApplyOutcome::error(
+                    $messageNdx, $analysisNdx, 'INTERNAL_ERROR',
+                    'Decisions cannot be encoded', 500,
+                );
+            }
+            $json = $encoded;
+        }
+
+        // Jeden UPDATE, bez transakce — NULL při prázdné mapě maže dřívější
+        // rozhodnutí (klient posílá celou mapu, „Zrušit výběr" = klíč zmizí).
+        try {
+            $this->db->updateWhere(
+                self::ANALYSES_TABLE,
+                ['user_actions_json' => $json],
+                'id = %i', $analysisNdx,
+            );
+        } catch (\Throwable $e) {
+            ErrorLogger::warn('MessageProposalApplier::saveUserActions failed', [
+                'error' => $e->getMessage(),
+                'analysisNdx' => $analysisNdx,
+            ]);
+            return ProposalApplyOutcome::error(
+                $messageNdx, $analysisNdx, 'INTERNAL_ERROR',
+                'Decisions write failed', 500,
+            );
+        }
+
+        return ProposalApplyOutcome::ok($messageNdx, $analysisNdx, null, null);
+    }
+
+    /**
      * Vrátí aplikovaný návrh (undo apply): cílovou entitu soft-deletne
      * (docs Koncept → Koš, registry dle target applieru), vynuluje
      * `message.target_*`, resolution analýzy → NULL a zprávu vrátí
@@ -684,17 +779,58 @@ final class MessageProposalApplier
             if (!is_string($action)) {
                 continue;
             }
-            if (preg_match('/^rows\[(\d+)\]\.(item|unit|vatCode)$/', (string) $path, $m)) {
+            if (preg_match(self::USER_ACTION_ROW_PATH_RE, (string) $path, $m)) {
                 $idx = (int) $m[1];
                 $field = $m[2];
                 $expanded['rows'][$idx][$field]['userAction'] = $action;
                 continue;
             }
-            if (in_array($path, ['supplier', 'customer', 'supplierBank', 'customerBank'], true)) {
+            if (in_array($path, self::USER_ACTION_TOP_PATHS, true)) {
                 $expanded[$path]['userAction'] = $action;
             }
         }
         return $expanded;
+    }
+
+    /**
+     * Ponechá jen dvojice s cestou z whitelistu (týž jako
+     * {@see expandUserActions}) a neprázdnou string hodnotou; zbytek tiše
+     * zahodí. Vstup POST /decisions i obrana proti ručně poškozenému
+     * sloupci `user_actions_json`. Pořadí klíčů zachovává.
+     *
+     * @param array<mixed, mixed> $flat
+     * @return array<string, string>
+     */
+    public static function sanitizeUserActions(array $flat): array
+    {
+        $clean = [];
+        foreach ($flat as $path => $action) {
+            if (!is_string($action) || $action === '') {
+                continue;
+            }
+            $path = (string) $path;
+            if (!in_array($path, self::USER_ACTION_TOP_PATHS, true)
+                && preg_match(self::USER_ACTION_ROW_PATH_RE, $path) !== 1) {
+                continue;
+            }
+            $clean[$path] = $action;
+        }
+        return $clean;
+    }
+
+    /**
+     * Dekóduje `user_actions_json` ze sloupce analýzy: NULL / prázdný /
+     * nevalidní JSON / ne-objekt → []. Výsledek prochází sanitizací.
+     *
+     * @return array<string, string>
+     */
+    public static function decodeUserActions(?string $json): array
+    {
+        if ($json === null || $json === '') {
+            return [];
+        }
+        $decoded = json_decode($json, true);
+        return is_array($decoded) ? self::sanitizeUserActions($decoded) : [];
     }
 
     /**

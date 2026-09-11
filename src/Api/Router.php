@@ -635,8 +635,9 @@ class Router
 
 		// Message-centrické akce nad dokumentovým návrhem poslední analýzy
 		// (tasks/mail-message-centric.md A4). Preview je GET (read-only),
-		// zbytek POST.
-		if (preg_match('#^(\d+)/(reanalyze|apply|unapply|reject|preview)$#', $rest, $m)) {
+		// zbytek POST. `decisions` = průběžné ukládání rozhodnutí z review
+		// modalu (tasks/mail-review-decisions-persist.md, #76).
+		if (preg_match('#^(\d+)/(reanalyze|apply|unapply|reject|preview|decisions)$#', $rest, $m)) {
 			$ndx = (int) $m[1];
 			$action = $m[2];
 			if ($ndx <= 0) {
@@ -646,12 +647,16 @@ class Router
 			if ($method !== $expectedMethod) {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
+			// Nová akce = tři místa: tahle mapa, dispatchAnalysis() v
+			// public/index.php (jinak 500 „Unknown analysis action") a
+			// ReadOnlyPolicy (aspoň komentář + test).
 			$controllerAction = match ($action) {
 				'reanalyze' => 'reanalyze',
 				'apply'     => 'applyMessage',
 				'unapply'   => 'unapplyMessage',
 				'reject'    => 'rejectMessage',
 				'preview'   => 'previewMessage',
+				'decisions' => 'saveDecisions',
 			};
 			return new Route('analysis', $controllerAction, null, $ndx);
 		}

@@ -1529,6 +1529,60 @@ class AnalysisController
     }
 
     /**
+     * Průběžné uložení rozhodnutí z review modalu (resolve badge popovery)
+     * na řádek poslední úspěšné analýzy — `user_actions_json` (#76,
+     * tasks/mail-review-decisions-persist.md). Body `{"_resolve": {cesta:
+     * userAction}}` — vždy **celá** mapa (last-write-wins), prázdná = smazat.
+     * Odpověď vrací mapu tak, jak byla uložena (po sanitizaci) — nic se
+     * nečte zpět z DB. Guardy (404/409) viz
+     * {@see MessageProposalApplier::saveUserActions}.
+     */
+    public function saveDecisions(AuthContext $auth, Request $request, int $messageNdx): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $body = $request->getBody();
+        $body = is_array($body) ? $body : [];
+        if (!array_key_exists('_resolve', $body) || !is_array($body['_resolve'])) {
+            return Response::error(
+                'VALIDATION_ERROR',
+                '_resolve must be an object',
+                422,
+                [['field' => '_resolve']],
+            );
+        }
+
+        $flat = MessageProposalApplier::sanitizeUserActions($body['_resolve']);
+        $outcome = $this->buildProposalApplier()->saveUserActions($messageNdx, $auth->userId, $flat);
+        if (!$outcome->ok) {
+            return Response::error(
+                $outcome->errorCode ?? 'INTERNAL_ERROR',
+                $outcome->errorMessage ?? 'Decisions save failed',
+                $outcome->statusCode,
+            );
+        }
+
+        return Response::success([
+            'messageNdx'  => $outcome->messageNdx,
+            'analysisNdx' => $outcome->analysisNdx,
+            'userActions' => self::userActionsPayload($flat),
+        ]);
+    }
+
+    /**
+     * Flat mapa rozhodnutí pro JSON odpověď: prázdná mapa jako `{}`, ne `[]`
+     * (PHP `json_encode([])` dá pole; frontend dělá `?? {}` + Object.keys).
+     *
+     * @param array<string, string> $flat
+     */
+    private static function userActionsPayload(array $flat): array|\stdClass
+    {
+        return $flat === [] ? new \stdClass() : $flat;
+    }
+
+    /**
      * Undo apply: cílová entita do Koše, resolution analýzy → NULL, zpráva
      * 40→20. Viz {@see MessageProposalApplier::unapply}.
      */
@@ -1683,6 +1737,12 @@ class AnalysisController
             'confidence'   => $analysis['confidence'] !== null ? (float) $analysis['confidence'] : null,
             'resolution'   => $analysis['resolution'] !== null ? (int) $analysis['resolution'] : null,
             'attachments'  => $attachments,
+            // Uložená rozhodnutí z review (#76) — ve všech větvích odpovědi
+            // (ai_failed, registry, bez applieru, docs). `?? null`: sloupec
+            // chybí na DS před ds-upgrade, preview nesmí spadnout.
+            'userActions'  => self::userActionsPayload(
+                MessageProposalApplier::decodeUserActions($analysis['user_actions_json'] ?? null),
+            ),
         ];
 
         // ai_failed wrapper → return it for the special UI render path

@@ -152,11 +152,14 @@ class AnalysisControllerPreviewMessageTest extends TestCase
         string $proposedType = 'invoiceReceived',
         ?int $resolution = null,
         ?float $confidence = 0.9,
+        array $extra = [],
     ): array {
-        return [
+        // `$extra` přidává sloupce, které výchozí řádek nemá (např.
+        // `user_actions_json` — default bez klíče simuluje DS před ds-upgrade).
+        return array_merge([
             'id' => 11, 'canonical_json' => $canonicalJson, 'proposed_type' => $proposedType,
             'resolution' => $resolution, 'confidence' => $confidence,
-        ];
+        ], $extra);
     }
 
     public function testPreviewMessageReturns401WhenUnauthenticated(): void
@@ -341,6 +344,47 @@ class AnalysisControllerPreviewMessageTest extends TestCase
         // Raw canonical without _resolve when applier is missing
         $this->assertSame($canonical['docType'], $data['canonical']['docType']);
         $this->assertArrayNotHasKey('_resolve', $data['canonical']);
+    }
+
+    public function testPreviewMessageReturnsStoredUserActions(): void
+    {
+        // Rozhodnutí z review (#76) — dekódovaná z `user_actions_json` po
+        // sanitizaci (neznámá cesta z ručně poškozeného sloupce zmizí).
+        $canonical = $this->happyCanonical();
+        $db = $this->db($this->message(100), $this->analysis(
+            (string) json_encode($canonical),
+            extra: ['user_actions_json' => '{"supplier":"useExisting:42","rows[0].item":"skip","bogus":"x"}'],
+        ));
+
+        $resp = $this->controller($db, null)->previewMessage($this->authed(), $this->request(), 100);
+        $this->assertSame(200, $this->statusOf($resp));
+        $this->assertSame(
+            ['supplier' => 'useExisting:42', 'rows[0].item' => 'skip'],
+            $resp->getPayload()['data']['userActions'],
+        );
+    }
+
+    public function testPreviewMessageReturnsEmptyUserActionsObjectWithoutColumn(): void
+    {
+        // Sloupec chybí (DS před ds-upgrade) nebo je NULL → `{}` (objekt, ne
+        // `[]`) — frontend dělá `?? {}` + Object.keys. Klíč je v `$base`,
+        // tedy i v ai_failed větvi.
+        $canonical = $this->happyCanonical();
+        $db = $this->db($this->message(100), $this->analysis((string) json_encode($canonical)));
+        $data = $this->controller($db, null)->previewMessage($this->authed(), $this->request(), 100)
+            ->getPayload()['data'];
+        $this->assertInstanceOf(\stdClass::class, $data['userActions']);
+        $this->assertSame('{}', json_encode($data['userActions']));
+
+        $wrapper = ['_validationError' => 'schema', '_validationIssues' => [], '_rawOutput' => 'x'];
+        $db = $this->db($this->message(100), $this->analysis(
+            (string) json_encode($wrapper),
+            extra: ['user_actions_json' => null],
+        ));
+        $data = $this->controller($db, null)->previewMessage($this->authed(), $this->request(), 100)
+            ->getPayload()['data'];
+        $this->assertTrue($data['aiFailed']);
+        $this->assertSame('{}', json_encode($data['userActions']));
     }
 
     public function testPreviewMessageReturnsRegistryCanonicalWithTarget(): void

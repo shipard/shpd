@@ -1110,6 +1110,7 @@ function dispatchAnalysis(
 		'unapplyMessage'    => $ctrl->unapplyMessage($auth, $request, (int) $route->id),
 		'rejectMessage'     => $ctrl->rejectMessage($auth, $request, (int) $route->id),
 		'previewMessage'    => $ctrl->previewMessage($auth, $request, (int) $route->id),
+		'saveDecisions'     => $ctrl->saveDecisions($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown analysis action: {$route->action}", 500),
 	};
 }

@@ -69,6 +69,7 @@ class ReadOnlyPolicyTest extends TestCase
 			['analysis', 'previewMessage', $allow],
 			['analysis', 'reanalyze', $d403], ['analysis', 'applyMessage', $d403],
 			['analysis', 'unapplyMessage', $d403], ['analysis', 'rejectMessage', $d403],
+			['analysis', 'saveDecisions', $d403],
 			// chat celý (D5)
 			['chat', 'list', $d403], ['chat', 'show', $d403], ['chat', 'create', $d403],
 			['chat', 'rename', $d403], ['chat', 'delete', $d403], ['chat', 'sendMessage', $d403],

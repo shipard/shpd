@@ -175,6 +175,20 @@
             "group": "result"
         },
         {
+            // Rozhodnutí uživatele z review modalu (resolve badge popovery) —
+            // flat mapa {cesta: userAction}, stejný tvar jako `_resolve` v body
+            // POST /apply. Ukládá se průběžně (POST /decisions), vázáno na tento
+            // běh analýzy; po verdiktu se nemaže (historie). NULL = nic nerozhodnuto.
+            // Viz tasks/mail-review-decisions-persist.md.
+            "id": "user_actions_json",
+            "name": "Review decisions (JSON)",
+            "name:cs": "Rozhodnutí z review (JSON)",
+            "name:en": "Review decisions (JSON)",
+            "type": "longtext",
+            "nullable": true,
+            "group": "result"
+        },
+        {
             // Typ dokumentu navržený tímto během (klíč core.mail.primaryTypes).
             // Historický záznam — na rozdíl od mutable message.primary_type se
             // po zápisu nemění. Ve wire kontraktu se pole jmenuje doc_type.

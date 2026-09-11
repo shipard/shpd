@@ -410,12 +410,14 @@ zprávy; jádro je HTTP-agnostická služba `MessageProposalApplier` (sdílí ji
 HTTP controller i MCP nástroj `mail_draft_document`), výsledek nese
 `ProposalApplyOutcome`. Guardy: zpráva mimo Archiv/Koš, `analysis_state=30`,
 otevřený návrh (`resolution IS NULL`). Endpointy (detailně
-[docs/mail/api-contract.md §9.8–9.12](../../../../docs/mail/api-contract.md)):
+[docs/mail/api-contract.md §9.8–9.13](../../../../docs/mail/api-contract.md)):
 
 - **`GET /_mail/messages/{ndx}/preview`** — read-only náhled návrhu pro
   review modal: canonical + fresh enrichment + `applier->preview()`
   (registry větev vrací canonical přímo). Přílohy v response = **všechny**
-  obsahové přílohy zprávy (D10).
+  obsahové přílohy zprávy (D10). `userActions` = uložená rozhodnutí
+  z review (flat mapa, nebo `{}`) — ve všech větvích odpovědi; modal jimi
+  předvyplní stav.
 - **`POST /_mail/messages/{ndx}/apply`** — routing dle `proposed_type`
   běhu přes `PrimaryTypes::targetFor()`: docs → exchange `DocumentApplier`
   se server-side injection `source.kind='aiExtraction'` +
@@ -432,6 +434,17 @@ otevřený návrh (`resolution IS NULL`). Endpointy (detailně
   záchranná brzda): cílová entita → Koš (docs guard: stále nedotčený
   Koncept, jinak 409 `DOC_ADVANCED`), `message.target_*` → NULL,
   `resolution/resolved_*` → NULL, zpráva 40 → 20.
+- **`POST /_mail/messages/{ndx}/decisions`** — průběžné ukládání
+  rozhodnutí z review modalu (badge popovery, #76). Body `{"_resolve":
+  {cesta: userAction}}` — vždy **celá** mapa (last-write-wins), tvar shodný
+  s `_resolve` v apply. Guardy jako reject; sanitizace přes whitelist cest
+  sdílený s `expandUserActions` (neznámé cesty a ne-string hodnoty tiše
+  zmizí). Ukládá se do `user_actions_json` na řádek **analýzy** (prázdná
+  mapa = NULL); po verdiktu se nemaže (záznam, co uživatel rozhodl),
+  reanalýza = nový řádek bez rozhodnutí. Odpověď vrací uloženou mapu.
+  One-click apply z feedu a MCP `mail_draft_document` uložená rozhodnutí
+  **nečtou**. Viz
+  [tasks/mail-review-decisions-persist.md](../../../../tasks/mail-review-decisions-persist.md).
 
 ## Klasifikace typu zprávy (message_classification)
 

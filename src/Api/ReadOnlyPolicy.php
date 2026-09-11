@@ -123,7 +123,7 @@ final class ReadOnlyPolicy
 			'result'            => ReadOnlyVerdict::Deny503,
 			'failed'            => ReadOnlyVerdict::Deny503,
 			'previewMessage'    => ReadOnlyVerdict::Allow,
-			// reanalyze, applyMessage, unapplyMessage, rejectMessage → 403
+			// reanalyze, applyMessage, unapplyMessage, rejectMessage, saveDecisions → 403
 		],
 
 		// Chat celý vypnutý (D5) — i list/show, entry point server skrývá.

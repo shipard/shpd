@@ -1,6 +1,6 @@
 # Task: Review modal — průběžné ukládání rozhodnutí z resolve panelu (Issue #76)
 
-**Stav:** naplánováno
+**Stav:** částečně
 
 ## Status / cíl
 
@@ -154,10 +154,11 @@ Pak `bin/shpd-ds ds-upgrade` na dev DS; na alfě Anna.
 - `public function saveUserActions(int $messageNdx, ?int $userId, array $flat): ProposalApplyOutcome`
   — guardy **1:1 jako `reject`** (NOT_FOUND 404; Archiv/Koš 409; bez
   analýzy / `analysis_state != 30` 409; `resolution !== null` 409), pak
-  `UPDATE core_mail_message_analyses SET user_actions_json = %sN WHERE id = %i`
+  `$db->updateWhere('core_mail_message_analyses', ['user_actions_json' => $json], 'id = %i', $analysisNdx)`
   — hodnota `json_encode($sanitized, JSON_UNESCAPED_UNICODE)`, nebo
   `NULL` když je mapa po sanitizaci prázdná. Bez transakce (jeden
-  UPDATE). Vrací `ProposalApplyOutcome::ok($messageNdx, $analysisNdx, null, null)`.
+  UPDATE); pád zápisu → 500 `INTERNAL_ERROR` (jako `reject`). Vrací
+  `ProposalApplyOutcome::ok($messageNdx, $analysisNdx, null, null)`.
   Metoda sanitizuje vstup sama (obrana, i když ji zavolá kdokoli jiný);
   controller sanitizuje také a **tu samou mapu** vrátí v odpovědi —
   nic se nečte zpět z DB.
@@ -245,6 +246,9 @@ Do `$base` přidat
 - `$effect` na `open` (větev `else`): navíc `pendingSave = false;
   saveError = false; pendingAction = null; saveSeq++` (zneplatní
   případnou dobíhající odpověď). **Žádné volání `persist` z efektu.**
+  Tentýž reset (`resetDecisionState()`) i na začátku `loadPreview` —
+  v batch módu `open` zůstává true a mění se jen `messageNdx`, větev
+  `else` tedy neproběhne.
 - Patička: před tlačítky `{#if saveError}<span class="shpd-exchange-modal__save-error">{t('exchange.preview.decisions.saveError')}</span>{/if}`
   (barva `--shpd-color-danger`, `font-size: var(--shpd-font-size-sm)`,
   `margin-right: auto`, aby se tlačítka nepohnula).
@@ -296,9 +300,18 @@ změny**; guard je uvnitř modalu, callbacky se volají až po průchodu guardem
   (`SupplierCodeCaptureHandler`), i když sloupec je pro to vstup.
 - Registry větev (Spisovna) — nemá resolve panel, `userActions` bude
   vždy `{}`; UI se nemění.
+- Dataset export/seed (`MailExporter` / `MailSeeder`) sloupec
+  `user_actions_json` **nepřenáší** — rozhodnutí z review je pracovní stav
+  uživatele, ne součást testovací sady.
 
 ## Pasti
 
+- **Dispatch tabulka v `public/index.php`.** Router jen mapuje URL na
+  název akce; volání controlleru dělá ruční `match` v `dispatchAnalysis()`
+  (`public/index.php`), kde neznámá akce vrací 500 „Unknown analysis
+  action". Nová akce = Router + `dispatchAnalysis()` + ReadOnlyPolicy.
+  RouterTest tuhle díru neodhalí — při první implementaci se na ni přišlo
+  až v E2E („Rozhodnutí se nepodařilo uložit" hned při prvním rozhodnutí).
 - **Pořadí nasazení:** nejdřív jsonc + `ds-upgrade`, pak kód. Do té doby
   `SELECT *` sloupec nevrací → v PHP vždy `$analysis['user_actions_json']
   ?? null`, aby preview na neupgradovaném DS nespadlo (`Dibi\Row` na

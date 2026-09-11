@@ -699,6 +699,182 @@ class MessageProposalApplierTest extends TestCase
         $this->assertSame(409, $outcome->statusCode);
     }
 
+    // ── saveUserActions() — průběžné ukládání rozhodnutí z review (#76) ────
+
+    /**
+     * @param array<string, mixed>|null $expectedData  null = updateWhere se nesmí volat
+     */
+    private function expectUserActionsUpdate(DataSourceConnection $db, ?array $expectedData): void
+    {
+        if ($expectedData === null) {
+            $db->expects($this->never())->method('updateWhere');
+            return;
+        }
+        $db->expects($this->once())->method('updateWhere')
+            ->with('core_mail_message_analyses', $expectedData, 'id = %i', self::ANALYSIS_NDX);
+    }
+
+    public function testSaveUserActionsWritesSanitizedJsonOnAnalysis(): void
+    {
+        $db = $this->db($this->messageRow(), $this->analysisRow());
+        $this->expectUserActionsUpdate($db, [
+            'user_actions_json' => '{"supplier":"useExisting:42","rows[0].item":"skip"}',
+        ]);
+
+        $outcome = $this->service($db, null)->saveUserActions(self::MESSAGE_NDX, 7, [
+            'supplier' => 'useExisting:42',
+            'bogus' => 'create',        // neznámá cesta — zahozena
+            'rows[0].item' => 'skip',
+            'customer' => '',           // prázdný string — zahozen
+        ]);
+
+        $this->assertTrue($outcome->ok);
+        $this->assertSame(self::MESSAGE_NDX, $outcome->messageNdx);
+        $this->assertSame(self::ANALYSIS_NDX, $outcome->analysisNdx);
+        $this->assertNull($outcome->savedDocId);
+    }
+
+    public function testSaveUserActionsEmptyMapWritesNull(): void
+    {
+        // „Zrušit výběr" posledního rozhodnutí → klient pošle {} → NULL
+        // ve sloupci, ne prázdný JSON objekt.
+        $db = $this->db(
+            $this->messageRow(),
+            $this->analysisRow(['user_actions_json' => '{"supplier":"create"}']),
+        );
+        $this->expectUserActionsUpdate($db, ['user_actions_json' => null]);
+
+        $outcome = $this->service($db, null)->saveUserActions(self::MESSAGE_NDX, 7, []);
+        $this->assertTrue($outcome->ok);
+        $this->assertSame(self::ANALYSIS_NDX, $outcome->analysisNdx);
+    }
+
+    public function testSaveUserActionsNotFound(): void
+    {
+        $db = $this->db(null, null);
+        $this->expectUserActionsUpdate($db, null);
+
+        $outcome = $this->service($db, null)->saveUserActions(999, 7, ['supplier' => 'create']);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('NOT_FOUND', $outcome->errorCode);
+        $this->assertSame(404, $outcome->statusCode);
+    }
+
+    public function testSaveUserActionsRejectsArchivedOrTrashedMessage(): void
+    {
+        foreach ([80, 90] as $docState) {
+            $db = $this->db($this->messageRow(['docState' => $docState]), $this->analysisRow());
+            $this->expectUserActionsUpdate($db, null);
+
+            $outcome = $this->service($db, null)->saveUserActions(self::MESSAGE_NDX, 7, ['supplier' => 'create']);
+            $this->assertFalse($outcome->ok, "docState={$docState}");
+            $this->assertSame('INVALID_STATE', $outcome->errorCode);
+            $this->assertSame(409, $outcome->statusCode);
+        }
+    }
+
+    public function testSaveUserActionsRejectsWithoutCompletedAnalysis(): void
+    {
+        // Bez úspěšné analýzy; a s analýzou, ale zprávou zpět ve frontě
+        // (analysis_state=20, reanalýza běží).
+        foreach ([[null, 30], [$this->analysisRow(), 20]] as [$analysis, $state]) {
+            $db = $this->db($this->messageRow(['analysis_state' => $state]), $analysis);
+            $this->expectUserActionsUpdate($db, null);
+
+            $outcome = $this->service($db, null)->saveUserActions(self::MESSAGE_NDX, 7, ['supplier' => 'create']);
+            $this->assertFalse($outcome->ok, "analysis_state={$state}");
+            $this->assertSame('INVALID_STATE', $outcome->errorCode);
+            $this->assertSame(409, $outcome->statusCode);
+        }
+    }
+
+    public function testSaveUserActionsRejectsResolvedProposal(): void
+    {
+        foreach ([40, 50] as $resolution) {
+            $db = $this->db($this->messageRow(), $this->analysisRow(['resolution' => $resolution]));
+            $this->expectUserActionsUpdate($db, null);
+
+            $outcome = $this->service($db, null)->saveUserActions(self::MESSAGE_NDX, 7, ['supplier' => 'create']);
+            $this->assertFalse($outcome->ok, "resolution={$resolution}");
+            $this->assertSame('INVALID_STATE', $outcome->errorCode);
+            $this->assertSame(409, $outcome->statusCode);
+            $this->assertSame(self::ANALYSIS_NDX, $outcome->analysisNdx);
+        }
+    }
+
+    public function testSaveUserActionsWriteFailureReturns500(): void
+    {
+        $db = $this->db($this->messageRow(), $this->analysisRow());
+        $db->method('updateWhere')->willThrowException(new \RuntimeException('DB down'));
+
+        $outcome = $this->service($db, null)->saveUserActions(self::MESSAGE_NDX, 7, ['supplier' => 'create']);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('INTERNAL_ERROR', $outcome->errorCode);
+        $this->assertSame(500, $outcome->statusCode);
+    }
+
+    // ── sanitize / decode helpers ────────────────────────────────────────────
+
+    public function testSanitizeUserActionsKeepsOnlyWhitelistedStringPairs(): void
+    {
+        $result = MessageProposalApplier::sanitizeUserActions([
+            'supplier' => 'useExisting:42',
+            'customerBank' => 'create',
+            'rows[0].item' => 'skip',
+            'rows[3].unit' => 'useExisting:5',
+            'rows[1].vatCode' => 'useExisting:2',
+            'bogus' => 'create',
+            'rows[abc].item' => 'skip',
+            'rows[0].bogus' => 'create',
+            'rows[0].item.extra' => 'x',
+            123 => 'create',
+            'customer' => null,
+            'supplierBank' => 12345,
+            'rows[2].item' => '',
+        ]);
+
+        $this->assertSame([
+            'supplier' => 'useExisting:42',
+            'customerBank' => 'create',
+            'rows[0].item' => 'skip',
+            'rows[3].unit' => 'useExisting:5',
+            'rows[1].vatCode' => 'useExisting:2',
+        ], $result);
+    }
+
+    public function testSanitizeIsTransparentForExpand(): void
+    {
+        // Sanitizace sdílí whitelist cest s expandUserActions — pro vstup bez
+        // prázdných řetězců nesmí expand po sanitizaci vypadat jinak. Kdo
+        // rozšíří whitelist jen na jednom místě, tento test spadne.
+        $input = [
+            'supplier' => 'useExisting:42',
+            'bogus' => 'create',
+            'rows[0].item' => 'skip',
+            'rows[abc].item' => 'skip',
+            'supplierBank' => 12345,
+            'rows[2].vatCode' => 'useExisting:9',
+            'rows[1].unit' => 'create',
+        ];
+        $this->assertSame(
+            MessageProposalApplier::expandUserActions($input),
+            MessageProposalApplier::expandUserActions(MessageProposalApplier::sanitizeUserActions($input)),
+        );
+    }
+
+    public function testDecodeUserActionsToleratesNullAndGarbage(): void
+    {
+        $this->assertSame([], MessageProposalApplier::decodeUserActions(null));
+        $this->assertSame([], MessageProposalApplier::decodeUserActions(''));
+        $this->assertSame([], MessageProposalApplier::decodeUserActions('not json'));
+        $this->assertSame([], MessageProposalApplier::decodeUserActions('"string"'));
+        $this->assertSame([], MessageProposalApplier::decodeUserActions('[1,2]'));
+        $this->assertSame(
+            ['supplier' => 'useExisting:42', 'rows[0].item' => 'skip'],
+            MessageProposalApplier::decodeUserActions('{"supplier":"useExisting:42","bogus":"x","rows[0].item":"skip"}'),
+        );
+    }
+
     // ── unapply() ───────────────────────────────────────────────────────────
 
     public function testUnapplyNotFound(): void

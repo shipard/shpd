@@ -906,6 +906,23 @@ class RouterTest extends TestCase
 		$this->assertSame(55, $result->id);
 	}
 
+	public function testMailMessagesDecisionsPost(): void
+	{
+		// Průběžné ukládání rozhodnutí z review modalu (#76).
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/decisions', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('analysis', $result->controller);
+		$this->assertSame('saveDecisions', $result->action);
+		$this->assertSame(55, $result->id);
+	}
+
+	public function testMailMessagesDecisionsGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/decisions', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
 	public function testMailMessagesPreviewGet(): void
 	{
 		// Preview je read-only → GET (na rozdíl od ostatních akcí).

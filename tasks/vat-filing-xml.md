@@ -325,3 +325,40 @@ Věta C součty; SHV řádek per (stát, DIČ, kód plnění).
   třístranný obchod v souhrnném hlášení (`k_pln_eu` = 2, dnes nemapované).
 - Nasazení na alfu: `ds-upgrade` (nové cfgItems, jinak generování skončí na
   chybějícím `valueScale`) a kontrola, že render služba běží.
+
+## Zlatý test — první běh (2026-09-11, dev DS `btpg-p`, podání #6–#10 z opraveného profilu)
+
+Porovnání `vat-filing-files --xml-only` proti podaným XML zdroje 689089 (fixtury lokálně,
+gitignorované). Hodnoty ř. 62/63/64 sedí ve všech čtyřech DP3; rozdíly:
+
+**Chyby k opravě (nová strana):**
+- **F3-1 KH `c_evid_dd` v sekcích B** — dáváme naše číslo dokladu (`doc_number`), patří tam
+  evidenční číslo daňového dokladu **dodavatele** (`partner_doc_number`, tak je v podaném).
+  Kvůli tomu `EpoXmlDiff` nespáruje ani jeden řádek B2. Sekce A (naše doklady) správně.
+- **F3-2 KH hlavička bez `id_dats`** — `filingHeaderCzKh1.jsonc` pole nemá, profil ho má,
+  podaný KH ho nese. Doplnit do schématu KH (DP3 ho oficiálně nemá).
+- **F3-3 `stat` jako kód** — vypisujeme `cz`; oficiální popis: název z číselníku zemí
+  (`naz_zeme_c25`, „Česká republika"). Writer musí mapovat kód → název (číselník
+  `world.base.countries` má název, nebo statická mapa pro EPO).
+- **F3-4 nulové atributy** — starý Shipard vypisoval `0` u řádků, které jeho výpočet znal
+  (ř. 45, 61, 65, 66, `odp_tuz5`, `dan3`/`zakl_dane3`, `rez_pren5`); my je vynecháváme.
+  EPO bere chybějící = 0, takže je to ekvivalentní — **`EpoXmlDiff` má brát „—" ≡ „0"**
+  u číselných atributů (README fixtur tvrdí, že na zápisu čísla nezáleží; na přítomnosti
+  nuly by nemělo taky).
+- **F3-5 chybí akce „Načíst hlavičku z profilu"** (§ 2, composer na ni v komentáři odkazuje) —
+  bez ní jde změna profilu do existujícího konceptu jen ručně přes tab Hlavička.
+
+**K rozhodnutí (David):**
+- **F3-6 krácený odpočet vs. podané** — podaná DP3 mají všechen odpočet ve sloupci „v plné výši"
+  (ř. 40 `odp_tuz23_nar` 106 109, ř. 46 153 772, bez ř. 52); my dle D13 dělíme na plný
+  105 624 + krácený 485, koef 100 % → ř. 52 = 485, ř. 63 = 153 772 **stejně**. Nové je
+  konzistentní s § 76 (firma má ř. 50 ≠ 0, koeficient ≥ 95 % → 100 %); staré vše sléváno
+  do plného. Volby: (a) nechat nové a zlatý test porovnávat ř. 40/46 jako součet
+  plný + krácený a ř. 52 ignorovat, (b) při koef = 100 % krácený sloučit do plného jako
+  starý. Doporučení: **(a)** — D13 byl vědomý.
+- **F3-7 KH B2/B3 u čtyř dokladů** — po opravě F3-1 zbývá ověřit, zda 4 řádky, které podaný
+  KH má v B2 a my v B3 (rozdíl B3 základ 8 060,93 / daň 1 692,79), jsou doklady s více
+  sazbami, kde limit 10 000 Kč vč. daně platí za **celý doklad** (a náš engine ho počítá
+  per sazbu), nebo chyba starého. Rozhodne až diff po F3-1.
+
+**Data profilu (ne kód):** `opr_jmeno`/`opr_prijmeni` zadáno v profilu prohozeně.

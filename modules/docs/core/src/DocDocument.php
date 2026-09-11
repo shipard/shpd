@@ -8,6 +8,7 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
+use Shipard\Module\Economy\Codebooks\FiscalMonthLookup;
 use Shipard\Module\World\Vat\VatRateResolver;
 
 /**
@@ -761,19 +762,17 @@ abstract class DocDocument extends Document
         return $row !== null ? (int) $row['id'] : null;
     }
 
+    /**
+     * Běžný měsíc (period_type 1) obsahující účetní datum — sdílený dotaz
+     * FiscalMonthLookup, tentýž používá FiscalMonthLockProvider pro nový
+     * měsíc dokladu před uložením (#55 D27).
+     */
     protected function resolveFiscalMonthId(string $accountingDate): ?int
     {
         if ($this->db === null || $accountingDate === '') {
             return null;
         }
-        // Pick regular months (period_type = 1), skip Opening (0) and Closing (2)
-        $row = $this->db->fetch(
-            'SELECT [id] FROM [economy_codebooks_fiscal_months]
-             WHERE [date_begin] <= %d AND [date_end] >= %d AND [period_type] = 1
-             LIMIT 1',
-            $accountingDate, $accountingDate,
-        );
-        return $row !== null ? (int) $row['id'] : null;
+        return FiscalMonthLookup::monthIdForDate($this->db, $accountingDate);
     }
 
     // ── Row calculations ────────────────────────────────────────────────────

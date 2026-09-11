@@ -20,7 +20,14 @@
                                 {"type": "input", "column": "date_end", "required": true},
                                 {"type": "select", "column": "period_type", "required": true},
                                 {"type": "input", "column": "calendar_year", "readOnly": true},
-                                {"type": "input", "column": "calendar_month", "readOnly": true}
+                                {"type": "input", "column": "calendar_month", "readOnly": true},
+                                {"type": "separator", "label": "Zámek", "label:cs": "Zámek", "label:en": "Lock"},
+                                // Zámek měsíce (#55 D27) — blokuje každý doklad s účetním datem
+                                // v měsíci. Jen běžné měsíce; při zamykání varuje na nenulové 343.
+                                {"type": "input", "column": "locked",
+                                 "hint": "Zamčený měsíc blokuje uložení, opravu, storno i smazání všech dokladů s účetním datem v něm — včetně konceptů.",
+                                 "hint:cs": "Zamčený měsíc blokuje uložení, opravu, storno i smazání všech dokladů s účetním datem v něm — včetně konceptů.",
+                                 "hint:en": "A locked month blocks saving, editing, cancelling and deleting every document dated within it, drafts included."}
                             ]
                         }
                     ]

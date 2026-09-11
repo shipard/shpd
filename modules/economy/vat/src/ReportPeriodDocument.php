@@ -7,6 +7,7 @@ namespace Shipard\Module\Economy\Vat;
 use Shipard\Core\Auth\CurrentUser;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\Document;
+use Shipard\Core\Document\LockStamp;
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
 
@@ -70,23 +71,7 @@ class ReportPeriodDocument extends Document
      */
     protected function stampLock(array &$data, ?array $originalData): void
     {
-        if (!array_key_exists('locked', $data)) {
-            return;
-        }
-        $wasLocked = !empty($originalData['locked']);
-        $isLocked  = !empty($data['locked']);
-        if ($isLocked && !$wasLocked) {
-            $userId = $this->currentUserId();
-            if ($userId !== null) {
-                $data['locked_at'] ??= $this->now();
-                $data['locked_by'] ??= $userId;
-            }
-            return;
-        }
-        if (!$isLocked && $wasLocked) {
-            $data['locked_at'] = null;
-            $data['locked_by'] = null;
-        }
+        LockStamp::apply($data, $originalData, $this->currentUserId(), $this->now());
     }
 
     /**

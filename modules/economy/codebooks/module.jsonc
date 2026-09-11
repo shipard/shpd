@@ -113,6 +113,16 @@
         { "table": "economy_codebooks_cost_centers", "id": "economy.codebooks.cost_centers" }
     ],
 
+    // Zámek fiskálního měsíce nad doklady (#55 D27): zamčený měsíc blokuje
+    // každý doklad s účetním datem v něm (koncepty i bezdaňové včetně).
+    // Ptá se TableGateway, generické CRUD i nabídka přechodů.
+    "documentLockProviders": [
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalMonthLockProvider"
+        }
+    ],
+
     "documentClasses": [
         {
             "table": "economy_codebooks_fiscal_years",

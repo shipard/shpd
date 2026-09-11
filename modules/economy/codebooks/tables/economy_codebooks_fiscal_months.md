@@ -14,12 +14,15 @@ přes rodičovský fiskální rok. Každý rok má právě 14 měsíců
 | `period_type` | enumInt default 1, cfgItem `economy.codebooks.fiscalPeriodTypes` | 0=Otevření, 1=Běžné, 2=Uzavření |
 | `calendar_year` | int | Denormalizováno z `date_begin` v `beforeSave` |
 | `calendar_month` | smallint | Denormalizováno z `date_begin` v `beforeSave`, 1–12 |
+| `locked` | boolean default 0 | Zámek měsíce (#55 D27) — viz níže. Jen `period_type` 1 |
+| `locked_at` | datetime, nullable, system | Kdy byl měsíc zamčen; `FiscalMonthDocument` při `locked` 0→1, maže při 1→0. NULL ve strojovém kontextu |
+| `locked_by` | int, reference `core_system_users`, nullable, system | Kdo zamkl (uživatel requestu) |
 
 ## Indexy
 
 - `idx_fiscal_year` na `fiscal_year, date_begin`
-- `idx_dates` na `date_begin, date_end` — připravený lookup pro
-  budoucí mapování doklad → fiskální měsíc
+- `idx_dates` na `date_begin, date_end` — lookup doklad → fiskální měsíc
+  (`FiscalMonthLookup::monthIdForDate`)
 
 ## Denormalizace `calendar_year`/`calendar_month`
 
@@ -34,6 +37,28 @@ přes rodičovský fiskální rok. Každý rok má právě 14 měsíců
 
 Ve formuláři jsou pole `readOnly` jen pro orientaci; hodnota se
 doplní po uložení.
+
+## Zámek měsíce (#55 D27)
+
+`locked = 1` na běžném měsíci blokuje **každý** doklad, jehož původní
+`fiscal_month` nebo nový měsíc (dopočtený z `accounting_date` přes
+`FiscalMonthLookup`, stejný dotaz jako `DocDocument::resolveFiscalMonthId`)
+míří na tento měsíc — bez ohledu na obsah a stav dokladu, koncepty
+i bezdaňové převody včetně (`FiscalMonthLockProvider`, registrovaný
+v `module.jsonc` → `documentLockProviders`). Vynucení dělá `TableGateway`
+(chyba formuláře `locked`), generické CRUD (`DOCUMENT_LOCKED`) a nabídka
+přechodů (žádné). Import mód (`_importNumber`) zámek obchází.
+
+Zamčený měsíc nemění rozsah, typ ani rok — jediná povolená mutace je
+přepnutí `locked` (formulář měsíce v detailu fiskálního roku). Roční
+`economy_codebooks_fiscal_years.locked` se **nevynucuje** — sémantika
+uzavřeného roku přijde s uzávěrkou.
+
+Při zamykání měsíce `FiscalMonthDocument` varuje (neblokuje), když kontrola
+zůstatků 343 za podané instance DPH končící v měsíci (`economy.vat`,
+`ClosedPeriodBalanceCheck`) najde nenulový zůstatek — chybí zaúčtování
+přiznání, nebo se DPH po podání změnila. Vazba je měkká: běží jen s aktivním
+modulem `economy.vat` (přítomnost tabulky).
 
 ## Otevření a Uzavření jako jednodenní
 

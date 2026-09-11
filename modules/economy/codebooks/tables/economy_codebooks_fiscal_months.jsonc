@@ -68,6 +68,38 @@
             "name:en": "Calendar month",
             "type": "smallint",
             "nullable": false
+        },
+        // Zámek měsíce (#55 D27): zamčený měsíc blokuje uložení, změnu stavu
+        // i smazání KAŽDÉHO dokladu s účetním datem v měsíci (koncepty
+        // i bezdaňové včetně) — FiscalMonthLockProvider. Jen běžné měsíce
+        // (period_type 1). Stejný tvar jako economy_vat_report_periods.
+        {
+            "id": "locked",
+            "name": "Locked",
+            "name:cs": "Uzamčeno",
+            "name:en": "Locked",
+            "type": "boolean",
+            "default": 0,
+            "nullable": false
+        },
+        {
+            "id": "locked_at",
+            "name": "Locked at",
+            "name:cs": "Uzamčeno kdy",
+            "name:en": "Locked at",
+            "type": "datetime",
+            "nullable": true,
+            "system": true
+        },
+        {
+            "id": "locked_by",
+            "name": "Locked by",
+            "name:cs": "Uzamkl",
+            "name:en": "Locked by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "system": true
         }
     ],
 

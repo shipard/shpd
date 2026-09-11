@@ -55,13 +55,27 @@ class BankPhase1Test extends IntegrationTestCase
         return $v;
     }
 
+    /** @return array{id: int, name: string} libovolná existující osoba na dev DS */
+    private function anyPartner(): array
+    {
+        $row = $this->db->fetchRow(
+            "SELECT id, full_name FROM base_persons_persons WHERE full_name <> '' ORDER BY id LIMIT 1",
+        );
+        if ($row === null) {
+            $this->markTestSkipped('Dev DS nemá žádnou osobu');
+        }
+        return ['id' => (int) $row['id'], 'name' => (string) $row['full_name']];
+    }
+
     public function testInsertTransactionsAndViewer(): void
     {
         $dibi = $this->db->getDibiConnection();
         $bankAccount = 990001; // app-level FK, žádný DB constraint — stačí int
+        $partner = $this->anyPartner();
 
         // Dvě transakce se stejným účtem a NULL external_id/fingerprint:
         // MariaDB povoluje víc NULL v unikátním indexu → nesmí kolidovat.
+        // První má přiřazeného partnera, druhá jen protistranu z výpisu.
         $dibi->insert('economy_bank_transactions', [
             'bank_account'     => $bankAccount,
             'direction'        => 1,
@@ -71,6 +85,7 @@ class BankPhase1Test extends IntegrationTestCase
             'exchange_rate'    => 1,
             'date_transaction' => '2026-06-10',
             'counterparty_name' => 'IT BankPhase1 Alpha',
+            'partner'          => $partner['id'],
             'payment_reference' => '12345',
             'accounting_state' => 0,
             'docState'         => 10,
@@ -110,18 +125,26 @@ class BankPhase1Test extends IntegrationTestCase
         $this->assertContains($id1, $ids);
         $this->assertContains($id2, $ids);
 
-        // renderRow: směr drží znaménko, stav = concept (docState 10)
+        // renderRow: titulek = přiřazený Partner (ne protistrana z výpisu),
+        // směr drží znaménko, stav = concept (docState 10)
         $row1 = null;
+        $row2 = null;
         foreach ($rows as $r) {
             if ((int) $r['id'] === $id1) {
                 $row1 = $r;
+            } elseif ((int) $r['id'] === $id2) {
+                $row2 = $r;
             }
         }
         $this->assertNotNull($row1);
+        $this->assertNotNull($row2);
         $rendered = $viewer->renderRow($row1);
-        $this->assertSame('IT BankPhase1 Alpha', $rendered['t1']);
+        $this->assertSame($partner['name'], $rendered['t1']);
         $this->assertSame('concept', $rendered['stateStyle']);
         $this->assertStringStartsWith('+', (string) $rendered['i1'][0]['text']);
+
+        // Bez partnera pomlčka — signál, že partner chybí (protistrana je v detailu).
+        $this->assertSame('—', $viewer->renderRow($row2)['t1']);
 
         // detail má taby a skupiny vlastností
         $detail = $viewer->renderDetail($id1);
@@ -174,9 +197,14 @@ class BankPhase1Test extends IntegrationTestCase
         $rendered = $viewer->renderRow($row);
         $this->assertSame('IT-2026-06', $rendered['t1']);
 
+        // Tab Přehled je kompozitní: první blok = vlastnosti výpisu, další
+        // (transakce, přílohy) jen když existují.
         $detail = $viewer->renderDetail($id);
         $this->assertNotEmpty($detail['tabs']);
-        $this->assertNotEmpty($detail['tabs'][0]['content']['groups']);
+        $content = $detail['tabs'][0]['content'];
+        $this->assertSame('composite', $content['type']);
+        $this->assertSame('properties', $content['blocks'][0]['type']);
+        $this->assertNotEmpty($content['blocks'][0]['groups']);
 
         // Bez „nový" (create); od Fáze 2 je zde akce Importovat výpis.
         $nullIds = array_column($viewer->getToolbarActions(null), 'id');

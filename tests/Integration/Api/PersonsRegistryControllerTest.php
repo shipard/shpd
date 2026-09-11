@@ -31,13 +31,20 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  *
  * Test data: created persons are tagged with the `IT-REG-` company-id
  * prefix so tearDown can purge them without disturbing real records.
+ * Rows the import merely matched (probe company already on the DS) are
+ * never touched — tearDown deletes only what `created: true` reported.
  */
 class PersonsRegistryControllerTest extends IntegrationTestCase
 {
     private const TEST_COMPANY_ID_PREFIX = 'IT-REG-';
-    /** Known-good CZ company in ARES — Výkupna železáctví Jan Trnka s.r.o. */
+    /**
+     * Known-good CZ company: Shipard s.r.o., the vendor of this software.
+     * A real, public IČO — the registry returns HTML (→ 502
+     * REGISTRY_INVALID_RESPONSE) for made-up ids, so a placeholder here
+     * breaks fetch + import while search may still pass by name match.
+     */
     private const PROBE_COUNTRY = 'cz';
-    private const PROBE_COMPANY_ID = '12345678';
+    private const PROBE_COMPANY_ID = '63478714';
 
     private PersonsRegistryController $ctrl;
     private PersonsRegistryClient $client;
@@ -202,7 +209,12 @@ class PersonsRegistryControllerTest extends IntegrationTestCase
         $data = $response->getPayload()['data'];
         $this->assertIsInt($data['personId']);
         $this->assertGreaterThan(0, $data['personId']);
-        $this->createdPersonIds[] = $data['personId'];
+        // Uklízet jen řádek, který test skutečně založil. Na DS, kde probe
+        // firma už existuje (na dev DS je to vlastní firma!), import vrátí
+        // matched id — smazat ho by odneslo vlastní firmu i s adresami a účty.
+        if ($data['created'] === true) {
+            $this->createdPersonIds[] = $data['personId'];
+        }
 
         // Second call should return the same id without creating a new row.
         $response2 = $this->ctrl->import($this->buildRequest('POST', [

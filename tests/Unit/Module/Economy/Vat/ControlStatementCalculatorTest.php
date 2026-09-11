@@ -93,7 +93,9 @@ class ControlStatementCalculatorTest extends TestCase
 
         $this->assertCount(1, $result['sections']['B2']);
         $this->assertSame('DOD-99', $result['sections']['B2'][0]['evidNumber']);
+        $this->assertSame(ControlStatementCalculator::MODE_DETAIL, $result['sections']['B2'][0]['csMode'], 'řádek nese režim pro sloupec Zařazení');
         $this->assertSame([], $result['sections']['B3']);
+        $this->assertSame([], $result['excluded']);
     }
 
     /** Starý engine vynutil A4 i bez CZ DIČ; podání pak `dic_odb` chybí — proto měkká chyba. */
@@ -142,6 +144,7 @@ class ControlStatementCalculatorTest extends TestCase
             $this->assertSame([], $result['sections'][$section], "sekce {$section} má být prázdná");
         }
         $this->assertSame([], $result['errors']);
+        $this->assertSame([['docId' => 1, 'docNumber' => 'FV-001']], $result['excluded'], 'report vyřazené doklady vypíše');
 
         // Totéž vidí snapshot podání přes sectionForCode — kh_section NULL.
         $this->assertNull($calculator->sectionForCode($excluded, 'cz-120'));

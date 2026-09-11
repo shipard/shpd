@@ -20,6 +20,10 @@ use Shipard\Module\Economy\Vat\ControlStatementCalculator;
  * doklad (ev. číslo / DIČ / kód PDP / DPPD v text/date sloupcích);
  * A5/B3 jen agregátní součtový řádek. Měkké chyby kalkulátoru se mapují
  * na warning messages s rowRef na dotčený řádek.
+ *
+ * Ruční zařazení (`cs_mode`, #77) je vidět ve sloupci „Zařazení" jen
+ * u ručně zařazených řádků (automatika = prázdné) a doklady vyřazené
+ * režimem 3 hlásí info zpráva — co v hlášení chybí úmyslně, musí být vidět.
  */
 final class VatControlStatementLiveBuilder implements ReportBuilder
 {
@@ -113,6 +117,7 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
                         'vatId'      => (string) $sectionRow['vatId'],
                         'kodPredPl'  => $sectionRow['kodPredPl'] !== null ? (string) $sectionRow['kodPredPl'] : '',
                         'dppd'       => (string) ($sectionRow['dppd'] ?? ''),
+                        'placement'  => $this->placementLabel($request, (int) ($sectionRow['csMode'] ?? 0)),
                     ] + $this->bandValues($support, $sectionRow),
                 );
             }
@@ -122,6 +127,26 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
         $lastFiling = $support->lastFilingMessage($request, $cs);
         if ($lastFiling !== null) {
             $messages[] = $lastFiling;
+        }
+        if ($calc['excluded'] !== []) {
+            $count      = count($calc['excluded']);
+            $messages[] = new ReportMessage(
+                ReportMessageSeverity::Info,
+                'vatCs.excludedDocuments',
+                $cs
+                    ? sprintf(
+                        'Ručně vyřazeno z kontrolního hlášení (Do kontrolního hlášení = Nevykazovat): %d %s — %s.',
+                        $count,
+                        $count === 1 ? 'doklad' : ($count < 5 ? 'doklady' : 'dokladů'),
+                        implode(', ', array_column($calc['excluded'], 'docNumber')),
+                    )
+                    : sprintf(
+                        'Manually excluded from the control statement (placement = Not reported): %d document(s) — %s.',
+                        $count,
+                        implode(', ', array_column($calc['excluded'], 'docNumber')),
+                    ),
+                null,
+            );
         }
         foreach ($calc['errors'] as $error) {
             $index      = $rowIndexByDocRef["{$error['section']}|{$error['docId']}"] ?? null;
@@ -162,6 +187,21 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
         return $values;
     }
 
+    /**
+     * Popisek ručního režimu z číselníku (`economy.vat.controlStatementModes`,
+     * kompilovaný per jazyk); automatika = prázdný text, ať sloupec
+     * neruší tam, kde se nic nepřepisovalo.
+     */
+    private function placementLabel(ReportRequest $request, int $mode): string
+    {
+        if ($mode === ControlStatementCalculator::MODE_AUTO) {
+            return '';
+        }
+        $cfg   = $request->config?->cfgItem('economy.vat.controlStatementModes');
+        $label = is_array($cfg) ? (string) ($cfg[(string) $mode]['name'] ?? '') : '';
+        return $label !== '' ? $label : (string) $mode;
+    }
+
     /** @return list<ReportColumn> */
     private function columns(bool $cs): array
     {
@@ -170,6 +210,7 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
             new ReportColumn('vatId', ReportColumn::TYPE_TEXT, $cs ? 'DIČ' : 'VAT ID'),
             new ReportColumn('kodPredPl', ReportColumn::TYPE_TEXT, $cs ? 'Kód' : 'Code'),
             new ReportColumn('dppd', ReportColumn::TYPE_DATE, 'DUZP / DPPD'),
+            new ReportColumn('placement', ReportColumn::TYPE_TEXT, $cs ? 'Zařazení' : 'Placement'),
             new ReportColumn('base1', ReportColumn::TYPE_MONEY, $cs ? 'Základ — základní' : 'Base — standard'),
             new ReportColumn('tax1', ReportColumn::TYPE_MONEY, $cs ? 'Daň — základní' : 'Tax — standard'),
             new ReportColumn('base2', ReportColumn::TYPE_MONEY, $cs ? 'Základ — snížená' : 'Base — reduced'),

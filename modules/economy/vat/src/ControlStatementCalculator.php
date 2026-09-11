@@ -83,16 +83,21 @@ final class ControlStatementCalculator
      * @return array{
      *     sections: array<string, list<array<string, mixed>>>,
      *     errors: list<array{code: string, docId: int, docNumber: string, section: string}>,
+     *     excluded: list<array{docId: int, docNumber: string}>,
      * }
+     *     `excluded` = doklady ručně vyřazené režimem 3 — report je vypíše,
+     *     ať je vidět, co v hlášení chybí úmyslně.
      */
     public function calculate(array $docs): array
     {
         $sections   = array_fill_keys(self::SECTIONS, []);
         $aggregates = ['A5' => null, 'B3' => null];
         $errors     = [];
+        $excluded   = [];
 
         foreach ($docs as $doc) {
             if (self::isExcluded($doc)) {
+                $excluded[] = ['docId' => (int) $doc['id'], 'docNumber' => (string) ($doc['doc_number'] ?? '')];
                 continue;
             }
             foreach ($this->groupRecap($doc) as $group) {
@@ -116,6 +121,7 @@ final class ControlStatementCalculator
                     'vatId'      => null,
                     'kodPredPl'  => null,
                     'dppd'       => null,
+                    'csMode'     => null,
                 ] + $this->roundBands($aggregates[$aggregate]);
             }
         }
@@ -129,7 +135,7 @@ final class ControlStatementCalculator
             );
         }
 
-        return ['sections' => $sections, 'errors' => $errors];
+        return ['sections' => $sections, 'errors' => $errors, 'excluded' => $excluded];
     }
 
     /**
@@ -291,6 +297,8 @@ final class ControlStatementCalculator
             'vatId'      => $vatId,
             'kodPredPl'  => $group['kodPredPl'],
             'dppd'       => $this->reportedDate($section, $doc),
+            // Ruční režim (1/2) — report ho u řádku ukáže, automatika ne.
+            'csMode'     => self::mode($doc),
         ] + $this->roundBands($group['bands']);
     }
 

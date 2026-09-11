@@ -356,9 +356,13 @@ gitignorované). Hodnoty ř. 62/63/64 sedí ve všech čtyřech DP3; rozdíly:
   do plného. Volby: (a) nechat nové a zlatý test porovnávat ř. 40/46 jako součet
   plný + krácený a ř. 52 ignorovat, (b) při koef = 100 % krácený sloučit do plného jako
   starý. Doporučení: **(a)** — D13 byl vědomý.
-- **F3-7 KH B2/B3 u čtyř dokladů** — po opravě F3-1 zbývá ověřit, zda 4 řádky, které podaný
-  KH má v B2 a my v B3 (rozdíl B3 základ 8 060,93 / daň 1 692,79), jsou doklady s více
-  sazbami, kde limit 10 000 Kč vč. daně platí za **celý doklad** (a náš engine ho počítá
-  per sazbu), nebo chyba starého. Rozhodne až diff po F3-1.
+- **F3-7 KH B2/B3 u čtyř dokladů — vyřešeno (2026-09-11):** tři jsou doklady s ručním
+  zařazením do detailu ve starém Shipardu (`vatCS = 1`, opakované FPB 4 356 / 4 590 Kč) →
+  chybějící vlastnost, **#77** (`kh_mode` na hlavičce + import z `vatCS`). Čtvrtý je FPB
+  s nulovou částkou a prázdným DIČ, kterou starý do B2 dal chybně — nový správně
+  nevykazuje; známá výjimka zlatého testu. Zlatý test KH se uzavře až po #77 a reimportu.
+- **F3-6 — rozhodnuto (a):** nechat krácený sloupec + ř. 52; zlatý test porovnává ř. 40–47
+  jako součet „plný + krácený" proti podanému plnému sloupci a ř. 52 / `koef_p20_nov`
+  ignoruje. Koeficienty lze nastavit v Nastavení → koeficienty odpočtu (D13).
 
 **Data profilu (ne kód):** `opr_jmeno`/`opr_prijmeni` zadáno v profilu prohozeně.

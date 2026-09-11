@@ -106,6 +106,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>vat-filing-compose</info>      Sestaví podání DPH za instanci tvrzení, nebo přepočítá snapshot konceptu');
         $output->writeln('  <info>vat-filing-files</info>        Vyrobí soubory podání DPH pro daňový portál (XML, PDF opis)');
         $output->writeln('  <info>vat-filing-xml-diff</info>     Porovná dva soubory podání DPH po větách a atributech');
+        $output->writeln('  <info>doc-reaccount</info>           Přegeneruje účetní deník dokladu ve stavu 40; --force obejde zámek období (zaloguje se)');
         $output->writeln('');
         $output->writeln('<comment>Registry (Spisovna):</comment>');
         $output->writeln('  <info>registry-extract-texts</info>  Fill registry documents extracted_text from attachments (default: missing only)');

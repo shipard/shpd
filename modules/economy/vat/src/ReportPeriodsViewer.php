@@ -150,13 +150,14 @@ class ReportPeriodsViewer extends TableViewer
         $type = (string) ($record['report_type'] ?? '');
         $registrations = $this->registrationNames();
 
+        $locked = !empty($record['locked']);
         $items = [
             ['label' => 'Název', 'value' => (string) ($record['name'] ?? '')],
             ['label' => 'Typ tvrzení', 'value' => $typeLabels[$type] ?? $type],
             ['label' => 'Registrace DPH', 'value' => $registrations[(int) ($record['vat_registration'] ?? 0)] ?? ''],
             ['label' => 'Začátek období', 'value' => $this->formatDate($record['date_begin'] ?? null)],
             ['label' => 'Konec období', 'value' => $this->formatDate($record['date_end'] ?? null)],
-            ['label' => 'Uzamčeno', 'value' => !empty($record['locked']) ? 'Ano' : 'Ne'],
+            ['label' => 'Uzamčeno', 'value' => $locked ? $this->lockLabel($record) : 'Ne'],
         ];
 
         $column = ReportPeriodDocument::HEAD_COLUMN_BY_TYPE[$type] ?? null;
@@ -193,6 +194,8 @@ class ReportPeriodsViewer extends TableViewer
 
         // „Sestavit podání" otevře formulář podání s předvyplněnou
         // instancí; povolené druhy dopočítá formulář z typu tvrzení.
+        // Sestavit lze i nad zamčenou instancí — snapshot je nad neměnnými
+        // daty (D25).
         if ((int) ($record['docState'] ?? 0) !== 90) {
             $detail['actions'] = [[
                 'id'      => 'composeFiling',
@@ -204,6 +207,11 @@ class ReportPeriodsViewer extends TableViewer
                     'preset' => ['report_period' => $recordId],
                 ],
             ]];
+            // Zámek instance (#55 D25): po podání „jeden klik"; odemknutí je
+            // vědomý krok před dodatečným podáním, proto potvrzení.
+            $detail['actions'][] = $locked
+                ? self::unlockAction($recordId)
+                : self::lockAction($recordId, $this->hasFiledFiling($filings) ? 'primary' : 'secondary');
         }
         if ($filings !== []) {
             $detail['actions'][] = [
@@ -233,6 +241,58 @@ class ReportPeriodsViewer extends TableViewer
             . ' ORDER BY `sequence` DESC, `id` DESC',
             $periodId,
         );
+    }
+
+    /**
+     * Akce „Uzamknout" — sdílí ji detail instance i detail podaného podání
+     * (FilingsViewer); klient volá POST /_vat/report-period-lock.
+     *
+     * @return array<string, mixed>
+     */
+    public static function lockAction(int $periodId, string $variant = 'secondary', ?string $label = null): array
+    {
+        return [
+            'id'      => 'lockReportPeriod',
+            'label'   => $label ?? 'Uzamknout',
+            'variant' => $variant,
+            'target'  => ['periodId' => $periodId],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function unlockAction(int $periodId): array
+    {
+        return [
+            'id'      => 'unlockReportPeriod',
+            'label'   => 'Odemknout',
+            'variant' => 'secondary',
+            'confirm' => 'Odemknout tvrzení? Doklady podaného období půjde znovu měnit — odemknutí je krok'
+                . ' před dodatečným nebo opravným podáním.',
+            'target'  => ['periodId' => $periodId],
+        ];
+    }
+
+    /**
+     * „Ano, 11. 9. 2026 14:05 (Jan Novák)" / „Ano (import)" — zámek bez
+     * času přišel importem ze starého systému (#55 D26).
+     *
+     * @param array<string, mixed> $record
+     */
+    private function lockLabel(array $record): string
+    {
+        $at = SubtableCellFormatter::dateTime($record['locked_at'] ?? null);
+        if ($at === null) {
+            return 'Ano (import)';
+        }
+        $label = 'Ano, ' . $at;
+        $userId = (int) ($record['locked_by'] ?? 0);
+        if ($userId > 0) {
+            $name = $this->db->fetchSingle('SELECT `full_name` FROM `core_system_users` WHERE `id` = %i', $userId);
+            if (is_string($name) && $name !== '') {
+                $label .= " ({$name})";
+            }
+        }
+        return $label;
     }
 
     /** @param list<array<string, mixed>> $filings */

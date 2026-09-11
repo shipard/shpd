@@ -34,7 +34,7 @@ class ReportPeriodDocument extends Document
 {
     public const TYPES = ['return', 'cs', 'rs'];
 
-    private const DOC_STATE_DELETED = 90;
+    public const DOC_STATE_DELETED = 90;
 
     /** Sloupce docs_core_heads mířící na instanci dle typu (extension economy.vat). */
     public const HEAD_COLUMN_BY_TYPE = [

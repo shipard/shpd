@@ -4,6 +4,7 @@
   import FormTab from './FormTab.svelte';
   import AttachmentPanel from './AttachmentPanel.svelte';
   import FormStateBar from './FormStateBar.svelte';
+  import DocumentLockBanner from '../ui/DocumentLockBanner.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
 
@@ -67,7 +68,11 @@
   // isDisabled navíc zahrnuje probíhající save/recalculate — sub-tabulka
   // dostává obojí zvlášť, aby během ukládání rodiče nepřepínala Upravit/Smazat
   // na Zobrazit (jen je dočasně vypne).
-  const isReadOnly = $derived(readOnly || (formDef?.doc_states?.read_only ?? false));
+  // Zámek záznamu (documentLockProviders, #55 D24): server ho posílá
+  // v doc_states.lock a zároveň nastaví read_only — formulář je jen
+  // k prohlížení a nad tab-contentem visí banner s důvody.
+  const documentLock = $derived(formDef?.doc_states?.lock ?? null);
+  const isReadOnly = $derived(readOnly || (formDef?.doc_states?.read_only ?? false) || (documentLock?.locked ?? false));
   const isDisabled = $derived(saving || recalculating || isReadOnly);
 
   // Notifikuje rodiče (FormDialog) o aktuálním titulku a stavu — header modalu
@@ -603,6 +608,10 @@
       {/each}
     </div>
   {/if}
+
+  <!-- Banner zámku záznamu — doklad v uzamčeném období (DPH / fiskální
+       měsíc). Formulář je read-only, přechody server nenabízí. -->
+  <DocumentLockBanner lock={documentLock} />
 
   <!-- Validační banner — form-level i field-level chyby z VALIDATION_ERROR.
        Žije nad tab-content (mimo scrollovaný obsah) — je globální o formuláři,

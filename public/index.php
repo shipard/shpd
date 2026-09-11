@@ -335,7 +335,7 @@ function dispatch(
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables, $resolved->isDevMode(), $resolved->state->getEffectiveState()),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
 		'lookup'  => dispatchLookup($route, $request, $auth, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
-		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $tables, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $tables, $db, $configRuntime, resolveLanguage($request, $resolved->config), $documentRegistry, $resolved->config),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'senderRules' => dispatchSenderRules($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime, $documentEventDispatcher),
 		'registry' => dispatchRegistry($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
@@ -347,8 +347,8 @@ function dispatch(
 		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'dsAbout' => dispatchDsAbout($route, $auth, $db, $configRuntime, $resolved->config, resolveLanguage($request, $resolved->config), $tables),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
-		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
-		'vat' => dispatchVat($route, $request, $db, $configRuntime, $resolved, $auth),
+		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher, $documentRegistry, $resolved->config),
+		'vat' => dispatchVat($route, $request, $db, $configRuntime, $resolved, $auth, $documentRegistry, $tables),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'hostingPortal' => dispatchHostingPortal($route, $request, $auth, $db, $tables, $resolved, $modulePathResolver, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -470,8 +470,12 @@ function dispatchAccounting(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	?\Shipard\Core\Document\JournalEventDispatcher $journalEventDispatcher = null,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
 ): Response {
-	$ctrl = new \Shipard\Module\Economy\Accounting\AccountingController($db, $configRuntime, $journalEventDispatcher);
+	$ctrl = new \Shipard\Module\Economy\Accounting\AccountingController(
+		$db, $configRuntime, $journalEventDispatcher, $documentRegistry, $dsConfig,
+	);
 	return match ($route->action) {
 		'reaccount' => $ctrl->reaccount($request),
 		default     => Response::error('INTERNAL_ERROR', "Unknown accounting action: {$route->action}", 500),
@@ -485,17 +489,22 @@ function dispatchVat(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	AuthContext $auth,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	array $tables = [],
 ): Response {
 	$ctrl = new \Shipard\Module\Economy\Vat\VatFilingController(
 		$db,
 		$configRuntime,
 		$resolved->config,
 		$auth->userId,
+		$documentRegistry,
+		$tables['economy_vat_report_periods'] ?? null,
 	);
 	return match ($route->action) {
 		'filingCompose'           => $ctrl->compose($request),
 		'filingFiles'             => $ctrl->files($request),
 		'filingHeaderFromProfile' => $ctrl->headerFromProfile($request),
+		'reportPeriodLock'        => $ctrl->lockPeriod($request),
 		default                   => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
 	};
 }
@@ -1365,13 +1374,15 @@ function dispatchViewer(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $config = null,
 	string $language = 'en',
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
 ): Response {
 	$ctrl     = new ViewerController();
 	$viewerId = $route->table ?? '';
 	return match ($route->action) {
 		'meta'   => $ctrl->meta($viewerId, $auth, $registry, $tables, $db, $config, $language),
 		'rows'   => $ctrl->rows($viewerId, $request, $auth, $registry, $tables, $db, $config, $language),
-		'detail' => $ctrl->detail($viewerId, (int) $route->id, $auth, $registry, $tables, $db, $config, $language),
+		'detail' => $ctrl->detail($viewerId, (int) $route->id, $auth, $registry, $tables, $db, $config, $language, $documentRegistry, $dsConfig),
 		default  => Response::error('INTERNAL_ERROR', "Unknown viewer action: {$route->action}", 500),
 	};
 }

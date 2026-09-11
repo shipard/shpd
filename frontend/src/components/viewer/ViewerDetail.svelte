@@ -10,6 +10,7 @@
   import DocumentDetail from './DocumentDetail.svelte';
   import Icon from '../ui/Icon.svelte';
   import SandboxedHtml from '../ui/SandboxedHtml.svelte';
+  import DocumentLockBanner from '../ui/DocumentLockBanner.svelte';
   import { resolveIcon } from '../../icons.js';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
@@ -240,6 +241,10 @@
         </div>
       </div>
     {/if}
+
+    <!-- Zámek záznamu (documentLockProviders, #55 D24) — server ho
+         posílá v detail.lock; toolbar Otevřít už vyřadil. -->
+    <DocumentLockBanner lock={detail.lock ?? null} />
 
     <!-- Tab bar -->
     {#if !(hideSingleTabBar && detail.tabs.length <= 1)}

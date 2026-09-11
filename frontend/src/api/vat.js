@@ -5,6 +5,7 @@
  *   POST /_vat/filing-compose              body {"filingId": N}
  *   POST /_vat/filing-files                body {"filingId": N}
  *   POST /_vat/filing-header-from-profile  body {"filingId": N}
+ *   POST /_vat/report-period-lock          body {"periodId": N, "locked": bool}
  *
  * Podání samotná se čtou jako jakákoliv jiná tabulka přes /_ui/viewer.
  */
@@ -41,4 +42,15 @@ export async function generateFilingFiles(filingId) {
  */
 export async function reloadFilingHeader(filingId) {
   return await post('/_vat/filing-header-from-profile', { filingId });
+}
+
+/**
+ * Zamknout / odemknout instanci tvrzení (#55 D25). Uložení jde přes
+ * Document instance (guardy, locked_at/by), vrací {periodId, locked,
+ * lockedAt, lockedBy}; chybové kódy BAD_REQUEST, NOT_FOUND,
+ * INVALID_DOC_STATE, VALIDATION_ERROR (`details` = chyby polí), DOMAIN_ERROR.
+ * Idempotentní — stejný stav nic nezapíše.
+ */
+export async function lockReportPeriod(periodId, locked) {
+  return await post('/_vat/report-period-lock', { periodId, locked });
 }

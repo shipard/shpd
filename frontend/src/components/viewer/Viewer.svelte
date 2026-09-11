@@ -8,7 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
-  import { recomposeFiling, generateFilingFiles, reloadFilingHeader } from '../../api/vat.js';
+  import { recomposeFiling, generateFilingFiles, reloadFilingHeader, lockReportPeriod } from '../../api/vat.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import { inviteUser } from '../../api/security.js';
   import { fileFromMessage } from '../../api/registry.js';
@@ -683,6 +683,24 @@
           t('viewer.detail.filingFilesCreated', { names })
           + (warnings.length ? `\n\n${warnings.join('\n')}` : ''),
         );
+        refreshAfterAction();
+      } else {
+        const details = result?.error?.details ?? [];
+        alert(
+          translateError(result?.error)
+          + (details.length ? `\n\n${details.map((d) => `• ${d.message}`).join('\n')}` : ''),
+        );
+      }
+      return;
+    }
+    // Zamknout / odemknout instanci tvrzení DPH (#55 D25) — z detailu
+    // instance (ReportPeriodsViewer) i podaného podání (FilingsViewer,
+    // „Uzamknout tvrzení"); id instance nese action.target.periodId.
+    // Potvrzení odemknutí řeší ViewerDetail přes action.confirm.
+    if (actionId === 'lockReportPeriod' || actionId === 'unlockReportPeriod') {
+      const periodId = action.target?.periodId ?? recordId;
+      const result = await lockReportPeriod(periodId, actionId === 'lockReportPeriod');
+      if (result?.success) {
         refreshAfterAction();
       } else {
         const details = result?.error?.details ?? [];

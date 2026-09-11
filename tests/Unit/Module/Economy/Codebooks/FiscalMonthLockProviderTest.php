@@ -65,7 +65,7 @@ final class FiscalMonthLockProviderTest extends TestCase
         $this->assertSame('Fiskální měsíc 2026/01 je uzamčený', $reasons[0]->title);
         $this->assertSame(314, $reasons[0]->subjectTableId);
         $this->assertSame(301, $reasons[0]->subjectRowId);
-        $this->assertSame(['year' => 2026, 'month' => 1], $reasons[0]->params);
+        $this->assertSame(['year' => 2026, 'month' => 1, 'label' => '2026/01'], $reasons[0]->params);
         // Nezměněné účetní datum → bez lookupu.
         $this->assertSame(0, $p->lookups);
     }

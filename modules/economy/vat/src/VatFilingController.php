@@ -9,6 +9,9 @@ use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\TableGateway;
 use Shipard\Module\Economy\Vat\Xml\FilingFile;
 use Shipard\Module\Economy\Vat\Xml\FilingFilesFactory;
 use Shipard\Module\Economy\Vat\Xml\FilingXmlValidationException;
@@ -36,7 +39,97 @@ final class VatFilingController
         /** Bez konfigurace zdroje dat se soubory nemají kam uložit. */
         private readonly ?DataSourceConfig $dsConfig = null,
         private readonly ?int $userId = null,
+        /** Zámek instance jde přes Document — guardy ReportPeriodDocument. */
+        private readonly ?DocumentRegistry $documents = null,
+        private readonly ?TableDefinition $periodsDef = null,
     ) {}
+
+    /**
+     * POST /_vat/report-period-lock, body {"periodId": N, "locked": bool}
+     * — zamkne / odemkne instanci tvrzení (#55 D25). Uložení jde přes
+     * TableGateway a ReportPeriodDocument (locked_at/by z CurrentUser),
+     * takže platí stejné guardy jako z formuláře. Idempotentní: stejný stav
+     * nic nezapíše.
+     */
+    public function lockPeriod(Request $request): Response
+    {
+        $body = $request->getBody();
+        $periodId = is_array($body) ? (int) ($body['periodId'] ?? 0) : 0;
+        if ($periodId <= 0 || !is_array($body) || !array_key_exists('locked', $body)) {
+            return Response::error('BAD_REQUEST', 'Body must contain a positive periodId and a boolean locked', 400);
+        }
+        $locked = filter_var($body['locked'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($locked === null) {
+            return Response::error('BAD_REQUEST', 'locked must be a boolean', 400);
+        }
+        if ($this->documents === null || $this->periodsDef === null) {
+            return Response::error('INTERNAL_ERROR', 'Document registry or table definition unavailable', 500);
+        }
+
+        $period = $this->db->fetchRow(
+            'SELECT id, locked, docState FROM economy_vat_report_periods WHERE id = %i',
+            $periodId,
+        );
+        if ($period === null) {
+            return Response::error('NOT_FOUND', "Report period {$periodId} not found", 404);
+        }
+        if ((int) $period['docState'] === ReportPeriodDocument::DOC_STATE_DELETED) {
+            return Response::error('INVALID_DOC_STATE', 'Zrušenou instanci nelze zamknout.', 422);
+        }
+
+        if ((bool) $period['locked'] !== $locked) {
+            $gateway = new TableGateway(
+                'economy_vat_report_periods',
+                $this->db->getDibiConnection(),
+                $this->documents,
+                $this->periodsDef->childTables,
+                $this->config,
+                $this->dsConfig,
+                null,
+                $this->periodsDef->docStates,
+                $this->periodsDef,
+            );
+            // Celý řádek + změna — Document validuje úplný stav (jako
+            // FormController::applyStateTransitionViaDocument).
+            $existing = $gateway->loadDocument($periodId);
+            if ($existing === null) {
+                return Response::error('NOT_FOUND', "Report period {$periodId} not found", 404);
+            }
+            $existing['locked'] = $locked ? 1 : 0;
+            $result = $gateway->saveDocument($existing);
+            if (!$result->isSuccess()) {
+                $validation = $result->getValidation();
+                if ($validation !== null) {
+                    $errors = array_map(
+                        static fn ($e) => ['field' => $e->column, 'code' => $e->code ?: 'INVALID', 'message' => $e->message],
+                        $validation->getErrors(),
+                    );
+                    return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+                }
+                if ($result->isDomainError()) {
+                    return Response::error(
+                        $result->getDomainErrorCode() ?: 'DOMAIN_ERROR',
+                        $result->getErrorMessage() ?? 'Domain rule violated',
+                        422,
+                    );
+                }
+                return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
+            }
+        }
+
+        $row = $this->db->fetchRow(
+            'SELECT locked, locked_at, locked_by FROM economy_vat_report_periods WHERE id = %i',
+            $periodId,
+        );
+        return Response::success([
+            'periodId' => $periodId,
+            'locked'   => (bool) ($row['locked'] ?? false),
+            'lockedAt' => $row['locked_at'] instanceof \DateTimeInterface
+                ? $row['locked_at']->format('Y-m-d H:i:s')
+                : ($row['locked_at'] ?? null),
+            'lockedBy' => isset($row['locked_by']) ? (int) $row['locked_by'] : null,
+        ]);
+    }
 
     public function compose(Request $request): Response
     {

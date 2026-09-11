@@ -103,6 +103,14 @@ export default {
   'dsState.unavailable.retry': 'Zkusit znovu',
   'dsState.readOnly.banner': 'Zdroj dat je jen pro čtení — změny nelze ukládat.',
   'dsState.readOnly.toast': 'Zdroj dat je jen pro čtení, změny nelze ukládat.',
+
+  // Zámek záznamu (documentLockProviders, #55 D24) — banner ve formuláři a detailu
+  'lock.banner.title': 'Záznam je uzamčený — nelze ho měnit, měnit stav ani smazat.',
+  'lock.source.vat_period': '{type, select, return {Přiznání k DPH} cs {Kontrolní hlášení} rs {Souhrnné hlášení} other {Tvrzení}} {name} je uzamčené',
+  'lock.message.vat_period': 'Doklad spadá do uzamčeného tvrzení DPH. Změna vyžaduje odemknutí tvrzení (Daňová tvrzení → Odemknout).',
+  'lock.source.fiscal_month': 'Fiskální měsíc {label} je uzamčený',
+  'lock.message.fiscal_month': 'Doklad má účetní datum v uzamčeném fiskálním měsíci. Změna vyžaduje odemknutí měsíce (Fiskální roky → Měsíce).',
+  'error.DOCUMENT_LOCKED': 'Záznam je uzamčený',
   'app.selectMenuItem': 'Vyberte položku v menu',
   'app.unsupportedPanel': 'Nepodporovaný typ panelu: {type}',
   'app.menu.open': 'Otevřít menu',

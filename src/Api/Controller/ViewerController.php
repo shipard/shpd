@@ -8,7 +8,10 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Api\TableAccessGuard;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\DocumentLockRegistry;
+use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Viewer\ViewerRegistry;
 
 class ViewerController
@@ -161,8 +164,18 @@ class ViewerController
 		return Response::success($result);
 	}
 
-	public function detail(string $viewerId, int $recordId, AuthContext $auth, ViewerRegistry $registry, array $tables, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
-	{
+	public function detail(
+		string $viewerId,
+		int $recordId,
+		AuthContext $auth,
+		ViewerRegistry $registry,
+		array $tables,
+		DataSourceConnection $db,
+		?ConfigRuntime $config = null,
+		?string $language = null,
+		?DocumentRegistry $documents = null,
+		?DataSourceConfig $dsConfig = null,
+	): Response {
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
@@ -183,9 +196,26 @@ class ViewerController
 			return Response::error('RECORD_NOT_FOUND', "Record {$recordId} not found", 404);
 		}
 
+		$toolbar = $viewer->getToolbarActions($record);
+		$detail  = $viewer->renderDetail($recordId);
+
+		// Zámek záznamu (documentLockProviders, #55 D24): banner v detailu
+		// a bez toolbar akce Otevřít — formulář by byl jen read-only.
+		if ($documents !== null && $documents->hasLockProviders($def->table)) {
+			$lock = DocumentLockRegistry::forDocuments($documents, $db->getDibiConnection(), $config, $dsConfig)
+				->describe($def->table, $record);
+			$detail['lock'] = $lock;
+			if ($lock['locked']) {
+				$toolbar = array_values(array_filter(
+					$toolbar,
+					static fn(array $a): bool => ($a['id'] ?? '') !== 'edit',
+				));
+			}
+		}
+
 		return Response::success([
-			'toolbar' => $viewer->getToolbarActions($record),
-			'detail'  => $viewer->renderDetail($recordId),
+			'toolbar' => $toolbar,
+			'detail'  => $detail,
 		]);
 	}
 }

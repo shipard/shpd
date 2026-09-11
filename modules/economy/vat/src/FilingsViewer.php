@@ -218,6 +218,23 @@ class FilingsViewer extends TableViewer
             ];
         }
 
+        // Zámek tvrzení po podání (#55 D25) — „jeden klik po podání":
+        // podané podání nad neuzamčenou instancí nabídne Uzamknout tvrzení.
+        // Přechodový dialog volitelná pole neumí, proto akce, ne checkbox.
+        if ($docState === FilingDocument::DOC_STATE_FILED) {
+            $periodId = (int) ($record['report_period'] ?? 0);
+            $period = $periodId > 0
+                ? $this->db->fetchRow('SELECT `locked`, `docState` FROM `economy_vat_report_periods` WHERE `id` = %i', $periodId)
+                : null;
+            if ($period !== null && empty($period['locked']) && (int) $period['docState'] !== 90) {
+                $detail['actions'][] = ReportPeriodsViewer::lockAction(
+                    $periodId,
+                    'primary',
+                    $cs ? 'Uzamknout tvrzení' : 'Lock period',
+                );
+            }
+        }
+
         // Soubory pro daňový portál (#55 X6): u konceptu si je lze vyrobit
         // dopředu (a opakovaně), u podaného podání jen doplnit, když
         // automatické vytvoření při podání selhalo. Hotové soubory jsou

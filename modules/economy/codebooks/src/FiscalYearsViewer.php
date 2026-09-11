@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Codebooks;
 
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Form\SubtableCellFormatter;
 use Shipard\Core\Viewer\TableViewer;
 
 class FiscalYearsViewer extends TableViewer
@@ -127,7 +128,8 @@ class FiscalYearsViewer extends TableViewer
         ];
 
         $months = $this->db->fetchAll(
-            'SELECT `date_begin`, `date_end`, `period_type`, `calendar_year`, `calendar_month`'
+            'SELECT `date_begin`, `date_end`, `period_type`, `calendar_year`, `calendar_month`,'
+            . ' `locked`, `locked_at`'
             . ' FROM `economy_codebooks_fiscal_months`'
             . ' WHERE `fiscal_year` = %i'
             . ' ORDER BY `date_begin` ASC, `id` ASC',
@@ -138,12 +140,16 @@ class FiscalYearsViewer extends TableViewer
         $monthRows = [];
         foreach ($months as $m) {
             $type = (int) ($m['period_type'] ?? 1);
+            // Zámek měsíce (#55 D27) — přepíná se ve formuláři měsíce
+            // (sub-tabulka roku); s časem zamknutí, bez něj (import) holé.
+            $lockedAt = !empty($m['locked']) ? SubtableCellFormatter::dateTime($m['locked_at'] ?? null) : null;
             $monthRows[] = [
                 'date_begin'     => $this->formatDate($m['date_begin'] ?? null),
                 'date_end'       => $this->formatDate($m['date_end'] ?? null),
                 'period_type'    => $periodTypeLabels[$type] ?? (string) $type,
                 'calendar_year'  => $m['calendar_year'] ?? null,
                 'calendar_month' => $m['calendar_month'] ?? null,
+                'locked'         => !empty($m['locked']) ? ('Uzamčeno' . ($lockedAt !== null ? " ({$lockedAt})" : '')) : '—',
             ];
         }
 
@@ -158,6 +164,7 @@ class FiscalYearsViewer extends TableViewer
                     ['id' => 'period_type',    'label' => 'Typ'],
                     ['id' => 'calendar_year',  'label' => 'Rok'],
                     ['id' => 'calendar_month', 'label' => 'Měsíc'],
+                    ['id' => 'locked',         'label' => 'Zámek'],
                 ],
                 'rows' => $monthRows,
             ],

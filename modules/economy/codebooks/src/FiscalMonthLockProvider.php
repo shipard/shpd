@@ -64,7 +64,7 @@ class FiscalMonthLockProvider extends AbstractDocumentLockProvider
                     . ' i smazání vyžadují jeho odemknutí (Fiskální roky → Měsíce).',
                 subjectTableId: self::SUBJECT_TABLE_ID,
                 subjectRowId: $monthId,
-                params: ['year' => (int) $month['calendar_year'], 'month' => (int) $month['calendar_month']],
+                params: ['year' => (int) $month['calendar_year'], 'month' => (int) $month['calendar_month'], 'label' => $label],
             );
         }
         return $reasons;

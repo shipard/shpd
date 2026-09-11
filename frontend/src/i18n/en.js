@@ -94,6 +94,14 @@ export default {
   'dsState.unavailable.retry': 'Try again',
   'dsState.readOnly.banner': 'Data source is read-only — changes cannot be saved.',
   'dsState.readOnly.toast': 'Data source is read-only, changes cannot be saved.',
+
+  // Record lock (documentLockProviders, #55 D24) — banner in form and detail
+  'lock.banner.title': 'This record is locked — it cannot be changed, transitioned or deleted.',
+  'lock.source.vat_period': '{type, select, return {VAT return} cs {Control statement} rs {Recapitulative statement} other {Report period}} {name} is locked',
+  'lock.message.vat_period': 'The document belongs to a locked VAT report period. Unlock the period first (Report periods → Unlock).',
+  'lock.source.fiscal_month': 'Fiscal month {label} is locked',
+  'lock.message.fiscal_month': 'The document is dated within a locked fiscal month. Unlock the month first (Fiscal years → Months).',
+  'error.DOCUMENT_LOCKED': 'The record is locked',
   'app.selectMenuItem': 'Select an item from the menu',
   'app.unsupportedPanel': 'Unsupported panel type: {type}',
   'app.menu.open': 'Open menu',

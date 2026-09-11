@@ -372,6 +372,14 @@ class Router
 			return new Route('vat', 'filingHeaderFromProfile');
 		}
 
+		// POST /_vat/report-period-lock — zamknout / odemknout instanci tvrzení (#55 D25)
+		if ($subpath === '/_vat/report-period-lock') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('vat', 'reportPeriodLock');
+		}
+
 		// POST /_bank/import-statement — import bankovního výpisu (multipart)
 		if ($subpath === '/_bank/import-statement') {
 			if ($method !== 'POST') {

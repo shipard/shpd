@@ -840,12 +840,25 @@ class FormController
             );
         }
 
+        // Zámek záznamu (documentLockProviders, #55 D24) — jen u uloženého
+        // záznamu; zamčený = read-only + banner, přechody už vyřadil filtr.
+        // Nový záznam do zamčeného období odmítne až save (chyba `locked`).
+        $lock = ['locked' => false, 'reasons' => []];
+        if ($table !== '' && $documentRegistry !== null && $db !== null
+            && !empty($data['id']) && $documentRegistry->hasLockProviders($table)
+        ) {
+            $lock = \Shipard\Core\Document\DocumentLockRegistry::forDocuments(
+                $documentRegistry, $db->getDibiConnection(), $config,
+            )->describe($table, $data);
+        }
+
         return [
             'currentState' => $currentState,
             'stateName'    => $stateData['stateName'] ?? '',
             'stateStyle'   => $stateData['stateStyle'] ?? '',
-            'read_only'    => $cfg->isReadOnly($currentState),
+            'read_only'    => $cfg->isReadOnly($currentState) || $lock['locked'],
             'transitions'  => $transitions,
+            'lock'         => $lock,
         ];
     }
 

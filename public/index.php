@@ -5,6 +5,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Shipard\Api\AlertCheckLoader;
 use Shipard\Api\AuthContext;
+use Shipard\Core\Auth\CurrentUser;
 use Shipard\Api\Controller\AlertsController;
 use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Controller\CrudController;
@@ -139,6 +140,8 @@ try {
 	}
 	/** @var AuthContext $auth */
 	$auth = $authResult;
+	// Aktuální uživatel pro Document hooky (locked_by zámků, #55 D25/D27).
+	CurrentUser::set($auth->userId);
 
 	// ── 6.5. Read-only vynucení (#56 fáze 2) ─────────────────────────────────
 	// Za auth (anonym dostane 401 dřív než informaci o stavu DS), před rate

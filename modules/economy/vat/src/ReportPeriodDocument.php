@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Economy\Vat;
 
+use Shipard\Core\Auth\CurrentUser;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationError;
@@ -53,6 +54,39 @@ class ReportPeriodDocument extends Document
                 || $this->isoDate($data['date_end'] ?? '') !== $this->isoDate($originalData['date_end'] ?? '')
                 || (int) ($data['docState'] ?? 10) !== (int) ($originalData['docState'] ?? 10)
             );
+
+        $this->stampLock($data, $originalData);
+    }
+
+    /**
+     * `locked_at` / `locked_by` (#55 D25): při zamknutí z requestu se vyplní
+     * čas a uživatel (CurrentUser), při odemknutí se vymažou. Strojový
+     * kontext (import, CLI) uživatele nemá — pole zůstanou, jak přišla
+     * (typicky NULL → viewer ukáže „Uzamčeno (import)"). Payload s
+     * vlastními hodnotami se respektuje.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed>|null $originalData
+     */
+    protected function stampLock(array &$data, ?array $originalData): void
+    {
+        if (!array_key_exists('locked', $data)) {
+            return;
+        }
+        $wasLocked = !empty($originalData['locked']);
+        $isLocked  = !empty($data['locked']);
+        if ($isLocked && !$wasLocked) {
+            $userId = $this->currentUserId();
+            if ($userId !== null) {
+                $data['locked_at'] ??= $this->now();
+                $data['locked_by'] ??= $userId;
+            }
+            return;
+        }
+        if (!$isLocked && $wasLocked) {
+            $data['locked_at'] = null;
+            $data['locked_by'] = null;
+        }
     }
 
     /**
@@ -144,6 +178,26 @@ class ReportPeriodDocument extends Document
         }
 
         $current = $selfId !== null ? $this->loadCurrent($selfId) : null;
+
+        // Zamčená instance (D25): jediná povolená mutace je přepnutí `locked`
+        // (a přejmenování). Rozsah, stav, registrace ani typ se nemění, dokud
+        // ji uživatel neodemkne — i v jednom uložení s odemknutím. Zrušení
+        // (→ 90) hlásí guardy níž vlastní zprávou.
+        if ($current !== null && !empty($current['locked']) && $state !== self::DOC_STATE_DELETED) {
+            $frozenChanged = (int) ($current['vat_registration'] ?? 0) !== $regId
+                || (string) ($current['report_type'] ?? '') !== $type
+                || $this->isoDate($current['date_begin'] ?? '') !== $begin
+                || $this->isoDate($current['date_end'] ?? '') !== $end
+                || (int) ($current['docState'] ?? 10) !== $state;
+            if ($frozenChanged) {
+                $result->addError(
+                    ValidationError::FIELD_FORM,
+                    'Instance je uzamčená — rozsah, stav, registraci ani typ nelze měnit. Nejdřív ji odemkněte.',
+                    'locked',
+                );
+                return $result;
+            }
+        }
 
         // Zámek rozsahu podaného tvrzení (D14). Neplatí pro přechod do
         // Smazáno — ten řeší guardy zrušení níž vlastní zprávou.
@@ -324,6 +378,16 @@ class ReportPeriodDocument extends Document
     }
 
     // ── Pomocné ─────────────────────────────────────────────────────────────
+
+    protected function currentUserId(): ?int
+    {
+        return CurrentUser::id();
+    }
+
+    protected function now(): string
+    {
+        return date('Y-m-d H:i:s');
+    }
 
     protected function isoDate(mixed $value): string
     {

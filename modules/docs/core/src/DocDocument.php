@@ -1078,6 +1078,45 @@ abstract class DocDocument extends Document
      * @param array<string, mixed> $data
      * @param array<string, mixed>|null $originalData
      */
+    /**
+     * Bude mít doklad po uložení neprázdnou rekapitulaci DPH? Totéž pravidlo,
+     * podle kterého beforeSave rekapitulaci staví (`buildVatRecapitulation`
+     * / `useDeclaredRecap`), jen bez výpočtu částek a bez DB: režim DPH
+     * ≠ 0, registrace DPH a aspoň jeden položkový řádek (`row_kind` 1)
+     * s kódem DPH, nebo převzatá rekapitulace v payloadu. Payload bez klíče
+     * `rows` (header-only save, přechod stavu) řádky nemění — rozhoduje
+     * uložený stav (`$storedRecap`), stejně jako `resolveRowsForCompute`
+     * spadne na řádky z DB.
+     *
+     * Používá `VatPeriodLockProvider` (economy.vat, #55 D23) k rozhodnutí,
+     * zda se doklad **po uložení** bude počítat do zamčené instance — proto
+     * statická a čistá, aby se pravidlo od beforeSave nerozjelo.
+     *
+     * @param array<string, mixed> $data nový stav dokladu
+     * @param bool $storedRecap má uložený doklad řádky v docs_core_vat_recap
+     */
+    public static function willHaveVatRecap(array $data, bool $storedRecap): bool
+    {
+        if ((int) ($data['vat_mode'] ?? 1) === 0 || empty($data['vat_registration'])) {
+            return false;
+        }
+        $declared = (int) ($data['vat_recap_source'] ?? 0) === 1;
+        if ($declared && isset($data['vatRecap']) && is_array($data['vatRecap']) && $data['vatRecap'] !== []) {
+            return true;
+        }
+        if (!array_key_exists('rows', $data) || !is_array($data['rows'])) {
+            return $storedRecap;
+        }
+        foreach ($data['rows'] as $row) {
+            if (is_array($row) && (int) ($row['row_kind'] ?? 1) === 1 && !empty($row['vat_code'])) {
+                return true;
+            }
+        }
+        // Převzatá rekapitulace u už uloženého dokladu žije v DB, řádky
+        // ji nenesou (useDeclaredRecap → takeOver z DB).
+        return $declared && $storedRecap;
+    }
+
     protected function useDeclaredRecap(array $data, ?array $originalData): bool
     {
         if ((int) ($data['vat_recap_source'] ?? 0) !== 1) {

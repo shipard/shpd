@@ -84,6 +84,29 @@
             "default": 0,
             "nullable": false
         },
+        // Kdy a kdo zamkl (#55 D25) — plní ReportPeriodDocument při přepnutí
+        // `locked` z kontextu requestu; NULL u zámku převzatého importem
+        // ze starého systému („Uzamčeno (import)"). Systémové: klient je
+        // neposílá, nastavuje je Document.
+        {
+            "id": "locked_at",
+            "name": "Locked at",
+            "name:cs": "Uzamčeno kdy",
+            "name:en": "Locked at",
+            "type": "datetime",
+            "nullable": true,
+            "system": true
+        },
+        {
+            "id": "locked_by",
+            "name": "Locked by",
+            "name:cs": "Uzamkl",
+            "name:en": "Locked by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "system": true
+        },
 
         // --- doc state (systémové, bez skupiny) ---
 

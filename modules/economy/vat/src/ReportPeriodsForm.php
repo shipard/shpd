@@ -40,7 +40,7 @@ class ReportPeriodsForm extends TableForm
                     ->date('date_begin', required: true)
                     ->date('date_end', required: true)
                     ->separator('Zámek')
-                    ->checkbox('locked', hint: 'Vynucení zámku nad doklady přijde v další fázi.')
+                    ->checkbox('locked', hint: 'Zamčená instance blokuje uložení, opravu, storno i smazání dokladů s DPH, které do ní spadají. Odemknutí je vědomý krok před dodatečným podáním.')
             ->build();
 
         return new FormDefinition(

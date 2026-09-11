@@ -48,6 +48,16 @@
         }
     ],
 
+    // Zámek instance tvrzení nad doklady (#55 D23/D24): doklad s rekapitulací
+    // DPH, jehož ukazatel míří na zamčenou instanci, nejde uložit, změnit
+    // stav ani smazat. Ptá se TableGateway, CRUD i nabídka přechodů.
+    "documentLockProviders": [
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Economy\\Vat\\VatPeriodLockProvider"
+        }
+    ],
+
     // Soubory podaného tvrzení jsou nevratný doklad — guard je chrání
     // před smazáním a přejmenováním (#55 X16).
     "attachmentGuards": [

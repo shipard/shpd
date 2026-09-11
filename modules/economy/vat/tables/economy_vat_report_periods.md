@@ -22,7 +22,9 @@ starého Shipardu (reálné rozsahy podaných tvrzení), (d) ručně přes viewe
 | `name` | varchar(20) | `"MM/YYYY"` měsíční, `"QN/YYYY"` čtvrtletní; import a uživatel mohou mít vlastní názvy |
 | `date_begin` | date | Začátek období |
 | `date_end` | date | Konec období |
-| `locked` | boolean default 0 | Zámek — sloupec existuje pro všechny typy, vynucení (gate mutací dokladů) je Fáze 4 dle #55 |
+| `locked` | boolean default 0 | Zámek instance (#55 D23/D25) — doklad s rekapitulací DPH, jehož kterýkoli ukazatel (`vat_period`/`cs_period`/`rs_period`, původní i nový) míří na zamčenou instanci, nejde uložit, změnit stav ani smazat (`VatPeriodLockProvider`). Import mód zámek obchází |
+| `locked_at` | datetime, nullable, system | Kdy byla instance zamčena; nastavuje `ReportPeriodDocument` při `locked` 0→1, maže při 1→0. NULL u zámku převzatého importem („Uzamčeno (import)") |
+| `locked_by` | int, reference `core_system_users`, nullable, system | Kdo zamkl (uživatel requestu, `CurrentUser`); NULL ve strojovém kontextu |
 
 ### Systémové (bez skupiny)
 
@@ -49,6 +51,22 @@ starého Shipardu (reálné rozsahy podaných tvrzení), (d) ručně přes viewe
 - **Zámek rozsahu**: instanci s podaným podáním nelze změnit `date_begin`
   ani `date_end` — podaný obsah odpovídá rozsahu, ve kterém se sestavil.
   Opravný postup je nové podání jiného druhu, ne editace rozsahu.
+- **Zamčená instance** (`locked = 1`, #55 D25): jediná povolená mutace je
+  přepnutí `locked` (a `name`); změna rozsahu, stavu, registrace nebo typu
+  je chyba `locked`. Zrušit ji nelze (guardy výš). Sestavit nad ní podání
+  **lze** — snapshot je nad neměnnými daty. Zamknout lze i instanci bez
+  podání (historicky podané ve starém systému).
+- **Zámek dokladů** (`VatPeriodLockProvider`, D23): doklad s rekapitulací
+  DPH v původním nebo novém stavu, jehož kterýkoli ukazatel míří na
+  zamčenou instanci, nejde uložit, změnit stav (40→80/30/90) ani smazat;
+  nový doklad s DUZP v zamčeném rozsahu se neuloží a koncept instance
+  nevznikne (lookup find-only). Bezdaňový doklad (bez rekapitulace) je
+  volný — o něj se stará zámek fiskálního měsíce. Import mód (`_importNumber`)
+  providery nevolá (D26).
+- **Přepočet přes zámek** (`VatPeriodRecalculator`, D26): změna rozsahu
+  sousední instance, která by přepsala ukazatel dokladu ze zamčené nebo do
+  zamčené instance, spadne doménovou chybou s výčtem dokladů — uložení
+  sousední instance se odroluje.
 - Změna `date_begin`/`date_end` spouští přepočet přiřazení dotčených
   dokladů (`ReportPeriodDocument::afterPersist`) — viz README modulu.
 - Přechody stavů běží přes Document (`stateTransitionsRunDocumentHooks`).

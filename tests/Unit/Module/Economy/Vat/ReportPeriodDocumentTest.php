@@ -27,6 +27,19 @@ final class TestableReportPeriodDocument extends ReportPeriodDocument
     /** @var array<int, int> id instance → počet podaných podání */
     public array $filedFilings = [];
 
+    public ?int $userId = null;
+    public string $nowValue = '2026-09-11 10:00:00';
+
+    protected function currentUserId(): ?int
+    {
+        return $this->userId;
+    }
+
+    protected function now(): string
+    {
+        return $this->nowValue;
+    }
+
     protected function findOverlapping(int $regId, string $type, string $begin, string $end, ?int $selfId): array
     {
         $out = [];
@@ -297,5 +310,138 @@ final class ReportPeriodDocumentTest extends TestCase
         $this->assertSame('cs_period', ReportPeriodDocument::HEAD_COLUMN_BY_TYPE['cs']);
         $this->assertSame('rs_period', ReportPeriodDocument::HEAD_COLUMN_BY_TYPE['rs']);
         $this->assertSame('vat_period', ReportPeriodDocument::HEAD_COLUMN_BY_TYPE['return']);
+    }
+
+    // ── Zámek instance (#55 D25) ────────────────────────────────────────
+
+    /** @return array{0: TestableReportPeriodDocument, 1: array<string, mixed>} */
+    private function lockedQ1(): array
+    {
+        $doc = $this->doc([$this->q1(['locked' => 1])]);
+        return [$doc, $this->q1(['locked' => 1])];
+    }
+
+    public function testLockedInstanceRejectsRangeChange(): void
+    {
+        [$doc] = $this->lockedQ1();
+        $data = $this->q1(['locked' => 1, 'date_end' => '2026-04-30']);
+        $result = $doc->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $error = $result->toArray()[0];
+        $this->assertSame(ValidationError::FIELD_FORM, $error['column']);
+        $this->assertSame('locked', $error['code']);
+    }
+
+    public function testLockedInstanceRejectsStateAndRegistrationChange(): void
+    {
+        [$doc] = $this->lockedQ1();
+        $data = $this->q1(['locked' => 1, 'docState' => 10]);
+        $this->assertSame('locked', $doc->validate($data)->toArray()[0]['code']);
+
+        $data = $this->q1(['locked' => 1, 'vat_registration' => 6]);
+        $this->assertSame('locked', $doc->validate($data)->toArray()[0]['code']);
+    }
+
+    public function testLockedInstanceAllowsRenameAndUnlock(): void
+    {
+        [$doc] = $this->lockedQ1();
+        $data = $this->q1(['locked' => 1, 'name' => '1Q/2026']);
+        $this->assertTrue($doc->validate($data)->isValid());
+
+        $data = $this->q1(['locked' => 0]);
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testUnlockCombinedWithRangeChangeIsStillRejected(): void
+    {
+        [$doc] = $this->lockedQ1();
+        $data = $this->q1(['locked' => 0, 'date_end' => '2026-04-30']);
+        $this->assertSame('locked', $doc->validate($data)->toArray()[0]['code']);
+    }
+
+    public function testLockedCancellationKeepsOwnMessage(): void
+    {
+        [$doc] = $this->lockedQ1();
+        $data = $this->q1(['locked' => 1, 'docState' => 90]);
+        $this->assertSame('cancellation_blocked', $doc->validate($data)->toArray()[0]['code']);
+    }
+
+    public function testFilingCanBeComposedOverLockedInstance(): void
+    {
+        // Zámek nebrání živému podání — guardy podání zůstávají jen u zrušení.
+        [$doc] = $this->lockedQ1();
+        $doc->liveFilings = [1 => 1];
+        $data = $this->q1(['locked' => 1]);
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testLockingStampsTimeAndUser(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->userId = 7;
+        $data = $this->q1(['locked' => 1]);
+
+        $doc->beforeSave($data, $this->q1());
+
+        $this->assertSame('2026-09-11 10:00:00', $data['locked_at']);
+        $this->assertSame(7, $data['locked_by']);
+    }
+
+    public function testLockingWithoutUserLeavesStampUntouched(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $data = $this->q1(['locked' => 1]);
+
+        $doc->beforeSave($data, $this->q1());
+
+        $this->assertArrayNotHasKey('locked_at', $data);
+        $this->assertArrayNotHasKey('locked_by', $data);
+    }
+
+    public function testLockingRespectsProvidedStamp(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->userId = 7;
+        $data = $this->q1(['locked' => 1, 'locked_at' => '2026-01-01 00:00:00', 'locked_by' => 3]);
+
+        $doc->beforeSave($data, $this->q1());
+
+        $this->assertSame('2026-01-01 00:00:00', $data['locked_at']);
+        $this->assertSame(3, $data['locked_by']);
+    }
+
+    public function testUnlockingClearsStamp(): void
+    {
+        $doc = $this->doc([$this->q1(['locked' => 1])]);
+        $data = $this->q1(['locked' => 0]);
+
+        $doc->beforeSave($data, $this->q1(['locked' => 1, 'locked_at' => '2026-01-01 00:00:00', 'locked_by' => 3]));
+
+        $this->assertNull($data['locked_at']);
+        $this->assertNull($data['locked_by']);
+    }
+
+    public function testSaveWithoutLockedKeyDoesNotTouchStamp(): void
+    {
+        $doc = $this->doc([$this->q1(['locked' => 1])]);
+        $data = $this->q1(['locked' => 1, 'name' => 'x']);
+        unset($data['locked']);
+
+        $doc->beforeSave($data, $this->q1(['locked' => 1]));
+
+        $this->assertArrayNotHasKey('locked_at', $data);
+    }
+
+    public function testInsertLockedByUserIsStamped(): void
+    {
+        $doc = $this->doc();
+        $doc->userId = 9;
+        $data = $this->validData(['locked' => 1]);
+
+        $doc->beforeSave($data, null);
+
+        $this->assertSame(9, $data['locked_by']);
+        $this->assertSame('2026-09-11 10:00:00', $data['locked_at']);
     }
 }

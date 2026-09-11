@@ -57,5 +57,25 @@
             "cfgItem": "economy.vat.controlStatementModes",
             "group": "accounting"
         }
+    ],
+    // Dotazy per instance: kontrola zůstatků 343 za podané období
+    // (ClosedPeriodBalanceCheck), přepočet zařazení, počet přiřazených
+    // dokladů v guardech instance.
+    "indexes": [
+        {
+            "id": "idx_vat_period",
+            "type": "index",
+            "columns": [{"column": "vat_period"}]
+        },
+        {
+            "id": "idx_cs_period",
+            "type": "index",
+            "columns": [{"column": "cs_period"}]
+        },
+        {
+            "id": "idx_rs_period",
+            "type": "index",
+            "columns": [{"column": "rs_period"}]
+        }
     ]
 }

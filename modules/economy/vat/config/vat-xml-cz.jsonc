@@ -147,6 +147,10 @@
             "vetaDFields": ["typ_platce", "c_okec", "trans", "kod_zo", "d_por_dod"],
             // Boolean pole schématu, které se v XML vypisuje jako A / N.
             "yesNoFields": ["trans"],
+            // Pole s ISO kódem státu (enumString nad `world.base.countries`),
+            // které se v XML vypisuje jako **název** z číselníku Země daňového
+            // portálu (`naz_zeme_c25`, cfgItem `world.cz.epoCountries`).
+            "countryNameFields": ["stat"],
             // Odvozené atributy věty D nad rámec `constants` a `formaAttr`:
             // datum zjištění důvodů z podání, datum podání, období z instance.
             "derived": ["d_zjist", "d_poddp", "rok", "mesic", "ctvrt", "zdobd_od", "zdobd_do"]
@@ -305,6 +309,7 @@
             "vetaD": "VetaD",
             "vetaDFields": [],
             "yesNoFields": [],
+            "countryNameFields": ["stat"],
             "derived": ["d_zjist", "d_poddp", "rok", "mesic", "ctvrt", "zdobd_od", "zdobd_do"]
         },
 
@@ -372,6 +377,7 @@
             "vetaD": "VetaD",
             "vetaDFields": [],
             "yesNoFields": [],
+            "countryNameFields": ["stat"],
             "derived": ["d_poddp", "rok", "mesic", "ctvrt"]
         },
 

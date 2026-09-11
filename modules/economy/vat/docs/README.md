@@ -328,6 +328,7 @@ struktury Finanční správy: `Pisemnost` → `DPHDP3` / `DPHKH1` / `DPHSHV`.
 | Řádek/sekce → věta a atribut | `config/vat-xml-cz.jsonc` (cfgItem `economy.vat.xml.cz`) |
 | Hodnoty | **jen** snapshot podání (`economy_vat_filings` + řádkové tabulky) |
 | Sada polí hlavičky | `config/filingHeaderCz{Dp3,Kh1,Shv}.jsonc` |
+| Název státu (`stat`) | `world.cz.epoCountries` — číselník Země daňového portálu, generovaný z exportu (`modules/world/cz/data/README.md`); hlavička drží ISO kód, XML dostane `naz_zeme_c25` (`header.countryNameFields`) |
 
 Writery neznají jediné číslo řádku ani jméno atributu — všechno je
 v configu, takže nové vydání formuláře je změna konfigurace, ne kódu.
@@ -358,6 +359,13 @@ nebo čtvrtletí z rozsahu instance. Rozsah, který nepokrývá celý měsíc an
 
 Kontrolní ani souhrnné hlášení nemá ve větě D **žádné** needvozené pole —
 proto mají tenčí schéma hlavičky než přiznání.
+
+Stát podatele drží hlavička jako ISO kód (`enumString` nad
+`world.base.countries`), formulář ale chce **název z číselníku Země**
+Finanční správy — a ten má jiné tvary než běžný český název („ČESKÁ
+REPUBLIKA", ne „Česko"). Překlad dělá `VatXmlMapping::countryName()`
+z cfgItem `world.cz.epoCountries`; kód bez názvu ohlásí validace jako
+chybu pole `header.stat`, writer by ho odmítl výjimkou.
 
 ### Kontrolní hlášení: co snapshot nenese
 

@@ -29,6 +29,8 @@ use Shipard\Module\Economy\Vat\Xml\VatXmlMapping;
 class Dp3XmlWriterTest extends TestCase
 {
     private const CONFIG   = __DIR__ . '/../../../../../../modules/economy/vat/config/vat-xml-cz.jsonc';
+    /** Číselník Země daňového portálu — název státu do věty P (#55 F3-3). */
+    private const COUNTRIES = __DIR__ . '/../../../../../../modules/world/cz/config/epoCountries.jsonc';
     private const FIXTURES = __DIR__ . '/../../../../../Fixtures/vat-xml/synthetic';
 
     /** Hlavička, kterou by po sestavení vyrobil composer z profilu podatele. */
@@ -239,6 +241,30 @@ class Dp3XmlWriterTest extends TestCase
         $this->assertSame(['header.jmeno'], array_column($errors, 'column'));
     }
 
+    /** Stát jde do věty P jako název z číselníku Země, ne jako ISO kód (#55 F3-3). */
+    public function testCountryIsWrittenAsPortalName(): void
+    {
+        $xml = $this->write($this->regularInput());
+        $this->assertStringContainsString('stat="ČESKÁ REPUBLIKA"', $xml);
+        $this->assertStringNotContainsString('stat="CZ"', $xml);
+
+        // Malá písmena (tak profil kód ukládá) i velká dávají týž název.
+        $lower = $this->write($this->regularInput(['header' => ['stat' => 'cz'] + self::HEADER]));
+        $this->assertStringContainsString('stat="ČESKÁ REPUBLIKA"', $lower);
+    }
+
+    public function testCountryWithoutPortalNameIsAFieldLevelError(): void
+    {
+        $header = ['stat' => 'xx'] + self::HEADER;
+
+        $errors = $this->validate($this->regularInput(['header' => $header]));
+        $this->assertSame([['column' => 'header.stat', 'code' => 'invalid_value']], $errors);
+
+        // Writer bez validace nesmí kód tiše opsat.
+        $this->expectException(\DomainException::class);
+        $this->write($this->regularInput(['header' => $header]));
+    }
+
     public function testPeriodThatIsNeitherMonthNorQuarterIsRejected(): void
     {
         $errors = $this->validate($this->regularInput([
@@ -271,7 +297,11 @@ class Dp3XmlWriterTest extends TestCase
 
     private function mapping(): VatXmlMapping
     {
-        return VatXmlMapping::fromArray(JsoncParser::parseFile(self::CONFIG), 'return');
+        return VatXmlMapping::fromArray(
+            JsoncParser::parseFile(self::CONFIG),
+            'return',
+            JsoncParser::parseFile(self::COUNTRIES),
+        );
     }
 
     private function write(FilingXmlInput $input): string

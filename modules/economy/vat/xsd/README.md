@@ -22,7 +22,8 @@ validátor v testech — proto leží v repozitáři a CI je nestahuje ze sítě
 pracoviště, země), jsou na
 `https://mojedane.gov.cz/pmd/dokumentace/ciselniky/ukazka/{okec,ufo,pracufo,zeme}`;
 v Shipardu žijí jako cfgItems (`world.cz.taxOffices`,
-`world.cz.taxOfficeBranches`, `world.base.countries`).
+`world.cz.taxOfficeBranches`, `world.cz.epoCountries` — generovaný
+z exportu číselníku Země, viz `modules/world/cz/data/README.md`).
 
 ## Co schéma ohlídá a co ne
 

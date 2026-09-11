@@ -28,7 +28,8 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  * **vědomých tolerancí** proti tomu, co starý Shipard podával
  * (`comparisonOptions()`): krácený odpočet sloučený do plného sloupce
  * a bez ř. 52 (rozhodnutí F3-6 (a) v tasks/vat-filing-xml.md), `id_dats`,
- * který ze struktury DPHKH1 mezitím zmizel (F3-2). Nulový atribut proti
+ * který ze struktury DPHKH1 mezitím zmizel (F3-2), a `stat`, kde se starý
+ * a nový zápis liší jen velikostí písmen (F3-3). Nulový atribut proti
  * chybějícímu neřeší test, ale porovnávač sám (F3-4).
  *
  * ```bash
@@ -141,6 +142,12 @@ class GoldenFilingXmlTest extends IntegrationTestCase
         // F3-2: `id_dats` zmizel ze struktury DPHKH1 (03.01.14), podané KH
         // ho nese ze starší verze; aktuální XSD by ho odmítlo.
         $ignore[] = 'id_dats';
+
+        // F3-3: starý Shipard psal název státu z vlastního číselníku („Česká
+        // republika"), nový `naz_zeme_c25` z číselníku Země daňového portálu
+        // („ČESKÁ REPUBLIKA") — rozdíl jen ve velikosti písmen. Správnost
+        // mapování kód → název hlídá unit test writeru.
+        $ignore[] = 'stat';
 
         return ['ignore' => $ignore, 'fold' => $fold];
     }

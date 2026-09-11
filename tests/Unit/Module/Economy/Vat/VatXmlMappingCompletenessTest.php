@@ -173,6 +173,29 @@ class VatXmlMappingCompletenessTest extends TestCase
         }
     }
 
+    /**
+     * Pole vypisovaná jako název státu musí být kódy zemí ve schématu
+     * hlavičky — jinak by `countryName()` překládal něco, co kód není.
+     */
+    public function testCountryNameFieldsAreCountryCodesInSchema(): void
+    {
+        foreach (self::DOCUMENTS as $document) {
+            $header = $this->xmlConfig()[$document]['header'];
+            $fields = $this->headerSchemaFieldDefinitions($document);
+
+            $this->assertNotEmpty($header['countryNameFields'] ?? [], "{$document}: věta P má `stat`, config musí říct, že jde o název státu");
+            foreach ($header['countryNameFields'] as $field) {
+                $this->assertArrayHasKey($field, $fields, "{$document}: pole '{$field}' schéma hlavičky nemá");
+                $this->assertSame('enumString', $fields[$field]['type'] ?? null, "{$document}: '{$field}' se překládá z ISO kódu, musí být enumString");
+                $this->assertSame(
+                    'world.base.countries',
+                    $fields[$field]['cfgItem'] ?? null,
+                    "{$document}: '{$field}' musí brát kódy z world.base.countries — číselník úřadu (world.cz.epoCountries) je na ně klíčovaný",
+                );
+            }
+        }
+    }
+
     public function testEnvelopeElementsAreNotMapped(): void
     {
         foreach (self::DOCUMENTS as $document) {
@@ -587,16 +610,25 @@ class VatXmlMappingCompletenessTest extends TestCase
     /** @return array<string, string> id pole → typ */
     private function headerSchemaFieldTypes(string $document): array
     {
+        return array_map(
+            static fn (array $field): string => (string) $field['type'],
+            $this->headerSchemaFieldDefinitions($document),
+        );
+    }
+
+    /** @return array<string, array<string, mixed>> id pole → celá definice */
+    private function headerSchemaFieldDefinitions(string $document): array
+    {
         $cfgItem = (string) $this->xmlConfig()[$document]['header']['schema'];
         $file    = $this->configFileByCfgItem()[$cfgItem] ?? null;
         $this->assertNotNull($file, "cfgItem '{$cfgItem}' není registrovaný v module.jsonc");
 
         $schema = JsoncParser::parseFile(self::MODULE . '/' . $file);
-        $types  = [];
+        $fields = [];
         foreach ($schema['fields'] as $field) {
-            $types[(string) $field['id']] = (string) $field['type'];
+            $fields[(string) $field['id']] = $field;
         }
-        return $types;
+        return $fields;
     }
 
     /** @return array<string, string> cfgItem → cesta k souboru v modulu */

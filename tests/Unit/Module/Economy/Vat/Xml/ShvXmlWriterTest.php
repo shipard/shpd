@@ -20,6 +20,8 @@ use Shipard\Module\Economy\Vat\Xml\VatXmlMapping;
 class ShvXmlWriterTest extends TestCase
 {
     private const CONFIG   = __DIR__ . '/../../../../../../modules/economy/vat/config/vat-xml-cz.jsonc';
+    /** Číselník Země daňového portálu — název státu do věty P (#55 F3-3). */
+    private const COUNTRIES = __DIR__ . '/../../../../../../modules/world/cz/config/epoCountries.jsonc';
     private const FIXTURES = __DIR__ . '/../../../../../Fixtures/vat-xml/synthetic';
 
     private const HEADER = [
@@ -126,7 +128,11 @@ class ShvXmlWriterTest extends TestCase
 
     private function mapping(): VatXmlMapping
     {
-        return VatXmlMapping::fromArray(JsoncParser::parseFile(self::CONFIG), 'rs');
+        return VatXmlMapping::fromArray(
+            JsoncParser::parseFile(self::CONFIG),
+            'rs',
+            JsoncParser::parseFile(self::COUNTRIES),
+        );
     }
 
     private function write(FilingXmlInput $input): string

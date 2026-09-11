@@ -17,6 +17,8 @@ use Shipard\Core\Document\ValidationError;
  *
  * - povinná pole podle typu subjektu (PO → obchodní jméno, FO → jméno),
  * - masky a délky, které XSD nechává volné (PSČ, telefon, kód zástupce),
+ * - stát, který má v číselníku Země daňového portálu název (XML ho
+ *   vypisuje názvem, ne kódem),
  * - datum zjištění důvodů u forem, které bez něj nedávají smysl (D/E/N),
  * - zdaňovací období, které nejde vyjádřit měsícem ani čtvrtletím,
  * - rozsah hodnot řádků.
@@ -124,6 +126,21 @@ final class FilingXmlValidator
             $digits = preg_replace('/\s+/', '', (string) $psc);
             if (preg_match('/^\d{5}$/', (string) $digits) !== 1) {
                 $this->error($errors, 'psc', 'České PSČ má pět číslic.', 'invalid_value');
+            }
+        }
+
+        // Stát jde do XML jako název z číselníku Země; kód bez názvu by
+        // shodil až writer bez vazby na pole (#55 F3-3).
+        foreach ($this->mapping->countryNameFields() as $field) {
+            $code = $this->value($input, $field);
+            if ($code !== null && $this->mapping->countryName($code) === null) {
+                $this->error(
+                    $errors,
+                    $field,
+                    "Stát '{$code}' není v číselníku zemí daňového portálu — zkontrolujte kód,"
+                    . ' nebo spusťte ds-upgrade (world.cz.epoCountries).',
+                    'invalid_value',
+                );
             }
         }
         foreach (['c_telef', 'sest_telef'] as $field) {

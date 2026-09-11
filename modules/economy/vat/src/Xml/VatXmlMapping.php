@@ -17,18 +17,30 @@ use Shipard\Core\Config\ConfigRuntime;
  *
  * Chybějící sekce nebo neznámý typ tvrzení je **výjimka**: generovat
  * podání z půlky mapování by znamenalo tiše vynechat řádky.
+ *
+ * Vedle mapování nese i **číselník Země daňového portálu**
+ * (`world.cz.epoCountries`): hlavička drží ISO kód státu, formulář chce
+ * název (`naz_zeme_c25`), a překlad je součást téže konfigurace písemnosti
+ * — writer se ptá jen tady (#55 F3-3).
  */
 final class VatXmlMapping
 {
     public const CFG_ITEM_CZ = 'economy.vat.xml.cz';
 
+    /** Číselník Země daňového portálu: ISO kód → `{name, epoName}`. */
+    public const CFG_ITEM_COUNTRIES = 'world.cz.epoCountries';
+
     /** Typ tvrzení (`economy.vat.reportTypes`) → sekce configu. */
     public const DOCUMENT_BY_REPORT_TYPE = ['return' => 'dp3', 'cs' => 'kh1', 'rs' => 'shv'];
 
-    /** @param array<string, mixed> $document sekce configu pro tuto písemnost */
+    /**
+     * @param array<string, mixed> $document  sekce configu pro tuto písemnost
+     * @param array<string, mixed> $countries číselník Země (`world.cz.epoCountries`)
+     */
     private function __construct(
         public readonly string $reportType,
         private readonly array $document,
+        private readonly array $countries,
     ) {}
 
     /**
@@ -39,16 +51,23 @@ final class VatXmlMapping
         ?ConfigRuntime $config,
         string $reportType,
         string $cfgItem = self::CFG_ITEM_CZ,
+        string $countriesCfgItem = self::CFG_ITEM_COUNTRIES,
     ): ?self {
         $cfg = $config?->cfgItem($cfgItem);
         if (!is_array($cfg)) {
             return null;
         }
-        return self::fromArray($cfg, $reportType);
+        // Chybějící číselník není důvod nevrátit mapování — projeví se až
+        // u pole se státem, a to jako srozumitelná chyba validace.
+        $countries = $config?->cfgItem($countriesCfgItem);
+        return self::fromArray($cfg, $reportType, is_array($countries) ? $countries : []);
     }
 
-    /** @param array<string, mixed> $cfg celý dekódovaný cfgItem */
-    public static function fromArray(array $cfg, string $reportType): self
+    /**
+     * @param array<string, mixed> $cfg       celý dekódovaný cfgItem mapování
+     * @param array<string, mixed> $countries číselník Země (`world.cz.epoCountries`)
+     */
+    public static function fromArray(array $cfg, string $reportType, array $countries = []): self
     {
         $key = self::DOCUMENT_BY_REPORT_TYPE[$reportType] ?? null;
         if ($key === null) {
@@ -57,7 +76,7 @@ final class VatXmlMapping
         if (!isset($cfg[$key]) || !is_array($cfg[$key])) {
             throw new \DomainException("XML mapování: chybí sekce '{$key}'");
         }
-        return new self($reportType, $cfg[$key]);
+        return new self($reportType, $cfg[$key], $countries);
     }
 
     public function element(): string
@@ -166,5 +185,27 @@ final class VatXmlMapping
     public function header(): array
     {
         return $this->document['header'] ?? [];
+    }
+
+    /** @return list<string> pole hlavičky s ISO kódem státu, vypisovaná jako název */
+    public function countryNameFields(): array
+    {
+        return $this->document['header']['countryNameFields'] ?? [];
+    }
+
+    /**
+     * Název státu pro EPO (`naz_zeme_c25`) podle ISO kódu; `null`, když kód
+     * číselník nezná — nebo když cfgItem není zkompilovaný (ds-upgrade).
+     * Kód se bere bez ohledu na velikost písmen (profil ukládá `cz`,
+     * starší data `CZ`).
+     */
+    public function countryName(mixed $code): ?string
+    {
+        $key = strtolower(trim((string) ($code ?? '')));
+        if ($key === '') {
+            return null;
+        }
+        $name = $this->countries[$key]['epoName'] ?? null;
+        return is_string($name) && $name !== '' ? $name : null;
     }
 }

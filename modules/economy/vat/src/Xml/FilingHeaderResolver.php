@@ -100,6 +100,11 @@ final class FilingHeaderResolver
      * `RRRR-MM-DD` — jiné pole věty P takový tvar nabýt nemůže. DIČ
      * subjektu i zástupce mají ve schématu vzor `[0-9]{1,10}`, takže se
      * z nich vypisují jen číslice.
+     *
+     * Stát (`countryNameFields`) drží hlavička jako ISO kód, formulář chce
+     * **název z číselníku Země** daňového portálu (`naz_zeme_c25`, #55 F3-3).
+     * Kód bez názvu je výjimka — validace podání ho ohlásí dřív jako chybu
+     * pole, tady už se tiše vypsat nesmí nic.
      */
     private function headerValue(string $field, FilingXmlInput $input): ?string
     {
@@ -108,6 +113,11 @@ final class FilingHeaderResolver
             return null;
         }
 
+        if (in_array($field, $this->mapping->countryNameFields(), true)) {
+            return $this->mapping->countryName($value) ?? throw new \DomainException(
+                "Stát '{$value}' nemá název v číselníku zemí daňového portálu (world.cz.epoCountries)",
+            );
+        }
         if (in_array($field, $this->mapping->header()['yesNoFields'] ?? [], true)) {
             return EpoXmlFormat::yesNo($value);
         }

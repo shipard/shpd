@@ -8,3 +8,6 @@
 /tools/video-runner/.storage-state.json
 /tools/video-runner/.work/
 /tools/video-runner/out/
+
+# Referenční podaná XML zlatého testu — reálná data zdroje, jen lokálně (viz README)
+tests/Fixtures/vat-xml/689089/*.xml

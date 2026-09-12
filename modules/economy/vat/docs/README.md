@@ -510,6 +510,74 @@ množiny účetní doklady podání (`acc_document`) a kontrolu „zhasne".
 Extension `docs_core_heads` dostala indexy `idx_vat_period` /
 `idx_cs_period` / `idx_rs_period`.
 
+## Zaúčtování přiznání (Fáze 4b, D28–D31)
+
+Podané přiznání dostane **účetní doklad per podání** (`cmnbkp`,
+`economy_vat_filings.acc_document`), který vynuluje analytiky 343 a zaúčtuje
+závazek / pohledávku vůči správci daně. Starý Shipard měl jeden doklad na
+report a přepisoval ho; tady se nic nepřepisuje — součet dokladů za instanci
+je vždy poslední podaná pravda:
+
+- **řádné** podání účtuje plný obsah; **opravné** i **dodatečné** jen
+  **rozdíl proti kumulativnímu podanému stavu** (D28) — dokladové řádky
+  a přesné hodnoty snapshotu jsou vždy plný obsah, kumulativní podaný stav
+  skládá `FilingSnapshotLoader::cumulativeFiledRows()` (sdílené s composerem);
+- **obsah dokladu** (`Accounting\VatReturnAccountingBuilder`, čistý, D29):
+  1. per kód DPH delta daně (vstupní kód DAL, výstupní MD, záporná delta
+     otočí stranu; účet z předpisu `cat: vat` / konvence `343{NNN}`),
+  2. **saldo řádek** ze změny *podané* daňové povinnosti — závazek
+     z kumulativního stavu po tomto podání minus před ním (řádné = ř. 64/65,
+     opravné = rozdíl vs. kumulativní stav, dodatečné = ř. 66); kladná →
+     DAL `vat.payable` 343801 (splatnost +25 d), záporná → MD `vat.receivable`
+     343802 (+60 d); partner = **správce daně** registrace (D30,
+     `tax_office_person`), VS = DIČ bez prefixu země, SS = `705` + RRRRMM
+     konce období, KS 1148 (`reportTypes.return.accounting`),
+  3. **neuplatnitelná část krácených kódů** (přesně: krácený sloupec ř. 46 −
+     ř. 52, delta proti předchozímu) na `vat.nondeductible` 548 — starý systém
+     ji nechával v zaokrouhlení,
+  4. zbytek do Σ MD = Σ DAL na `rounding.cost` / `rounding.revenue`
+     s tolerancí 0,5 Kč × počet řádků DP3 s daní; větší = chyba (rozjetý
+     snapshot / mapování);
+- chybějící účet (analytika, saldo, 548/648) = **chyba, doklad nevzniká** —
+  uživatel účet doplní a akci spustí znovu (odchylka od zadání, které chtělo
+  doklad bez saldo řádku: nevyrovnaný koncept nikomu nepomůže);
+- **explicitní akce Zaúčtovat** (D31) v detailu podaného podání typu
+  přiznání (`FilingsViewer`, `POST /_vat/filing-account`, CLI
+  `vat-filing-account`); doklad vzniká jako **koncept** — uživatel ho
+  zkontroluje a uzavře, deník vznikne až tím. Žádné automatické účtování
+  při podání.
+
+`Accounting\VatReturnAccountingService` načte snapshot, předchozí podaný
+stav, registraci a účty (`AccountMaskResolver` nad předpisem), nechá builder
+sestavit plán a v **jedné transakci** (`TransactionlessTableGateway`)
+založí doklad s řádky `acc.record` (`price_calc_mode = 1`, saldo pole per
+řádek) a zapíše `acc_document` + záznam `vatReturn.accounted` (a varování
+builderu) do `messages` podání — jediná povolená změna zmrazených zpráv
+(`FilingDocument`). Idempotence: živý `acc_document` (mimo Storno/Smazáno)
+→ `ALREADY_ACCOUNTED`, po stornu dokladu vznikne nový a FK se přepíše.
+Řadu dokladu určuje volitelný parametr vrstvy C
+`economy.vat.filingAccountingSeries`; bez něj jen jediná aktivní řada
+`cmnbkp`, při více řadách služba odmítne s pokynem klíč nastavit (žádný
+tichý výběr první řady). Doklad nemá registraci ani rekapitulaci, takže
+ho **zámek instance nechytá**; zámek fiskálního měsíce (`accounting_date`
+= konec období) ano → `SAVE_FAILED` s důvodem — pořadí je zaúčtovat, pak
+zamknout měsíc (varování při zamykání měsíce z F4a to hlídá).
+
+`ClosedPeriodBalanceService` počítá vedle dokladů instance i účetní doklady
+jejích podaných podání (`acc_document`, `docState != 90`); po uzavření
+dokladu přiznání je zůstatek 343 (mimo 801/802) nula — a znovu nenulový,
+když se DPH po podání změní, dokud nevznikne dodatečné podání a jeho
+zaúčtování. Kód DPH mimo přiznání (`dp3_row` NULL) do vypořádání nevstupuje.
+
+Správce daně je ručně vybraná osoba na registraci (formulář, i ve stavu
+V pořádku bez „Opravit" — `getReadOnlyEditableColumns`, `docs/edit-forms.md`
+kap. 26) nebo import přes `POST /_vat/registration-tax-office`. Bez něj
+doklad vznikne se saldo řádkem bez partnera a varováním ve zprávách podání.
+
+Zlatý test (dev DS `btpg-p`, zdroj 689089, DP3 01–04/2026 přes
+`vat-filing-account --dry-run` nad koncepty podání): viz
+`tasks/vat-filing-accounting.md` → Hotovo když.
+
 ## Architektura
 
 ```
@@ -535,8 +603,14 @@ src/
 ├── FilingDocument.php                     # podání: druhy, pořadí, lifecycle, immutabilita
 ├── FilingRounding.php                     # podané hodnoty (čistá třída): řádky na Kč, dopočty, diff
 ├── FilingComposer.php                     # snapshot: items + výstupní řádky + result/messages
-├── FilingsViewer.php / FilingsForm.php    # viewer Podání DPH (vč. rozdílů) a formulář
-├── VatFilingController.php                # POST /_vat/filing-compose, /_vat/filing-files
+├── FilingSnapshotLoader.php               # čtení snapshotu + kumulativní podaný stav (composer, zaúčtování)
+├── FilingsViewer.php / FilingsForm.php    # viewer Podání DPH (vč. rozdílů, akce Zaúčtovat) a formulář
+├── VatFilingController.php                # POST /_vat/filing-compose, -files, -account, report-period-lock, registration-tax-office
+├── ClosedPeriodBalanceService.php         # zůstatky 343 podaných instancí (doklady instance + doklady podání)
+├── Accounting/                            # zaúčtování přiznání (Fáze 4b)
+│   ├── VatReturnAccountingBuilder.php     #   čistý builder řádků (delta per kód, saldo, krácení, zaokrouhlení)
+│   ├── VatReturnAccountingInput.php / …Plan.php / …Result.php
+│   └── VatReturnAccountingService.php     #   DB + TableGateway: cmnbkp koncept + acc_document v jedné transakci
 ├── FilingHeaderSchema.php                 # výběr schématu hlavičky per typ + předvyplnění
 ├── FilingAttachmentGuard.php              # soubory podaného tvrzení jsou zamčené
 ├── Xml/                                   # XML pro EPO (Fáze 3) — viz výše
@@ -567,12 +641,12 @@ v docblocích kalkulátorů a v zadání.
 Živé výstupy jsou **reporty** — vždy přepočtené, bez lifecycle. **Podání**
 je doména `filing`: snapshot s lifecyclem, druhy podání a zaokrouhlením
 (Fáze 2) plus soubory pro daňový portál (Fáze 3, viz níže). Zámek instance,
-vynucení proti změnám dokladů a zaúčtování přiznání jsou Fáze 4.
+vynucení proti změnám dokladů (Fáze 4a) a zaúčtování přiznání (Fáze 4b)
+jsou popsané výše.
 
 ## Mimo scope
 
-Odeslání na portál a do datové schránky (podává člověk), vynucení zámku
-a zaúčtování přiznání (Fáze 4), import starých podání (`old_shipard` task 34),
+Odeslání na portál a do datové schránky (podává člověk), import starých podání (`old_shipard` task 34),
 storno řádky následného souhrnného hlášení (X14), odpověď na výzvu u KH,
 sekce A.3 (investiční zlato), rozdíly mezi
 dvěma libovolnými podáními (jen proti `previous_filing`), oprava dle § 44

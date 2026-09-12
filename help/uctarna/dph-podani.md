@@ -1,7 +1,7 @@
 ---
 title: Podání DPH
 summary: Jak z živého výpočtu udělat podání, vyrobit soubor pro daňový portál a mít trvalý záznam toho, co jsi za období odevzdal.
-keywords: [podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál, soubor pro EPO, vytvořit soubory, opis přiznání, obsah podání, hlavička podání, načíst hlavičku z profilu, elektronické podání]
+keywords: [zaúčtovat přiznání, zaúčtování DPH, účetní doklad přiznání, odvod DPH, nadměrný odpočet, správce daně, závazek vůči finančnímu úřadu, účet 343, vypořádání DPH, podací údaje, profil podatele, finanční úřad, územní pracoviště, kdo podává přiznání, sestavil, podepisující osoba, zástupce, datová schránka, podání DPH, podat přiznání, odevzdat přiznání, řádné podání, opravné podání, dodatečné přiznání, následné hlášení, dodatečné podání, změna daňové povinnosti, řádek 66, zaokrouhlení na koruny, sestavit podání, přepočítat podání, co jsem podal, historie podání, datum podání, datum zjištění důvodů, rozdíly proti předchozímu podání, podané hodnoty, XML pro daňový portál, soubor pro EPO, vytvořit soubory, opis přiznání, obsah podání, hlavička podání, načíst hlavičku z profilu, elektronické podání]
 related: [uctarna/dph-zive-vystupy.md, uctarna/uzamceni-obdobi.md, co-dnes-nejde.md]
 ---
 
@@ -150,6 +150,46 @@ U opravného, dodatečného i následného podání má detail záložku
 nezměnilo nic, řekne to. Tohle je nejrychlejší způsob, jak zjistit, proč
 dodatečné přiznání vychází právě takhle.
 
+## Zaúčtování přiznání
+
+Podané přiznání k DPH je potřeba také **zaúčtovat**: daň na vstupu a na
+výstupu, která se během období nasčítala na účtech DPH, se převede na
+jeden závazek vůči finančnímu úřadu (odvod) nebo pohledávku (nadměrný
+odpočet). Shipard to udělá za tebe:
+
+1. V **Účtárna → Podání DPH** otevři podání ve stavu **Podáno**.
+2. V pravém panelu klikni na **Zaúčtovat**.
+3. Otevře se nový **účetní doklad** ve stavu **Koncept**: řádky s daní za
+   jednotlivé druhy plnění, řádek odvodu nebo nadměrného odpočtu vůči
+   správci daně (s variabilním a specifickým symbolem a splatností) a
+   případné zaokrouhlení. Zkontroluj ho a přepni do stavu **V pořádku** —
+   teprve tím se zaúčtuje.
+
+V detailu podání pak vidíš řádek **Zaúčtování** s číslem dokladu a jeho
+stavem a akci, která doklad otevře. Dodatečné nebo opravné podání zaúčtuje
+**jen rozdíl** proti tomu, co už je podané a zaúčtované — nic se
+nepřepisuje, doklady za období dávají dohromady poslední podaný stav.
+
+Kdo je **správce daně**, si Shipard bere z registrace k DPH: v **Nastavení
+→ Účetnictví → Registrace DPH** vyber v sekci **Správce daně** osobu
+finančního úřadu z adresáře (pokud tam ještě není, založ ji v Osobách).
+Jde to doplnit i u potvrzené registrace, bez opravy. Bez správce daně
+doklad vznikne také, jen řádek odvodu nemá partnera — Shipard na to
+upozorní a úhradu úřadu pak nepůjde spárovat.
+
+Co když se něco nepovede:
+
+- **Podání už má účetní doklad** — Shipard nezaloží druhý. Když je doklad
+  špatně, stornuj ho a klikni na **Zaúčtovat znovu**.
+- **Chybí účet** (odvod DPH, nadměrný odpočet, DPH bez nároku na odpočet,
+  zaokrouhlení) — doklad nevznikne a Shipard řekne který. Doplň ho do
+  účtového rozvrhu a akci zopakuj.
+- **Měsíc konce období je uzamčený** — doklad má datum účtování na konci
+  období, do zamčeného měsíce ho nejde založit. Nejdřív zaúčtuj, pak
+  zamykej měsíc; jinak měsíc dočasně odemkni.
+- **Víc řad účetních dokladů** — Shipard nevybere první; správce systému
+  určí, do které řady přiznání patří.
+
 ## Na co si dát pozor
 
 - **Podané podání už nezměníš ani nesmažeš.** Doplnit k němu můžeš jen
@@ -167,9 +207,13 @@ dodatečné přiznání vychází právě takhle.
   sestavení se zastaví s chybou. Je to schválně: z podání nesmí nic tiše
   vypadnout. Oprav kód na dokladu a zkus to znovu.
 - **Období se podáním nezamkne samo.** Po podání klikni v detailu podání
-  na **Uzamknout tvrzení** — od té chvíle doklady s DPH za to období
-  nejde měnit ani do něj dopisovat. Když na to zapomeneš, Shipard ti to
-  za tři dny připomene. Podrobně [Uzamčení období](uzamceni-obdobi.md).
+  na **Zaúčtovat** a pak na **Uzamknout tvrzení** — od té chvíle doklady
+  s DPH za to období nejde měnit ani do něj dopisovat. Když na zámek
+  zapomeneš, Shipard ti to za tři dny připomene. Podrobně
+  [Uzamčení období](uzamceni-obdobi.md).
+- **Přiznání se nezaúčtuje samo.** Dokud účetní doklad přiznání
+  neuzavřeš, hlásí Shipard u tvrzení **Zůstatky DPH** — účty DPH za
+  období nejsou vypořádané.
 - **Soubor Shipard nikam neodešle.** Vyrobí ho a uloží k podání; na
   daňový portál nebo do datové schránky ho odesíláš ty.
 - **Soubor je snímek okamžiku sestavení.** Když se doklady později změní,

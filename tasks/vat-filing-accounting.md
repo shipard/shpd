@@ -1,11 +1,8 @@
 # Task: Zaúčtování přiznání DPH — účetní doklad per podání, správce daně, akce Zaúčtovat (M1 Fáze 4b) — #55 D28–D31
 
-**Stav:** k implementaci — 2026-09-12 (F4a hotová, dev DS; viz „Odchylky" v
-`tasks/vat-period-lock.md` — relevantní pro F4b: registry zámků na `DocumentRegistry`,
-vynucení v `TableGateway` po `validate()`, `LockStamp::apply()` + `Core\Auth\CurrentUser`
-pro `locked_at/by`, endpoint zámku `POST /_vat/report-period-lock` ve
-`VatFilingController` jako vzor pro `filing-account` a `registration-tax-office`,
-`Checks\FiledUnlockedPeriodsCheck` jako vzor alertové obálky)
+**Stav:** hotovo — 2026-09-12 na dev DS (4l3j: integrační testy + HTTP smoke,
+btpg-p: zlatý test 01–04/2026); zbývá alfa (ds-upgrade, nastavit správce daně
+a `economy.vat.filingAccountingSeries`, proklik UI). Odchylky viz níže.
 **Issue:** #55 — komentář „Fáze 4 — Zámek a zaúčtování: rozhodnutí D23–D31 (2026-09-11)"
 **Návaznost:** staví na podáních a jejich snapshotu (`economy_vat_filings`,
 `economy_vat_filing_items`, `economy_vat_filing_return_rows` — `tasks/vat-filings.md`),
@@ -273,21 +270,86 @@ do PRD importéru; tady jen guard: služba odmítne podání s `date_filed` pře
 
 ## Hotovo když
 
-- [ ] Testy zelené (builder matice, service, FilingDocument guard, kontrola zůstatků).
-- [ ] `ds-upgrade` na dev DS projde (`acc_document`, `tax_office_person`).
-- [ ] Dev DS: řádné podání DP3 → „Zaúčtovat" založí `cmnbkp` 10 s vyrovnanými
-      řádky; po jeho uzavření (40) `ClosedPeriodBalanceService` za instanci = prázdný;
-      druhé „Zaúčtovat" odmítne; po stornu dokladu projde znovu.
-- [ ] Dev DS: změna DPH dokladu v odemčené podané instanci → kontrola nenulová →
-      dodatečné podání + zaúčtování → kontrola prázdná; doklad dodatečného nese jen
-      deltu a ř. 66 na saldo účtu.
-- [ ] Zlatý test 689089 DP3 01–04/2026: `--dry-run` řádky = staré účetní doklady
-      přiznání per 343 analytika a saldo řádek (částka, VS, SS); odchylky jen
-      v rozdělení zbytku (zaokrouhlení vs. 548) — zdokumentované.
-- [ ] Registrace bez správce daně: doklad vznikne, warning v messages podání;
-      po doplnění osoby a přeúčtování (storno + znovu) má saldo řádek partnera.
-- [ ] Dokumentace dle §7.
+- [x] Testy zelené: `VatReturnAccountingBuilderTest` (18 scénářů: řádné odvod
+      i odpočet, reverse charge pár, krácení + koeficient nahoru, dodatečné ±,
+      opravné, prázdná delta, tolerance zaokrouhlení, chybějící účty, správce
+      daně, DIČ, neznámý kód, čtvrtletní SS), `VatReturnAccountingServiceTest`
+      (integrační, 4l3j: koncept 10 s vyrovnanými řádky, `acc_document` +
+      zpráva, ALREADY_ACCOUNTED, po stornu znovu, koncept podání odmítnut +
+      dry-run, KH odmítnuto, bez správce daně warning), `FilingDocumentTest`
+      (+9 na `acc_document`/`messages`), `ClosedPeriodBalanceServiceTest`
+      (+ doklad podání mimo instanci vypořádá, smazaný ne),
+      `VatRegistrationDocumentTest` (+6 částečné uložení), `VatOutputsMappingTest`
+      (+5 `accounting`), `ReadOnlyPolicyTest`, `HelpDriftTest`.
+- [x] `ds-upgrade` na 4l3j i btpg-p projde (`acc_document`, `tax_office_person`).
+- [x] 4l3j: podané řádné podání (Q3/2026) → `POST /_vat/filing-account` založil
+      `cmnbkp` 10 s řádky 343110 DAL / 343802 MD / 648100 DAL (Σ = Σ), druhé
+      volání `ALREADY_ACCOUNTED`, po smazání dokladu detail nabízí „Zaúčtovat
+      znovu". Vypořádání po uzavření dokladu ověřuje integrační test kontroly
+      zůstatků (deník přímo), ne proklik — proklik UI (uzavření dokladu →
+      Zůstatky DPH prázdné) zbývá.
+- [ ] Dev DS ruční scénář: změna DPH dokladu v odemčené podané instanci →
+      kontrola nenulová → dodatečné podání + zaúčtování → kontrola prázdná.
+      Matematiku dodatečného (delta per kód + ř. 66) kryje builder test;
+      proklik zbývá spolu s alfou.
+- [x] **Zlatý test 689089 DP3 01–04/2026** (btpg-p, koncepty podání #1–#4
+      přes `vat-filing-compose`, `vat-filing-account --dry-run`): per analytika
+      343 **shodná strana i částka** ve všech čtyřech měsících (11 / 8 / 10 /
+      10 řádků), saldo řádek 343801 DAL 260 864 / 135 796 / 120 203 / 143 583
+      = staré doklady, VS `46343504`, SS `705202601`…`705202604`, splatnost
+      +25 dní shodná. Zbytek 1,06 / 0,02 / −0,97 / 0,48 shodný se starými
+      doklady včetně strany; liší se jen účet zaokrouhlení — předpis dává
+      `rounding.revenue` 648001 / `rounding.cost` 548001, starý systém účtoval
+      668001 / 568001. Krácení 0,00 (koeficient 1,00), takže rozdělení zbytku
+      mezi 548 a zaokrouhlení se neprojevilo.
+- [x] Registrace bez správce daně: doklad vznikne, saldo řádek bez partnera,
+      warning ve zprávách podání i v odpovědi akce (integrační test + btpg
+      dry-run); po doplnění osoby a novém zaúčtování má partnera (test).
+- [x] Dokumentace dle §7: README modulu vat (sekce Zaúčtování přiznání +
+      architektura), `tables/economy_vat_filings.md`,
+      `economy_codebooks_vat_registrations.md`, `docs/accounting.md` §5,
+      README codebooks, `docs/edit-forms.md` kap. 26 (nový primitiv),
+      `docs/cli.md`, `docs/ds-setup.md` §5.2, help `dph-podani.md`
+      (Zaúčtování přiznání), `uzamceni-obdobi.md`, `co-dnes-nejde.md`.
 
 ## Odchylky od zadání
 
-(doplní implementace)
+Odsouhlaseno před implementací (plán 2026-09-12):
+
+- **Editace ve stavu 40 nejde přes Document, ale přes nový primitiv
+  `TableForm::getReadOnlyEditableColumns()`.** Read-only stav vynucují
+  controllery, ne Document — a `FormController::save()` ho dosud nehlídal
+  vůbec (mrtvý `processDocState`), takže `note` u podaného podání šlo
+  „povolit" jen na papíře: formulář byl celý zamčený. Teď server odmítne
+  update read-only záznamu mimo whitelist (`DOCUMENT_READONLY`), klient
+  odemkne jen vyjmenované sloupce a posílá jen je; první uživatelé `note`
+  podání a `tax_office_person` registrace. `VatRegistrationDocument` proto
+  zvládá částečné uložení (merge s uloženým řádkem). `docs/edit-forms.md` §26.
+- **`messages` podání smí změnit jen uložení, které zároveň nastavuje
+  `acc_document`** (záznam `vatReturn.accounted` + varování builderu);
+  jinak zůstává ve `FROZEN_COLUMNS`.
+- **Číselná řada z volitelného parametru vrstvy C
+  `economy.vat.filingAccountingSeries`**, bez něj jen když je aktivní řada
+  `cmnbkp` právě jedna; při více řadách chyba s pokynem (btpg-p má osm řad,
+  „první podle id" by byla Saldokonto místo Daně). Mimo průvodce nastavením
+  i `[TODO]` výpis `ds-upgrade` (`optional` ve specifikaci).
+- **Saldo řádek jednotně = závazek(kumulativní podané po) − závazek(před)**
+  přes `FilingSnapshotLoader::cumulativeFiledRows()` (extrakce z composeru);
+  pro řádné to je ř. 64/65, pro opravné rozdíl proti kumulativnímu stavu,
+  pro dodatečné přesně ř. 66.
+- **SS = prefix + `date_end` ve tvaru RRRRMM** (název instance `01/2026`
+  číslice ve správném pořadí nedá); u čtvrtletí koncový měsíc — starý systém
+  bral číslice z id období.
+- **CLI `--dry-run` jde i nad konceptem podání** (zápis ne) — bez toho by
+  zlatý test na btpg-p vyžadoval podat čtyři přiznání.
+- **Chybějící účet 343801/802 nebo 548 = chyba, doklad nevznikne** (zadání:
+  doklad bez saldo řádku + chyba). Nevyrovnaný koncept nikomu nepomůže,
+  uživatel účet doplní a akci spustí znovu tak jako tak.
+- **Kódy mimo přiznání (`dp3_row` NULL) se neúčtují** — nejsou součástí
+  podané povinnosti; kdyby nesly daň, ohlásí je kontrola zůstatků.
+- **Endpoint správce daně používá částečný payload** (`{id, tax_office_person}`)
+  místo celého řádku — registrace má strukturovaný `filing_profile`, celý
+  řádek zpět přes gateway by ho zbytečně reserializoval.
+- Import (§5): `old_shipard` task 36 na staré straně zatím neexistuje; runner
+  registrací navíc posílá neexistující `report_period_kind` (má být
+  `cs_period_kind`) — obojí je věc staré strany.

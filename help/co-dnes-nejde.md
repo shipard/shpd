@@ -41,12 +41,20 @@ přehled zámků přes celý rok (rok × měsíc) neexistuje a ze zamčeného do
 se k odemknutí musíš proklikat sám. Přeúčtovat zamčený doklad umí jen
 správce z konzole.
 
+**Úhradu finančnímu úřadu Shipard zatím nespáruje.** Účetní doklad
+přiznání sice založí závazek (nebo pohledávku) vůči správci daně s
+variabilním a specifickým symbolem a splatností, ale účty odvodu
+a nadměrného odpočtu DPH nejsou v saldokontu — platba z výpisu proti nim
+nesedne sama, přiřadíš ji ručně. Účetní doklad přiznání také vzniká vždy
+jako **koncept**: zaúčtuje se, až ho uzavřeš.
+
 **Roční vypořádání koeficientu odpočtu (řádek 53) a úpravu odpočtu
 (řádek 60) živé přiznání nespočítá.** Krácený odpočet přes zálohový
 koeficient (řádek 52) funguje — koeficient per rok zadáš v Nastavení, viz
 [Živé výstupy DPH](uctarna/dph-zive-vystupy.md). Vypořádací koeficient
 sice můžeš uložit, ale vypořádací řádek posledního přiznání roku zatím
-doplní účetní.
+doplní účetní — a do účetního dokladu přiznání se rozdíl zálohového
+a vypořádacího koeficientu nepromítne.
 
 ---
 

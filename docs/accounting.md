@@ -683,9 +683,23 @@ podle `is_error`.
   `343???`, `is_error`, alert) — žádné tiché smíchání cizí DPH s tuzemskou.
   Hodnota `cz` je správně, dokud existuje jen `rules.cz`; každý budoucí
   country předpis dostane vlastní fallback se svou zemí.
-- **Krácené kódy** (118/119/341/342, koeficient odpočtu): zatím se účtuje
-  plná daň na vlastní analytiku; krácení odpočtu (dopočet na 548) je
-  budoucí téma DPH přiznání — mimo scope účtování.
+- **Krácené kódy** (118/119/341/342, koeficient odpočtu): doklad účtuje
+  plnou daň na vlastní analytiku; neuplatnitelnou část (krácený sloupec
+  ř. 46 − odpočet ř. 52) přeúčtuje na náklad `vat.nondeductible` (548) až
+  účetní doklad přiznání.
+- **Uzavření analytik 343 přiznáním** (#55 F4b): podané přiznání dostane
+  účetní doklad `cmnbkp` (`economy_vat_filings.acc_document`), který per
+  kód DPH vynuluje analytiku proti saldu — kategorie `vat.payable` (343801,
+  odvod, DAL) / `vat.receivable` (343802, nadměrný odpočet, MD), partner =
+  správce daně registrace, VS/SS/KS + splatnost pro párování platby FÚ.
+  Opravné a dodatečné podání účtují jen rozdíl proti kumulativnímu
+  podanému stavu; zbytek ze zaokrouhlení na Kč jde na `rounding.cost` /
+  `rounding.revenue`. Řádky dokladu staví `Economy\Vat\Accounting
+  \VatReturnAccountingBuilder` ze snapshotu podání (ne z deníku), deník
+  vznikne standardně uzavřením dokladu. Součet deníku na `343*` (mimo
+  801/802) přes doklady instance a doklady jejích podání je pak nula —
+  `ClosedPeriodBalanceService`. Detaily: README modulu `economy.vat` →
+  Zaúčtování přiznání.
 
 ---
 

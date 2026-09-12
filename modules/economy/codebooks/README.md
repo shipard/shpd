@@ -159,6 +159,16 @@ později) bude obsahovat referenci na konkrétní registraci, a podle data
 uskutečnění zdanitelného plnění „spadne" do jejího příslušného období.
 Přiznání DPH se sestavují per registrace.
 
+**Správce daně** (`tax_office_person`, #55 D30): osoba finančního úřadu
+z adresáře, ručně vybraná v sekci **Správce daně** formuláře registrace.
+`economy.vat` ji dává jako partnera saldo řádku účetního dokladu přiznání
+(343801/343802), aby šla úhrada FÚ párovat. Je to jediný sloupec, který
+jde doplnit i k registraci ve stavu **V pořádku** bez „Opravit"
+(`VatRegistrationsForm::getReadOnlyEditableColumns`, Document zvládá
+částečné uložení); import ji nastavuje přes `POST /_vat/registration-tax-office`
+po naimportování osob. Číselník FÚ (`world.cz` `taxOffices`) slouží jen
+hlavičce podání — osoba správce daně z něj neplyne.
+
 ### Instance daňových tvrzení
 
 Období DPH už codebooks negeneruje. Instance tvrzení (přiznání, kontrolní

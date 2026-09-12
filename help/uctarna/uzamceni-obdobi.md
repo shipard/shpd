@@ -1,7 +1,7 @@
 ---
 title: Uzamčení období
 summary: Jak po podání DPH uzamknout tvrzení nebo celý fiskální měsíc, co zámek zastaví, jak vypadá zamčený doklad a jak zámek zase sundat.
-keywords: [uzamknout období, zamknout období, zámek období, uzamčené tvrzení, uzamčený měsíc, uzamčené období, zamčený doklad, doklad je uzamčený, nejde opravit doklad, nejde stornovat doklad, nejde smazat doklad, odemknout tvrzení, odemknout měsíc, uzávěrka měsíce, uzavřít měsíc, uzavřít období, po podání DPH, dodatečné přiznání odemknout, podané přiznání není uzamčené, nevypořádaná DPH, zůstatky DPH, účet 343, přeúčtovat zamčený doklad]
+keywords: [uzamknout období, zamknout období, zaúčtovat před zamčením, zaúčtování přiznání, zámek období, uzamčené tvrzení, uzamčený měsíc, uzamčené období, zamčený doklad, doklad je uzamčený, nejde opravit doklad, nejde stornovat doklad, nejde smazat doklad, odemknout tvrzení, odemknout měsíc, uzávěrka měsíce, uzavřít měsíc, uzavřít období, po podání DPH, dodatečné přiznání odemknout, podané přiznání není uzamčené, nevypořádaná DPH, zůstatky DPH, účet 343, přeúčtovat zamčený doklad]
 related: [uctarna/dph-podani.md, uctarna/dph-zive-vystupy.md, faktury-prijate/oprava-dokladu.md, co-dnes-nejde.md]
 ---
 
@@ -27,7 +27,9 @@ stornovat ani smazat a do zamčeného období nejde dopsat nový doklad.
 ### Zamknout tvrzení po podání
 
 1. V **Účtárna → Podání DPH** otevři podání, které jsi právě **Podal**.
-2. V pravém panelu klikni na **Uzamknout tvrzení**. Tvrzení, ke kterému
+2. U přiznání k DPH nejdřív klikni na **Zaúčtovat** — vznikne účetní
+   doklad přiznání (viz [Podání DPH](dph-podani.md), Zaúčtování přiznání).
+3. V pravém panelu klikni na **Uzamknout tvrzení**. Tvrzení, ke kterému
    podání patří, se zamkne a tlačítko zmizí.
 
 Totéž uděláš i bez podání: v **Účtárna → Daňová tvrzení** vyber tvrzení a
@@ -87,10 +89,13 @@ následné hlášení: podání jen čte.
   který zámek vědomě obejde a zapíše o tom záznam.
 - **Při zamykání měsíce může Shipard varovat**, že za podané přiznání
   končící v tom měsíci zůstává na účtech DPH **nevypořádaný zůstatek**.
-  Měsíc se zamkne i tak; varování říká, že přiznání ještě není zaúčtované,
-  nebo že se DPH po podání změnila. Totéž hlídá denní upozornění
-  **Nevypořádaná DPH za podané přiznání …** a sekce **Zůstatky DPH**
-  v detailu tvrzení.
+  Měsíc se zamkne i tak; varování říká, že přiznání ještě není zaúčtované
+  (účetní doklad přiznání chybí nebo je pořád koncept), nebo že se DPH po
+  podání změnila. Totéž hlídá denní upozornění **Nevypořádaná DPH za
+  podané přiznání …** a sekce **Zůstatky DPH** v detailu tvrzení.
+  Pořadí je proto: podat → **Zaúčtovat** → uzavřít účetní doklad → zamknout
+  měsíc. Účetní doklad přiznání má datum účtování na konci období, takže
+  do už zamčeného měsíce ho nezaložíš — měsíc bys musel dočasně odemknout.
 - **Změna období sousedního tvrzení může narazit na zámek.** Když by
   posun hranic přesunul doklady ze zamčeného tvrzení nebo do něj, uložení
   se nepovede a Shipard vypíše, kterých dokladů se to týká. Nejdřív

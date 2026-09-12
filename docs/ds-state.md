@@ -1,6 +1,6 @@
 # Stavy zdroje dat
 
-Stavový model DS podle issue [shipard/shpd#56](https://github.com/shipard/shpd/issues/56)
+Stavový model DS podle issue [shipard/shipard#56](https://github.com/shipard/shipard/issues/56)
 (rozhodnutí D1–D10). Tento dokument popisuje **fázi 1** (stavový soubor,
 503 pro zavřené DS, cron gating, CLI) a **fázi 2** (read-only vynucení na
 routách, MCP read-tier, stavová obrazovka SPA, hlídání zapomenuté

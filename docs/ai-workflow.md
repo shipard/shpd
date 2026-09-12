@@ -26,7 +26,7 @@ a jak udržet přehled o tom, co se změnilo a proč.
 
 ## 2. Postup: issue → rozhodnutí → PRD → implementace → ověření
 
-1. **Design issue** na GitHubu (`shipard/shpd`). Diskuse probíhá v chatu, závěry se
+1. **Design issue** na GitHubu (`shipard/shipard`). Diskuse probíhá v chatu, závěry se
    propisují do issue komentářem.
 2. **Rozhodnutí se číslují a zamykají** (`D1`, `D2`, …) dřív, než se napíše PRD.
    PRD i issue na ně odkazují. Když se rozhodnutí později změní, dostane nové číslo
@@ -69,7 +69,7 @@ starém (import runner) závisí na novém applieru nebo poli.
 
 ## 4. Nástroje a návyky ověřené v praxi
 
-**GitHub** — přes `gh` CLI, vždy s `--repo shipard/shpd`. Víceřádkové texty přes
+**GitHub** — přes `gh` CLI, vždy s `--repo shipard/shipard`. Víceřádkové texty přes
 `--body-file /tmp/soubor.md`, ne přes `--body` (uvozovky a diakritika).
 
 **PHPUnit** — vždy úzký filtr: `vendor/bin/phpunit --filter 'TestA|TestB'`;
@@ -122,10 +122,10 @@ změnu **navrhne** a člověk ji commitne; do `CLAUDE.md` se nepíše potichu.
 
 | Vrstva | Soubory | Jak se dostane ke kolegovi |
 |--------|---------|----------------------------|
-| **repo `shpd`** (veřejné) | `CLAUDE.md`, `docs/`, `tasks/README.md`, tento dokument | `git clone`; Claude Code načte `CLAUDE.md` automaticky |
+| **repo `shipard/shipard`** (veřejné) | `CLAUDE.md`, `docs/`, `tasks/README.md`, tento dokument | `git clone`; Claude Code načte `CLAUDE.md` automaticky |
 | **repo `shipard/dev-env`** (soukromé) | `dev-env.md` (prostředí, nástroje, přístupy), `alpha.md` (testovací server), `claude-project-instructions.md` (text instrukcí Projektu), `README.md` (checklist nového člověka) | `git clone`; v claude.ai přes GitHub sync do knowledge Projektu |
 | **stroj** | `CLAUDE.local.md` v kořeni checkoutu, `~/.claude/*` | nesdílí se; vzor v kapitole 7 |
-| **claude.ai Projekt** | instrukce + knowledge (GitHub sync `dev-env` + z `shpd` aspoň `CLAUDE.md`, `docs/`, `tasks/README.md`) | Team plán: jeden sdílený Projekt; Pro/Max: každý si založí vlastní podle `claude-project-instructions.md` |
+| **claude.ai Projekt** | instrukce + knowledge (GitHub sync `dev-env` + z `shipard/shipard` aspoň `CLAUDE.md`, `docs/`, `tasks/README.md`) | Team plán: jeden sdílený Projekt; Pro/Max: každý si založí vlastní podle `claude-project-instructions.md` |
 
 Důležité: **Claude v chatu `CLAUDE.md` sám od sebe nečte.** Musí být v knowledge
 Projektu (GitHub sync) nebo si ho Claude načte z repa přes MCP most na začátku

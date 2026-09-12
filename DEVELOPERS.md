@@ -20,7 +20,7 @@ Vítej v projektu Shipard! Tenhle dokument tě provede od nuly k funkčnímu vý
 ## 1. Stažení repozitáře
 
 ```bash
-git clone git@github.com:shipard/shpd.git ~/sw/shpd
+git clone git@github.com:shipard/shipard.git ~/sw/shpd
 cd ~/sw/shpd
 ```
 
@@ -216,7 +216,7 @@ tabulek — spusť `shpd-server ds-upgrade-all` (nebo **Upgrade All**
 v dashboardu).
 
 Pořád to nejde? Založ issue na
-[GitHubu](https://github.com/shipard/shpd/issues) s výstupem
+[GitHubu](https://github.com/shipard/shipard/issues) s výstupem
 `shpd-server doctor` a relevantními řádky z logu — díky tomu to
 rozklíčujeme nejrychleji.
 

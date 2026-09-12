@@ -115,7 +115,7 @@ to, co nás teď zajímá nejvíc:
 **Nepiš nám chyby e-mailem.** Zakládej je jako *issue* na GitHubu —
 máme je tam všechny na jednom místě, vidíš stav svého hlášení a nezapadne to.
 
-👉 **[Nahlásit chybu nebo napsat nápad](https://github.com/shipard/shpd/issues/new/choose)**
+👉 **[Nahlásit chybu nebo napsat nápad](https://github.com/shipard/shipard/issues/new/choose)**
 
 Budeš k tomu potřebovat účet na GitHubu. Když ho nemáš, zřídíš ho za dvě
 minuty na [github.com/signup](https://github.com/signup) — je zdarma

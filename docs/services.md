@@ -1,6 +1,6 @@
 # Standard samostatných komponent
 
-Pravidla pro komponenty, které nejsou součástí repozitáře `shipard/shpd`, ale
+Pravidla pro komponenty, které nejsou součástí repozitáře `shipard/shipard`, ale
 tvoří s ním jeden systém — dnes `ai-analyzer` a `mail-router`, dále generátor
 UI videa (#48) a PDF rendering (#34).
 

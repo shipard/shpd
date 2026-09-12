@@ -1,7 +1,7 @@
 # Shipard — Varianty UI (shells)
 
 > **Stav: návrh (design doc).** Popisuje koncepty a cílový stav, ne implementaci.
-> Realizace probíhá po fázích přes zastřešující issue [#45](https://github.com/shipard/shpd/issues/45); každá fáze má
+> Realizace probíhá po fázích přes zastřešující issue [#45](https://github.com/shipard/shipard/issues/45); každá fáze má
 > vlastní PRD v `tasks/`. Sekce dokumentu se po realizaci přesouvají /
 > přepisují do `frontend.md` a souvisejících dokumentů (dokumentujeme, co
 > existuje — plány žijí tady).

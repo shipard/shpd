@@ -8,7 +8,7 @@ příkazem.
 Runner o Shipardu neví nic — Shipard-specifické jsou jen scénáře
 v [`demo/scenarios/`](../../demo/scenarios/) a verb `login`.
 
-Rozhodnutí, ze kterých návrh vychází, jsou v issue **shipard/shpd#48**
+Rozhodnutí, ze kterých návrh vychází, jsou v issue **shipard/shipard#48**
 a v tasku [`tasks/video-runner-spike.md`](../../tasks/video-runner-spike.md).
 
 > **Stav: pilotní spike.** Implementovaná je podmnožina — chybí zoomy
@@ -78,7 +78,7 @@ framů v jednosekundovém okně. To je jediné číslo, které odpovídá na ot�
 Zvažovala se ještě varianta s headed Chromiem ve Xvfb a `ffmpeg -f x11grab`
 (konstantní FPS nativně). Ve spike prohrála — měla stejný obraz za cenu dvou
 systémových závislostí a nedala se v ní schovat lišta prohlížeče. Důvody
-jsou v `tasks/video-runner-spike.md` a v shipard/shpd#48.
+jsou v `tasks/video-runner-spike.md` a v shipard/shipard#48.
 
 ---
 

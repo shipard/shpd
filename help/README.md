@@ -91,7 +91,7 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
    zatím fakt nejde a není to tvoje chyba.
 2. Zkus se zeptat asistenta v **Chatu**.
 3. Napiš na **podpora@shipard.cz**, nebo
-   [založ hlášení na GitHubu](https://github.com/shipard/shpd/issues/new/choose)
+   [založ hlášení na GitHubu](https://github.com/shipard/shipard/issues/new/choose)
    (pozor, hlášení jsou veřejná — pravidla jsou v [TESTERS.md](../TESTERS.md)).
 
 ---

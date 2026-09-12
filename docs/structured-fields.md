@@ -1,7 +1,7 @@
 # Strukturovaná pole se schématem
 
 Mechanismus pro **strukturovaná data se schématem, které se mění podle typu
-záznamu, země a času** — podle issue [shipard/shpd#74](https://github.com/shipard/shpd/issues/74)
+záznamu, země a času** — podle issue [shipard/shipard#74](https://github.com/shipard/shipard/issues/74)
 (rozhodnutí S1–S7 a implementační I1–I6). Nahrazuje `subColumns`/properties
 starého Shipardu: princip je převzatý, verze schématu se ale **neodvozuje**
 z data záznamu, nese ji hodnota.

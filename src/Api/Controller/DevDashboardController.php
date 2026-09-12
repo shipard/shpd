@@ -1129,7 +1129,7 @@ class DevDashboardController
 		<script>
 		(function () {
 			var REFRESH_INTERVAL = 5;
-			var DOCS_URL = 'https://github.com/shipard/shpd/blob/main/docs/logging.md';
+			var DOCS_URL = 'https://github.com/shipard/shipard/blob/stable/docs/logging.md';
 			var DS_NULL = '__null__';
 
 			var state = {

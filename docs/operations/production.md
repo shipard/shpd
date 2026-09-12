@@ -30,7 +30,7 @@ V produkci klonuj rovnou do datového rootu (ne do `~`):
 
 ```bash
 sudo mkdir -p /opt/shipard
-sudo git clone https://github.com/shipard/shpd.git /opt/shipard/shpd
+sudo git clone https://github.com/shipard/shipard.git /opt/shipard/shpd
 ```
 
 (Ownership se srovná v dalším kroku instalačním skriptem.)

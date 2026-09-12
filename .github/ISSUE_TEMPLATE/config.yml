@@ -4,13 +4,13 @@ blank_issues_enabled: true
 
 contact_links:
   - name: 🔑 Chci vyzkoušet Shipard (přístup k aplikaci)
-    url: https://github.com/shipard/shpd/blob/stable/TESTERS.md#2-jak-si-říct-o-přístup
+    url: https://github.com/shipard/shipard/blob/stable/TESTERS.md#2-jak-si-říct-o-přístup
     about: Přístupy zakládáme ručně na požádání — tady je, co nám poslat.
 
   - name: ❓ Mám jen dotaz
-    url: https://github.com/shipard/shpd/blob/stable/TESTERS.md#6-kde-se-ptát
+    url: https://github.com/shipard/shipard/blob/stable/TESTERS.md#6-kde-se-ptát
     about: Otázky „jak se to dělá" nepatří do Issues — kanály najdeš tady.
 
   - name: 🛠 Nejde mi rozchodit vývojové prostředí
-    url: https://github.com/shipard/shpd/blob/stable/DEVELOPERS.md#9-něco-nefunguje
+    url: https://github.com/shipard/shipard/blob/stable/DEVELOPERS.md#9-něco-nefunguje
     about: Většinu potíží s instalací odhalí health check — zkus ho prosím nejdřív.

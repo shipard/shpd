@@ -1,7 +1,7 @@
 // S1 — Přeposlaná faktura → doklad (hero video webu).
 // Tvrzení: klient přepošle fakturu e-mailem, Shipard z ní připraví doklad,
 // účetní jen zkontroluje a potvrdí. Viz shpd-web/docs/demo-scenare.md (S1)
-// a shipard/shpd#48.
+// a shipard/shipard#48.
 //
 // Rozsah rozhodnut v chatu (O1/O2): video začíná kartou na dashboardu
 // (došlá pošta se neukazuje — „klient přeposlal fakturu" říká titulek,

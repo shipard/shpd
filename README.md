@@ -67,7 +67,7 @@ a poslat nám zpětnou vazbu popisuje [průvodce pro testery](TESTERS.md).
 
 - [Začínáme](help/zaciname.md) — první přihlášení, nastavení a první faktura.
 - [Uživatelské návody](help/README.md) — jak se v Shipardu dělají jednotlivé věci.
-- [Nahlásit chybu nebo napsat nápad](https://github.com/shipard/shpd/issues/new/choose)
+- [Nahlásit chybu nebo napsat nápad](https://github.com/shipard/shipard/issues/new/choose)
   — pravidla pro veřejná hlášení najdeš v [průvodci pro testery](TESTERS.md#5-jak-nahlásit-chybu).
 
 Rychlý dotaz, nejasnost, nebo si jen chceš popovídat o tom, kam Shipard

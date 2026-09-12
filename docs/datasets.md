@@ -3,7 +3,7 @@
 Přenosný obraz obsahu datového zdroje: složka (nebo zip) souborů ve
 výměnných formátech, kterou lze naimportovat do jiného (nebo téhož,
 zresetovaného) DS. Zadání a rozhodnutí: `tasks/dataset-phase1.md`, issue
-shipard/shpd#40 (D1–D5). Pilotní konzument: demonstrační sada pro web.
+shipard/shipard#40 (D1–D5). Pilotní konzument: demonstrační sada pro web.
 
 Fáze 1 pokrývá `dateMode: fixed`, celý DS bez filtrů a *snapshot mode*
 došlé pošty (analýza se přenáší jako data — žádné volání AI).

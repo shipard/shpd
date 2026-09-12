@@ -7,7 +7,7 @@ namespace Shipard\Core\Config;
 use Shipard\Core\Logging\ErrorLogger;
 
 /**
- * Stav zdroje dat — `config/state.json` (issue shipard/shpd#56, docs/ds-state.md).
+ * Stav zdroje dat — `config/state.json` (issue shipard/shipard#56, docs/ds-state.md).
  *
  * Dvě osy: lifecycle stav (active / read_only / suspended / pending_deletion)
  * a maintenance overlay (reason + since). Aktivní maintenance má přednost —

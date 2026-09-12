@@ -24,7 +24,13 @@
     onSaveAndContinue = undefined,
   } = $props();
 
-  const showSave = $derived(!readOnly && (!docStates || !docStates.read_only));
+  // Read-only stav dokumentu schová Uložit — ledaže server povolil pár
+  // sloupců editovatelných i tak (doc_states.editable_columns, např.
+  // poznámka k podanému podání); pak se ukládají jen ony (FormEditor).
+  const showSave = $derived(
+    !readOnly
+      && (!docStates || !docStates.read_only || (docStates.editable_columns?.length ?? 0) > 0),
+  );
   const transitions = $derived(readOnly ? [] : (docStates?.transitions ?? []));
   const showContinue = $derived(showSave && isNew && typeof onSaveAndContinue === 'function');
   const saveLabel = $derived(showContinue ? t('form.add') : t('common.save'));

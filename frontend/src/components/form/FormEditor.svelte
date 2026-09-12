@@ -75,6 +75,16 @@
   const isReadOnly = $derived(readOnly || (formDef?.doc_states?.read_only ?? false) || (documentLock?.locked ?? false));
   const isDisabled = $derived(saving || recalculating || isReadOnly);
 
+  // Sloupce editovatelné i v read-only stavu dokumentu
+  // (doc_states.editable_columns ← TableForm::getReadOnlyEditableColumns):
+  // jejich inputy zůstávají aktivní a Uložit pošle jen je. Externí prop
+  // `readOnly` (prohlížení) je přebíjí; během save/recalculate se zamykají
+  // jako ostatní.
+  const readOnlyEditable = $derived(formDef?.doc_states?.editable_columns ?? []);
+  const unlockedColumns = $derived(
+    isReadOnly && !readOnly && !saving && !recalculating ? readOnlyEditable : [],
+  );
+
   // Notifikuje rodiče (FormDialog) o aktuálním titulku a stavu — header modalu
   // tak může zobrazit titulek, FormStateBadge a subtitle z header_info.
   $effect(() => {
@@ -93,9 +103,19 @@
   // takže změna spuštěná triggerem zachová dirty stav (uživatel musí Uložit).
   const isDirty = $derived.by(() => {
     if (!loadedDataSnapshot) return false;
-    if (isReadOnly) return false;
+    if (isReadOnly) {
+      // Read-only formulář je dirty jen v odemčených sloupcích.
+      if (readOnly || readOnlyEditable.length === 0) return false;
+      return !shallowEqual(pickColumns(formData, readOnlyEditable), pickColumns(loadedDataSnapshot, readOnlyEditable));
+    }
     return !shallowEqual(formData, loadedDataSnapshot);
   });
+
+  function pickColumns(data, columns) {
+    const out = {};
+    for (const c of columns) out[c] = data?.[c];
+    return out;
+  }
 
   // Propagace dirty stavu do rodiče (FormDialog) — používá se při pokusu o zavření.
   $effect(() => {
@@ -259,9 +279,14 @@
     clearValidationErrors();
     loadError = null;
     const isNew = currentId == null;
+    // Read-only dokument s odemčenými sloupci: server pustí jen je
+    // (DOCUMENT_READONLY jinak), takže se posílají samotné.
+    const payload = !isNew && isReadOnly && readOnlyEditable.length > 0
+      ? pickColumns(sanitizeFormData(formData), readOnlyEditable)
+      : sanitizeFormData(formData);
     const res = isNew
-      ? await post(`/_ui/form/${table}/save`, sanitizeFormData(formData))
-      : await put(`/_ui/form/${table}/save/${currentId}`, sanitizeFormData(formData));
+      ? await post(`/_ui/form/${table}/save`, payload)
+      : await put(`/_ui/form/${table}/save/${currentId}`, payload);
 
     if (res?.success) {
       captureWarnings(res.data);
@@ -674,6 +699,7 @@
               {dataResolved}
               disabled={isDisabled}
               readOnly={isReadOnly}
+              {unlockedColumns}
               onTrigger={handleTrigger}
               onResolveChange={handleResolveChange}
               parentId={currentId}

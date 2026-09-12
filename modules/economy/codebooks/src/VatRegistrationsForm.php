@@ -46,6 +46,11 @@ class VatRegistrationsForm extends TableForm
                     ->select('region', options: $regionOptions, required: true)
                     ->select('country', options: $countryOptions, required: true)
                     ->select('taxpayer_kind', options: $taxpayerKindOptions, required: true)
+                    ->separator('Správce daně')
+                    ->lookup('tax_office_person', 'base_persons_persons',
+                        placeholder: 'Hledat osobu…',
+                        hint: 'Finanční úřad jako osoba v adresáři — partner saldo řádku účetního dokladu '
+                            . 'přiznání DPH. Lze doplnit i u potvrzené registrace.')
                     ->separator('Periodicita')
                     ->select('tax_period_kind', options: $periodKindOptions, required: true)
                     ->select('cs_period_kind', options: $periodKindOptions, required: true)
@@ -89,6 +94,16 @@ class VatRegistrationsForm extends TableForm
             titleNew: 'Nová registrace DPH',
             tabs: $tabs,
         );
+    }
+
+    /**
+     * Správce daně smí přibýt i k registraci ve stavu V pořádku (#55 D30) —
+     * jediná změna, kterou potvrzená registrace připouští bez „Opravit".
+     * Document zvládá částečné uložení (merge s uloženým řádkem).
+     */
+    public function getReadOnlyEditableColumns(): array
+    {
+        return ['tax_office_person'];
     }
 
     /**

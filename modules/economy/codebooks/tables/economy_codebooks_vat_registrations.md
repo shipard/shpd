@@ -16,6 +16,7 @@ nesahá.
 | `country` | enumString(2), cfgItem `world.base.countries`, default `'cz'` | ISO 3166-1 alpha-2 lowercase |
 | `taxpayer_kind` | enumInt default 0, cfgItem `economy.codebooks.vatTaxpayerKinds` | 0 = Klasický plátce, 1 = OSS (One-Stop-Shop pro EU služby) |
 | `vat_id` | varchar(30) NULL | DIČ; nullable kvůli stavu „v procesu registrace" — formálně registrace existuje, ale DIČ ještě nepřišlo |
+| `tax_office_person` | int NULL, reference `base_persons_persons` | Správce daně (#55 D30) — osoba finančního úřadu; partner saldo řádku účetního dokladu přiznání (`economy.vat`). Ručně vybraná osoba, žádný číselník FÚ. Jediný sloupec editovatelný i ve stavu V pořádku (formulář i `POST /_vat/registration-tax-office` pro import) |
 
 ### Skupina `period`
 
@@ -50,6 +51,12 @@ nesahá.
   runtime logika reportů je nečte (D10).
 - Doklad podle DUZP (a DPPD oříznutého do přiznání) spadne do instancí
   tvrzení své registrace — přiřazení dělá `economy.vat` při uložení.
+- **Správce daně** (`tax_office_person`) musí být živá osoba (stav 10/40/80);
+  jde doplnit i k registraci ve stavu V pořádku bez „Opravit" — formulář ho
+  pouští jako jediný sloupec (`getReadOnlyEditableColumns`), import přes
+  `POST /_vat/registration-tax-office {registrationId, personId}` v `economy.vat`
+  (idempotentní; volá ho migrace po importu osob, protože při založení
+  registrace osoba FÚ ještě neexistuje).
 
 ## Související
 

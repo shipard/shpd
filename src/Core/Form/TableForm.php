@@ -177,6 +177,26 @@ abstract class TableForm
         return [];
     }
 
+    /**
+     * Opt-in whitelist sloupců editovatelných i v read-only stavu dokumentu
+     * (`readOnly: 1` v docStates cfgItem — Podáno, V pořádku…).
+     *
+     * FormController jinak uložení read-only záznamu odmítne (422
+     * DOCUMENT_READONLY); payload složený jen z těchto sloupců projde.
+     * Klient je dostane v `doc_states.editable_columns`, nechá jejich
+     * inputy aktivní a při uložení pošle **jen je** — Document třída tedy
+     * musí zvládnout částečné uložení (merge s uloženým řádkem, vzor
+     * FilingDocument). Typicky poznámka k podanému podání nebo správce
+     * daně na potvrzené registraci — údaje, které k zmrazenému záznamu
+     * smí přibýt bez „Opravit". Viz docs/edit-forms.md kap. 26.
+     *
+     * @return list<string>
+     */
+    public function getReadOnlyEditableColumns(): array
+    {
+        return [];
+    }
+
     public function recalculate(string $changedColumn, array $data): RecalculateResult
     {
         $isNew = !isset($data['id']) || $data['id'] === null;

@@ -127,6 +127,7 @@ class FormController
             $docData = $isNew ? [$def->docStates->stateColumn => 10] : $data;
             $docStatesInfo = $this->buildDocStatesInfo(
                 $def, $docData, $config, $table, $documentRegistry, $db,
+                $structuredForm?->getReadOnlyEditableColumns() ?? [],
             );
             $formDefinition = $formDefinition->withDocStates($docStatesInfo);
         }
@@ -184,8 +185,8 @@ class FormController
         // Form může opt-in whitelistem povolit editaci konkrétních sensitive
         // sloupců (TableForm::getEditableSensitiveColumns) — např. mail_token
         // na hosting DS. Bez registrované form třídy platí plný zákaz.
-        $sensitiveAllowed = $formRegistry->createForm($table, $body, $db, $config)
-            ?->getEditableSensitiveColumns() ?? [];
+        $form = $formRegistry->createForm($table, $body, $db, $config);
+        $sensitiveAllowed = $form?->getEditableSensitiveColumns() ?? [];
         $sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def, $sensitiveAllowed);
         if ($sensitiveErr !== null) {
             return $sensitiveErr;
@@ -246,6 +247,22 @@ class FormController
             && $auth->userId !== null
         ) {
             $inputData['created_by'] = $auth->userId;
+        }
+
+        // Read-only stav dokumentu (`readOnly` v docStates cfgItem): uložení
+        // existujícího záznamu projde jen s payloadem složeným ze sloupců,
+        // které form výslovně pouští (TableForm::getReadOnlyEditableColumns);
+        // cokoli jiného = 422 DOCUMENT_READONLY. Klient v tom stavu posílá
+        // právě jen tyto sloupce (FormEditor), takže Document vidí částečné
+        // uložení. Přechody stavu jdou jinou větví (výše).
+        if ($id !== null) {
+            $readOnlyErr = $this->guardReadOnlyUpdate(
+                $table, $id, $def, $inputData, $db, $config,
+                $form?->getReadOnlyEditableColumns() ?? [],
+            );
+            if ($readOnlyErr !== null) {
+                return $readOnlyErr;
+            }
         }
 
         // Init docState for new records
@@ -732,7 +749,10 @@ class FormController
                 ? [$def->docStates->stateColumn => ($data[$def->docStates->stateColumn] ?? 10)]
                 : $data;
             $formDefinition = $formDefinition->withDocStates(
-                $this->buildDocStatesInfo($def, $docData, $config, $table, $documentRegistry, $db)
+                $this->buildDocStatesInfo(
+                    $def, $docData, $config, $table, $documentRegistry, $db,
+                    $tableForm?->getReadOnlyEditableColumns() ?? [],
+                )
             );
         }
 
@@ -820,6 +840,12 @@ class FormController
         return $formDefinition->withHeaderInfo($headerInfo);
     }
 
+    /**
+     * @param list<string> $readOnlyEditable sloupce editovatelné i v read-only
+     *        stavu (TableForm::getReadOnlyEditableColumns) — klient je dostane
+     *        jako `editable_columns`, jen když stav read-only je a záznam
+     *        nedrží zámek (zámek je silnější než whitelist)
+     */
     private function buildDocStatesInfo(
         TableDefinition $def,
         array $data,
@@ -827,6 +853,7 @@ class FormController
         string $table = '',
         ?DocumentRegistry $documentRegistry = null,
         ?DataSourceConnection $db = null,
+        array $readOnlyEditable = [],
     ): array {
         $dsDef = $def->docStates;
         $cfg = DocStateConfig::fromCfgItem($config->cfgItem($dsDef->cfgItem));
@@ -852,14 +879,19 @@ class FormController
             )->describe($table, $data);
         }
 
-        return [
+        $stateReadOnly = $cfg->isReadOnly($currentState);
+        $info = [
             'currentState' => $currentState,
             'stateName'    => $stateData['stateName'] ?? '',
             'stateStyle'   => $stateData['stateStyle'] ?? '',
-            'read_only'    => $cfg->isReadOnly($currentState) || $lock['locked'],
+            'read_only'    => $stateReadOnly || $lock['locked'],
             'transitions'  => $transitions,
             'lock'         => $lock,
         ];
+        if ($stateReadOnly && !$lock['locked'] && $readOnlyEditable !== []) {
+            $info['editable_columns'] = array_values($readOnlyEditable);
+        }
+        return $info;
     }
 
     private function filterWritableFields(array $data, TableDefinition $def): array
@@ -913,14 +945,22 @@ class FormController
         $data[$mainCol] = $cfg->getMainState($newState);
     }
 
-    private function processDocState(
+    /**
+     * Read-only stav dokumentu při uložení existujícího záznamu: payload smí
+     * obsahovat jen sloupce z whitelistu formu (`getReadOnlyEditableColumns`),
+     * jinak 422 DOCUMENT_READONLY. Neexistující záznam nechává na gateway.
+     *
+     * @param array<string, mixed> $data  zapisovaná data (po filterWritableFields)
+     * @param list<string> $allowedColumns
+     */
+    private function guardReadOnlyUpdate(
         string $table,
         int $id,
-        array $rawBody,
         TableDefinition $def,
-        array &$data,
+        array $data,
         DataSourceConnection $db,
         ?ConfigRuntime $config,
+        array $allowedColumns,
     ): ?Response {
         $dsDef = $def->docStates;
         if ($dsDef === null || $config === null) {
@@ -928,37 +968,25 @@ class FormController
         }
 
         $stateCol = $dsDef->stateColumn;
-        $mainCol = $dsDef->mainColumn;
-        $cfg = DocStateConfig::fromCfgItem($config->cfgItem($dsDef->cfgItem));
-
         $currentRow = $db->fetchRow("SELECT `{$stateCol}` FROM `{$table}` WHERE `id` = %i", $id);
+        if ($currentRow === null) {
+            return null;
+        }
         $currentState = (int) ($currentRow[$stateCol] ?? 10);
-        $isReadOnly = $cfg->isReadOnly($currentState);
-
-        $hasStateChange = isset($rawBody[$stateCol]);
-
-        if ($isReadOnly && $data !== []) {
-            return Response::error(
-                'DOCUMENT_READONLY',
-                "Document is read-only in state {$currentState}.",
-                422,
-            );
+        $cfg = DocStateConfig::fromCfgItem($config->cfgItem($dsDef->cfgItem));
+        if (!$cfg->isReadOnly($currentState)) {
+            return null;
         }
 
-        if ($hasStateChange) {
-            $newState = (int) $rawBody[$stateCol];
-            if ($newState !== $currentState && !$cfg->isTransitionAllowed($currentState, $newState)) {
-                return Response::error(
-                    'INVALID_STATE_TRANSITION',
-                    "Transition from state {$currentState} to {$newState} is not allowed.",
-                    422,
-                );
-            }
-            $data[$stateCol] = $newState;
-            $data[$mainCol] = $cfg->getMainState($newState);
+        $extra = array_diff(array_keys($data), $allowedColumns, ['id', 'modified']);
+        if ($extra === []) {
+            return null;
         }
-
-        return null;
+        return Response::error(
+            'DOCUMENT_READONLY',
+            "Document is read-only in state {$currentState}.",
+            422,
+        );
     }
 
     /**

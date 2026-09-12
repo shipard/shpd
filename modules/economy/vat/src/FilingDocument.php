@@ -57,6 +57,15 @@ class FilingDocument extends Document
     /** Dodatečné přiznání: rozdíly proti předchozímu podání + ř. 66. */
     public const KIND_SUPPLEMENTARY = 'supplementary';
 
+    /** Typ účetního dokladu přiznání (`acc_document`, #55 D28–D31). */
+    public const ACC_DOCUMENT_TYPE = 'cmnbkp';
+
+    /**
+     * Stavy dokladu, ve kterých účetní doklad přiznání už „nežije" (Storno,
+     * Smazáno) — jen tehdy se smí `acc_document` přepsat novým dokladem.
+     */
+    public const ACC_DOCUMENT_DEAD_STATES = [30, 90];
+
     /**
      * Sloupce, které po podání (a po zrušení) drží hodnotu z okamžiku
      * přechodu. Mimo ně zbývá jen `note` — jediné, co smí přibýt k už
@@ -258,9 +267,38 @@ class FilingDocument extends Document
             $message = $currentState === self::DOC_STATE_FILED
                 ? 'Podané podání už nelze změnit — oprava se podává jako nové podání jiného druhu.'
                 : 'Zrušené podání už nelze změnit — sestavte nové.';
-            foreach ($this->changedFrozenColumns($data, $current ?? []) as $column) {
+
+            // Účetní doklad přiznání (#55 F4b) není zmrazený, ale má vlastní
+            // pravidla: jen u podaného podání, jen z NULL nebo z mrtvého
+            // dokladu, jen na živý cmnbkp. Zaúčtování zároveň zapisuje
+            // záznam do zpráv podání — jediná povolená změna `messages`.
+            $frozen = self::FROZEN_COLUMNS;
+            if (array_key_exists('acc_document', $data)
+                && $this->normalizeValue($data['acc_document']) !== $this->normalizeValue($current['acc_document'] ?? null)
+            ) {
+                $error = $currentState === self::DOC_STATE_CANCELLED
+                    ? ['Zrušenému podání nelze přiřadit účetní doklad.', 'immutable']
+                    : $this->accDocumentError($data['acc_document'], $current['acc_document'] ?? null);
+                if ($error !== null) {
+                    $result->addError('acc_document', $error[0], $error[1]);
+                } else {
+                    $frozen = array_values(array_diff($frozen, ['messages']));
+                }
+            }
+
+            foreach ($this->changedFrozenColumns($data, $current ?? [], $frozen) as $column) {
                 $result->addError($column, $message, 'immutable');
             }
+            return $result;
+        }
+
+        // Koncept účetní doklad nemá — vzniká až akcí nad podaným podáním.
+        if (!empty($data['acc_document'])) {
+            $result->addError(
+                'acc_document',
+                'Účetní doklad lze přiřadit jen k podanému podání.',
+                'invalid_state',
+            );
             return $result;
         }
 
@@ -459,12 +497,13 @@ class FilingDocument extends Document
      *
      * @param array<string, mixed> $data
      * @param array<string, mixed> $current
+     * @param list<string> $columns
      * @return list<string>
      */
-    private function changedFrozenColumns(array $data, array $current): array
+    private function changedFrozenColumns(array $data, array $current, array $columns = self::FROZEN_COLUMNS): array
     {
         $changed = [];
-        foreach (self::FROZEN_COLUMNS as $column) {
+        foreach ($columns as $column) {
             if (!array_key_exists($column, $data)) {
                 continue;
             }
@@ -502,6 +541,42 @@ class FilingDocument extends Document
             return $m[1];
         }
         return $string;
+    }
+
+    /**
+     * Důvod, proč `acc_document` nejde nastavit na `$new`, nebo null.
+     * Živý současný doklad se nepřepisuje (nejdřív storno); nová hodnota
+     * musí být existující cmnbkp v živém stavu; NULL smí odpojit jen mrtvý.
+     *
+     * @return ?array{0: string, 1: string} [zpráva, kód]
+     */
+    private function accDocumentError(mixed $new, mixed $currentValue): ?array
+    {
+        $currentId = (int) ($currentValue ?? 0);
+        if ($currentId > 0) {
+            $head = $this->loadHead($currentId);
+            if ($head !== null && !in_array((int) ($head['docState'] ?? 0), self::ACC_DOCUMENT_DEAD_STATES, true)) {
+                return ["Podání už má živý účetní doklad #{$currentId} — nejdřív ho stornujte.", 'acc_document_live'];
+            }
+        }
+        if ($new === null || $new === '') {
+            return null;
+        }
+        $newId = (int) $new;
+        if ($newId <= 0) {
+            return ['Neplatný odkaz na účetní doklad.', 'invalid_value'];
+        }
+        $head = $this->loadHead($newId);
+        if ($head === null) {
+            return ["Účetní doklad #{$newId} neexistuje.", 'invalid_value'];
+        }
+        if ((string) ($head['doc_type'] ?? '') !== self::ACC_DOCUMENT_TYPE) {
+            return ['Účetní doklad přiznání musí být typu Účetní doklad (cmnbkp).', 'invalid_value'];
+        }
+        if (in_array((int) ($head['docState'] ?? 0), self::ACC_DOCUMENT_DEAD_STATES, true)) {
+            return ['Nelze přiřadit stornovaný ani smazaný doklad.', 'invalid_value'];
+        }
+        return null;
     }
 
     /** „{název instance} — {druh} {pořadí}"; popisek druhu je z cfgItem. */
@@ -542,6 +617,23 @@ class FilingDocument extends Document
             return null;
         }
         $row = $this->db->fetch('SELECT * FROM %n WHERE [id] = %i', self::TABLE, $id);
+        return $row !== null ? $row->toArray() : null;
+    }
+
+    /**
+     * Hlavička dokladu pro guard `acc_document`.
+     *
+     * @return ?array{id: int, doc_type: string, docState: int}
+     */
+    protected function loadHead(int $headId): ?array
+    {
+        if ($this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [id], [doc_type], [docState] FROM [docs_core_heads] WHERE [id] = %i',
+            $headId,
+        );
         return $row !== null ? $row->toArray() : null;
     }
 

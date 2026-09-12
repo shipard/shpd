@@ -121,7 +121,10 @@ class VatRegistrationsViewer extends TableViewer
     public function renderDetail(int $recordId): array
     {
         $record = $this->db->fetchRow(
-            'SELECT * FROM `' . $this->table . '` WHERE `id` = %i',
+            'SELECT r.*, p.`full_name` AS `tax_office_person_name`'
+            . ' FROM `' . $this->table . '` r'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = r.`tax_office_person`'
+            . ' WHERE r.`id` = %i',
             $recordId,
         );
 
@@ -189,6 +192,14 @@ class VatRegistrationsViewer extends TableViewer
             $identityItems,
             'Druh plátce',
             $taxpayerKindLabels[$taxpayerKind] ?? (string) $taxpayerKind,
+        );
+
+        // Správce daně (#55 D30) — chybějící se ukáže výslovně: bez něj vzniká
+        // účetní doklad přiznání se saldo řádkem bez partnera.
+        $this->addItem(
+            $identityItems,
+            'Správce daně',
+            $record['tax_office_person_name'] ?? (empty($record['tax_office_person']) ? 'nevyplněn' : null),
         );
 
         $periodItems = [];

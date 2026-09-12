@@ -380,6 +380,14 @@ class Router
 			return new Route('vat', 'reportPeriodLock');
 		}
 
+		// POST /_vat/registration-tax-office — správce daně na registraci k DPH (#55 D30)
+		if ($subpath === '/_vat/registration-tax-office') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('vat', 'registrationTaxOffice');
+		}
+
 		// POST /_bank/import-statement — import bankovního výpisu (multipart)
 		if ($subpath === '/_bank/import-statement') {
 			if ($method !== 'POST') {

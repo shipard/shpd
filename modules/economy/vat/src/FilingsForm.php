@@ -261,4 +261,14 @@ class FilingsForm extends TableForm
             $periodId, FilingDocument::DOC_STATE_FILED,
         ) > 0;
     }
+
+    /**
+     * Poznámka smí přibýt i k podanému podání — FilingDocument ji jako
+     * jedinou (vedle `acc_document`, který nastavuje jen služba) nezmrazuje
+     * a zvládá částečné uložení.
+     */
+    public function getReadOnlyEditableColumns(): array
+    {
+        return ['note'];
+    }
 }

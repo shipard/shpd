@@ -27,6 +27,14 @@ final class TestableFilingDocument extends FilingDocument
     /** @var list<int> id podání, kterým se mazal snapshot */
     public array $snapshotsDeleted = [];
 
+    /** @var array<int, array<string, mixed>> id dokladu → {id, doc_type, docState} */
+    public array $heads = [];
+
+    protected function loadHead(int $headId): ?array
+    {
+        return $this->heads[$headId] ?? null;
+    }
+
     protected function loadReportPeriod(int $periodId): ?array
     {
         return $this->periods[$periodId] ?? null;
@@ -137,6 +145,7 @@ final class FilingDocumentTest extends TestCase
             'sequence' => 1, 'name' => '04/2026 — Řádné 1', 'date_issue' => '2026-05-02',
             'date_filed' => '2026-05-04', 'date_found' => null, 'previous_filing' => null,
             'header' => null, 'result' => '{"row64":260864}', 'messages' => null, 'note' => null,
+            'acc_document' => null,
             'docState' => FilingDocument::DOC_STATE_FILED,
         ], $override);
     }
@@ -509,5 +518,121 @@ final class FilingDocumentTest extends TestCase
         $doc = $this->doc();
         $this->assertNull($doc->structuredSchemaFor('result', ['report_period' => 7]));
         $this->assertNull($doc->structuredSchemaFor('header', []));
+    }
+
+    // ── acc_document — účetní doklad přiznání (#55 F4b) ──────────────────
+
+    /**
+     * @param array<int, array<string, mixed>> $filings
+     * @param array<int, array<string, mixed>> $heads
+     */
+    private function docWithHeads(array $filings, array $heads): TestableFilingDocument
+    {
+        $doc = $this->doc('return', $filings);
+        $doc->heads = $heads;
+        return $doc;
+    }
+
+    /** @return array<string, mixed> */
+    private function head(int $id, string $type = 'cmnbkp', int $state = 10): array
+    {
+        return ['id' => $id, 'doc_type' => $type, 'docState' => $state];
+    }
+
+    public function testFiledFilingAcceptsAccDocumentFromNull(): void
+    {
+        $doc  = $this->docWithHeads([1 => $this->filedRow()], [5 => $this->head(5)]);
+        $data = ['id' => 1, 'acc_document' => 5];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testAccDocumentChangeAllowsMessagesInSameSave(): void
+    {
+        $doc  = $this->docWithHeads([1 => $this->filedRow()], [5 => $this->head(5)]);
+        $data = ['id' => 1, 'acc_document' => 5, 'messages' => '[{"code":"vatReturn.accounted","docId":5}]'];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testMessagesAloneStayFrozen(): void
+    {
+        $doc    = $this->doc('return', [1 => $this->filedRow()]);
+        $data   = ['id' => 1, 'messages' => '[{"code":"x"}]'];
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('messages', $result->toArray()[0]['column']);
+        $this->assertSame('immutable', $result->toArray()[0]['code']);
+    }
+
+    public function testLiveAccDocumentIsNotReplaced(): void
+    {
+        $doc = $this->docWithHeads(
+            [1 => $this->filedRow(['acc_document' => 5])],
+            [5 => $this->head(5, 'cmnbkp', 40), 6 => $this->head(6)],
+        );
+        $data   = ['id' => 1, 'acc_document' => 6];
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('acc_document', $result->toArray()[0]['column']);
+        $this->assertSame('acc_document_live', $result->toArray()[0]['code']);
+    }
+
+    public function testCancelledAccDocumentCanBeReplaced(): void
+    {
+        $doc = $this->docWithHeads(
+            [1 => $this->filedRow(['acc_document' => 5])],
+            [5 => $this->head(5, 'cmnbkp', 30), 6 => $this->head(6)],
+        );
+        $data = ['id' => 1, 'acc_document' => 6];
+        $this->assertTrue($doc->validate($data)->isValid());
+
+        // Odpojení mrtvého dokladu (NULL) projde taky.
+        $data = ['id' => 1, 'acc_document' => null];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testAccDocumentMustBeLiveCmnbkp(): void
+    {
+        $doc = $this->docWithHeads(
+            [1 => $this->filedRow()],
+            [7 => $this->head(7, 'invno', 10), 8 => $this->head(8, 'cmnbkp', 90)],
+        );
+        foreach ([7, 8, 9] as $headId) {
+            $data   = ['id' => 1, 'acc_document' => $headId];
+            $result = $doc->validate($data);
+            $this->assertFalse($result->isValid(), "doklad {$headId}");
+            $this->assertSame('acc_document', $result->toArray()[0]['column']);
+            $this->assertSame('invalid_value', $result->toArray()[0]['code']);
+        }
+    }
+
+    public function testCancelledFilingRejectsAccDocument(): void
+    {
+        $doc = $this->docWithHeads(
+            [1 => $this->filedRow(['docState' => FilingDocument::DOC_STATE_CANCELLED])],
+            [5 => $this->head(5)],
+        );
+        $data   = ['id' => 1, 'acc_document' => 5];
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('acc_document', $result->toArray()[0]['column']);
+        $this->assertSame('immutable', $result->toArray()[0]['code']);
+    }
+
+    public function testDraftRejectsAccDocument(): void
+    {
+        $doc    = $this->doc('return', []);
+        $data   = $this->newFiling(['acc_document' => 5]);
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('acc_document', $result->toArray()[0]['column']);
+        $this->assertSame('invalid_state', $result->toArray()[0]['code']);
+    }
+
+    public function testUnchangedAccDocumentOnFiledRowPasses(): void
+    {
+        // Celý řádek zpět s nezměněným (živým) dokladem — žádná kontrola, žádná chyba.
+        $doc  = $this->docWithHeads([1 => $this->filedRow(['acc_document' => 5])], [5 => $this->head(5, 'cmnbkp', 40)]);
+        $data = $this->filedRow(['acc_document' => 5, 'note' => 'zaúčtováno']);
+        $this->assertTrue($doc->validate($data)->isValid());
     }
 }

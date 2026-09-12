@@ -11,7 +11,9 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
+use Shipard\Module\Economy\Codebooks\VatRegistrationDocument;
 use Shipard\Module\Economy\Vat\Xml\FilingFile;
 use Shipard\Module\Economy\Vat\Xml\FilingFilesFactory;
 use Shipard\Module\Economy\Vat\Xml\FilingXmlValidationException;
@@ -30,6 +32,13 @@ use Shipard\Module\Economy\Vat\Xml\FilingXmlValidationException;
  * POST /_vat/filing-header-from-profile, body {"filingId": N} — přepíše
  * hlavičku konceptu předvyplněním z profilu podatele (akce „Načíst
  * hlavičku z profilu", #55 F3-5); přepočet hlavičku schválně nechává být.
+ *
+ * POST /_vat/report-period-lock, body {"periodId": N, "locked": bool} —
+ * zámek instance tvrzení (#55 D25).
+ *
+ * POST /_vat/registration-tax-office, body {"registrationId": N,
+ * "personId": N|null} — správce daně na registraci k DPH (#55 D30), cesta
+ * pro import po naimportování osob.
  */
 final class VatFilingController
 {
@@ -42,7 +51,96 @@ final class VatFilingController
         /** Zámek instance jde přes Document — guardy ReportPeriodDocument. */
         private readonly ?DocumentRegistry $documents = null,
         private readonly ?TableDefinition $periodsDef = null,
+        /** Správce daně jde přes Document — validace VatRegistrationDocument. */
+        private readonly ?TableDefinition $registrationsDef = null,
     ) {}
+
+    /**
+     * POST /_vat/registration-tax-office, body {"registrationId": N,
+     * "personId": N|null} — nastaví správce daně na registraci k DPH (#55
+     * D30). Uložení jde přes TableGateway a VatRegistrationDocument (stejná
+     * validace jako z formuláře), ale mimo read-only bariéru FormControlleru:
+     * registrace ve stavu V pořádku je jinak zamčená a import osob FÚ běží
+     * až po založení registrací. Částečný payload — Document si zbytek
+     * řádku domergeuje. Idempotentní: stejná hodnota nic nezapíše.
+     */
+    public function registrationTaxOffice(Request $request): Response
+    {
+        $body = $request->getBody();
+        $registrationId = is_array($body) ? (int) ($body['registrationId'] ?? 0) : 0;
+        if ($registrationId <= 0 || !is_array($body) || !array_key_exists('personId', $body)) {
+            return Response::error(
+                'BAD_REQUEST',
+                'Body must contain a positive registrationId and personId (positive int or null)',
+                400,
+            );
+        }
+        $personId = $body['personId'] === null ? null : (int) $body['personId'];
+        if ($personId !== null && $personId <= 0) {
+            return Response::error('BAD_REQUEST', 'personId must be a positive integer or null', 400);
+        }
+        if ($this->documents === null || $this->registrationsDef === null) {
+            return Response::error('INTERNAL_ERROR', 'Document registry or table definition unavailable', 500);
+        }
+
+        $registration = $this->db->fetchRow(
+            'SELECT id, tax_office_person, docState FROM ' . VatRegistrationDocument::TABLE . ' WHERE id = %i',
+            $registrationId,
+        );
+        if ($registration === null) {
+            return Response::error('NOT_FOUND', "VAT registration {$registrationId} not found", 404);
+        }
+        if ((int) $registration['docState'] === 90) {
+            return Response::error('INVALID_DOC_STATE', 'Smazané registraci nelze nastavit správce daně.', 422);
+        }
+
+        $current = $registration['tax_office_person'] !== null ? (int) $registration['tax_office_person'] : null;
+        $changed = $current !== $personId;
+        if ($changed) {
+            $gateway = new TableGateway(
+                VatRegistrationDocument::TABLE,
+                $this->db->getDibiConnection(),
+                $this->documents,
+                $this->registrationsDef->childTables,
+                $this->config,
+                $this->dsConfig,
+                null,
+                $this->registrationsDef->docStates,
+                $this->registrationsDef,
+            );
+            $result = $gateway->saveDocument(['id' => $registrationId, 'tax_office_person' => $personId]);
+            if (!$result->isSuccess()) {
+                return $this->saveFailure($result);
+            }
+        }
+
+        return Response::success([
+            'registrationId' => $registrationId,
+            'personId'       => $personId,
+            'changed'        => $changed,
+        ]);
+    }
+
+    /** Neúspěch `TableGateway::saveDocument` → HTTP odpověď (422 validace / doména, jinak 500). */
+    private function saveFailure(DocumentResult $result): Response
+    {
+        $validation = $result->getValidation();
+        if ($validation !== null) {
+            $errors = array_map(
+                static fn ($e) => ['field' => $e->column, 'code' => $e->code ?: 'INVALID', 'message' => $e->message],
+                $validation->getErrors(),
+            );
+            return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+        }
+        if ($result->isDomainError()) {
+            return Response::error(
+                $result->getDomainErrorCode() ?: 'DOMAIN_ERROR',
+                $result->getErrorMessage() ?? 'Domain rule violated',
+                422,
+            );
+        }
+        return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
+    }
 
     /**
      * POST /_vat/report-period-lock, body {"periodId": N, "locked": bool}
@@ -98,22 +196,7 @@ final class VatFilingController
             $existing['locked'] = $locked ? 1 : 0;
             $result = $gateway->saveDocument($existing);
             if (!$result->isSuccess()) {
-                $validation = $result->getValidation();
-                if ($validation !== null) {
-                    $errors = array_map(
-                        static fn ($e) => ['field' => $e->column, 'code' => $e->code ?: 'INVALID', 'message' => $e->message],
-                        $validation->getErrors(),
-                    );
-                    return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
-                }
-                if ($result->isDomainError()) {
-                    return Response::error(
-                        $result->getDomainErrorCode() ?: 'DOMAIN_ERROR',
-                        $result->getErrorMessage() ?? 'Domain rule violated',
-                        422,
-                    );
-                }
-                return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
+                return $this->saveFailure($result);
             }
         }
 

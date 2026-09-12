@@ -2275,3 +2275,57 @@ dostanou sekci automaticky z `AutoFormBuilder`; **deklarativní JSONC formy
 strukturovaná pole neumí**.
 
 Vzor: `VatRegistrationsForm` (záložka Podací údaje na registraci k DPH).
+
+---
+
+## 26. Sloupce editovatelné v read-only stavu dokumentu
+
+Stav s `"readOnly": 1` v docStates cfgItem (Podáno, V pořádku, …) zamyká
+celý formulář: klient kreslí inputy jako `disabled` a bez tlačítka Uložit,
+`FormController::save()` uložení existujícího záznamu odmítne
+(`422 DOCUMENT_READONLY`). Některé údaje ale ke zmrazenému záznamu smí
+**přibýt** bez „Opravit" — poznámka k podanému podání DPH, správce daně na
+potvrzené registraci. Form třída je pustí opt-in whitelistem:
+
+```php
+class VatRegistrationsForm extends TableForm
+{
+    public function getReadOnlyEditableColumns(): array
+    {
+        return ['tax_office_person'];
+    }
+}
+```
+
+Co se stane:
+
+- **Meta / recalculate**: `doc_states` dostane `editable_columns`
+  (`buildDocStatesInfo`), ale jen když je stav read-only **a** záznam
+  nedrží zámek (`documentLockProviders`, `docs/document-system.md`
+  §16) — zámek je silnější než whitelist.
+- **Klient** (`FormEditor`): inputy vyjmenovaných sloupců zůstávají
+  aktivní (`unlockedColumns` propadá `FormTab → FormSection → FormColumn →
+  FormElement`), `FormStateBar` ukáže Uložit, dirty stav sleduje jen tyto
+  sloupce a **uložení pošle jen je**. Externí prop `readOnly` (prohlížení
+  řádku sub-tabulky) whitelist přebíjí — nic se neodemyká.
+- **Server** (`FormController::save()` → `guardReadOnlyUpdate`): payload
+  update na read-only záznam smí obsahovat jen whitelistované sloupce
+  (+ `id`, `modified`), jinak `DOCUMENT_READONLY`. Whitelist si controller
+  vyžádá od registrované form třídy; bez ní (JSONC/Auto formulář) je
+  prázdný a read-only záznam nejde přes formulář změnit vůbec.
+
+Důsledek pro Document třídu: dostane **částečné uložení** (jen
+whitelistované sloupce + `id`; `docState` doplní gateway z uloženého
+řádku). Povinná pole tedy nesmí validovat jen z payloadu — merge s uloženým
+řádkem, vzor `FilingDocument` / `VatRegistrationDocument`
+(`$effective = array_merge($current, $data)`). Vlastní business pravidla
+(u podání `FROZEN_COLUMNS`) zůstávají v Documentu; whitelist formu je jen
+vstupenka přes controller, ne oprávnění cokoli měnit.
+
+Generické REST CRUD (`PATCH /api/v1/{table}/{id}`) whitelist nezná a
+read-only stav odmítá vždy; strojové zápisy do read-only záznamu mají
+vlastní endpoint (např. `POST /_vat/registration-tax-office`), který jde
+rovnou přes `TableGateway`.
+
+První uživatelé: `note` v `FilingsForm` (podání DPH) a `tax_office_person`
+ve `VatRegistrationsForm` (#55 D30).

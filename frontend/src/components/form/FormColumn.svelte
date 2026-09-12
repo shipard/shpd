@@ -7,6 +7,7 @@
     fieldErrors = {},
     dataResolved = {},
     disabled = false,
+    unlockedColumns = [],
     onTrigger,
     onResolveChange,
     parentId = null,
@@ -27,6 +28,7 @@
       {fieldErrors}
       {dataResolved}
       {disabled}
+      {unlockedColumns}
       {onTrigger}
       {onResolveChange}
       {parentId}

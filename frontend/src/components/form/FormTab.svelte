@@ -12,6 +12,8 @@
     /** Rodič je jen pro čtení (prop FormEditor nebo doc state) — sub-tabulka
      *  přepne na režim Zobrazit. `disabled` samotné = jen dočasně vypnuté akce. */
     readOnly = false,
+    /** Sloupce editovatelné i v read-only stavu (doc_states.editable_columns). */
+    unlockedColumns = [],
     onTrigger,
     onResolveChange,
     parentId = null,
@@ -43,6 +45,7 @@
         {fieldErrors}
         {dataResolved}
         {disabled}
+        {unlockedColumns}
         {onTrigger}
         {onResolveChange}
         {parentId}

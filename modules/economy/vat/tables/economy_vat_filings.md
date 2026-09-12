@@ -33,7 +33,8 @@ Fáze 2 je jen deklaruje, plní je Fáze 3.
 | `header` | json, nullable, schema `economy.vat.filingHeaderCzDp3` | Snapshot hlavičky XML (D19): věta P a needvozená pole věty D. Sada polí per typ tvrzení — statické schéma je přiznání, `FilingDocument::structuredSchemaFor()` ho přebíjí na `…CzKh1` / `…CzShv`. Předvyplní `FilingComposer` z profilu podatele, přepočet ho nepřepíše. **Není `system`** — systémové sloupce by formulář neuložil |
 | `result` | json, nullable, system | Souhrn podaných hodnot (DP3 ř. 62–66, počty řádků sekcí KH, hodnota SH, stav křížové kontroly, `isEmpty`). **NULL = snapshot nesestaven** — podat takové podání nelze |
 | `messages` | json, nullable, system | Měkké chyby kalkulátorů v okamžiku sestavení — historický záznam, ne živý stav |
-| `note` | text, nullable | Jediný sloupec editovatelný i po podání |
+| `note` | text, nullable | Vedle `acc_document` jediný sloupec editovatelný i po podání (formulář ho pouští přes `getReadOnlyEditableColumns`) |
+| `acc_document` | int, nullable, reference `docs_core_heads` | Účetní doklad přiznání (`cmnbkp`, #55 D28–D31) založený akcí **Zaúčtovat** nad podaným podáním typu `return` (`VatReturnAccountingService`). Řádné účtuje plný obsah, opravné a dodatečné rozdíl proti kumulativnímu podanému stavu; součet dokladů instance a účetních dokladů jejích podání na `343*` (mimo 343801/802) je nula (`ClosedPeriodBalanceService`). Není zmrazený — pravidla níže |
 
 ### Systémové (bez skupiny)
 
@@ -66,9 +67,14 @@ Vynucuje [FilingDocument](../src/FilingDocument.php):
   (poslední podání instance ve stavu Podáno); po podání se zmrazí.
 - **Přechod do Podáno** doplní `date_filed` (dnes, pokud prázdné)
   a vyžaduje sestavený snapshot (`result` není NULL).
-- **Podané podání je immutable** — změnit smí jen `note`, smazat se nedá.
-  Zrušené podání je zmrazené stejně; zrušený koncept se nevrací, sestaví
-  se nový.
+- **Podané podání je immutable** — změnit smí jen `note` a `acc_document`,
+  smazat se nedá. Zrušené podání je zmrazené stejně (bez výjimky pro
+  `acc_document`); zrušený koncept se nevrací, sestaví se nový.
+- **`acc_document`** lze nastavit jen u podaného podání, jen z NULL nebo
+  z dokladu ve stavu Storno (30) / Smazáno (90), a jen na existující `cmnbkp`
+  v živém stavu; živý doklad se nepřepisuje (kód `acc_document_live`).
+  Ve stejném uložení smí přibýt záznam do `messages` (zaúčtováno, varování
+  builderu) — jediný případ, kdy se zmrazené `messages` mění.
 - Smazání konceptu (nebo zrušeného podání) uklidí i snapshot ve čtyřech
   systémových tabulkách (`beforeDelete`); `previous_filing` na mazatelné
   podání nikdy nemíří, takže nezůstane visící odkaz.

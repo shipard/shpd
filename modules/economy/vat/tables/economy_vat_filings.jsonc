@@ -173,13 +173,29 @@
             "system": true
         },
         {
-            // Jediný sloupec editovatelný i po podání.
+            // Vedle `acc_document` jediný sloupec editovatelný i po podání.
             "id": "note",
             "name": "Note",
             "name:cs": "Poznámka",
             "name:en": "Note",
             "type": "text",
             "nullable": true
+        },
+        {
+            // Účetní doklad přiznání (#55 D28–D31, F4b): cmnbkp založený akcí
+            // „Zaúčtovat" nad podaným podáním (VatReturnAccountingService).
+            // Jen typ `return`. Není ve FROZEN_COLUMNS — FilingDocument hlídá,
+            // že se nastavuje jen u podaného podání, z NULL nebo z dokladu ve
+            // stavu 30/90, a jen na živý cmnbkp. Součet deníku dokladů instance
+            // + účetních dokladů jejích podání na 343* (mimo 343801/802) = 0
+            // (ClosedPeriodBalanceService).
+            "id": "acc_document",
+            "name": "Accounting document",
+            "name:cs": "Účetní doklad",
+            "name:en": "Accounting document",
+            "type": "int",
+            "nullable": true,
+            "reference": "docs_core_heads"
         },
 
         // --- doc state (systémové, bez skupiny) ---

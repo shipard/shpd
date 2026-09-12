@@ -92,6 +92,21 @@
             "nullable": true,
             "group": "identity"
         },
+        {
+            // Správce daně (#55 D30) — osoba finančního úřadu, partner saldo
+            // řádku účetního dokladu přiznání (economy.vat). Ručně vybraná
+            // osoba, ne číselník FÚ. Editovatelný i ve stavu V pořádku
+            // (TableForm::getReadOnlyEditableColumns) a přes
+            // POST /_vat/registration-tax-office (import).
+            "id": "tax_office_person",
+            "name": "Tax office",
+            "name:cs": "Správce daně",
+            "name:en": "Tax office",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons",
+            "group": "identity"
+        },
 
         // --- period ---
 

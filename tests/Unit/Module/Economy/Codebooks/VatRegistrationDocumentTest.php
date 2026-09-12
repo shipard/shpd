@@ -7,6 +7,26 @@ namespace Shipard\Tests\Unit\Module\Economy\Codebooks;
 use PHPUnit\Framework\TestCase;
 use Shipard\Module\Economy\Codebooks\VatRegistrationDocument;
 
+/** DB seamy nahrazené in-memory daty: uložený řádek a živé osoby. */
+final class TestableVatRegistrationDocument extends VatRegistrationDocument
+{
+    /** @var ?array<string, mixed> */
+    public ?array $current = null;
+
+    /** @var list<int> */
+    public array $livePersons = [];
+
+    protected function loadCurrent(int $id): ?array
+    {
+        return $this->current !== null && (int) ($this->current['id'] ?? 0) === $id ? $this->current : null;
+    }
+
+    protected function personIsLive(int $personId): bool
+    {
+        return in_array($personId, $this->livePersons, true);
+    }
+}
+
 class VatRegistrationDocumentTest extends TestCase
 {
     private function doc(): VatRegistrationDocument
@@ -207,6 +227,63 @@ class VatRegistrationDocumentTest extends TestCase
     {
         $data = $this->validData();
         $data['vat_id'] = null;
+        $this->assertTrue($this->doc()->validate($data)->isValid());
+    }
+
+    // ── částečné uložení + správce daně (#55 D30) ────────────────────────
+
+    private function testable(): TestableVatRegistrationDocument
+    {
+        $doc = new TestableVatRegistrationDocument();
+        $doc->current = $this->validData() + ['id' => 3, 'docState' => 40];
+        return $doc;
+    }
+
+    public function testPartialUpdateMergesStoredRow(): void
+    {
+        $doc = $this->testable();
+        $doc->livePersons = [9];
+        $data = ['id' => 3, 'tax_office_person' => 9];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testTaxOfficePersonMustBeLivePerson(): void
+    {
+        $doc = $this->testable();
+        $data = ['id' => 3, 'tax_office_person' => 9];
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('tax_office_person', $result->toArray()[0]['column']);
+        $this->assertSame('invalid_value', $result->toArray()[0]['code']);
+    }
+
+    public function testTaxOfficePersonMayBeCleared(): void
+    {
+        $doc = $this->testable();
+        $data = ['id' => 3, 'tax_office_person' => null];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testPartialUpdateStillValidatesRange(): void
+    {
+        $doc = $this->testable();
+        $data = ['id' => 3, 'valid_to' => '2025-01-01'];
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('valid_to', $result->toArray()[0]['column']);
+    }
+
+    public function testStoredDateTimeValuesCompareAsDates(): void
+    {
+        $doc = $this->testable();
+        $doc->current['valid_from'] = new \DateTimeImmutable('2026-01-01');
+        $data = ['id' => 3, 'valid_to' => '2026-06-30'];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testWithoutDbSeamPersonIsNotChecked(): void
+    {
+        $data = $this->validData() + ['tax_office_person' => 9];
         $this->assertTrue($this->doc()->validate($data)->isValid());
     }
 }

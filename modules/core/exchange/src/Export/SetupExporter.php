@@ -48,6 +48,13 @@ final class SetupExporter
 
     private const SKIP_COLUMNS = ['id', 'docStateMain', 'created', 'modified', 'created_by'];
 
+    /**
+     * FK sloupce, jejichž vynechání se nehlásí: nesou vazbu na záznam, který
+     * sada z principu nepřenáší (osoba FÚ na registraci DPH), takže warning
+     * by jen šuměl v každém dumpu.
+     */
+    private const SILENT_FK_COLUMNS = ['tax_office_person'];
+
     /** @var list<string> */
     private array $warnings = [];
 
@@ -108,7 +115,9 @@ final class SetupExporter
         foreach ($columns as $colId => $col) {
             if ($col->reference !== null && !in_array($colId, self::SKIP_COLUMNS, true)
                 && $col->reference !== 'economy_accounting_accounts') {
-                $this->warnings[] = "setup {$tableName}: sloupec '{$colId}' (FK na {$col->reference}) se nepřenáší";
+                if (!in_array($colId, self::SILENT_FK_COLUMNS, true)) {
+                    $this->warnings[] = "setup {$tableName}: sloupec '{$colId}' (FK na {$col->reference}) se nepřenáší";
+                }
                 unset($columns[$colId]);
             }
         }

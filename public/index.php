@@ -499,12 +499,14 @@ function dispatchVat(
 		$auth->userId,
 		$documentRegistry,
 		$tables['economy_vat_report_periods'] ?? null,
+		$tables['economy_codebooks_vat_registrations'] ?? null,
 	);
 	return match ($route->action) {
 		'filingCompose'           => $ctrl->compose($request),
 		'filingFiles'             => $ctrl->files($request),
 		'filingHeaderFromProfile' => $ctrl->headerFromProfile($request),
 		'reportPeriodLock'        => $ctrl->lockPeriod($request),
+		'registrationTaxOffice'   => $ctrl->registrationTaxOffice($request),
 		default                   => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
 	};
 }

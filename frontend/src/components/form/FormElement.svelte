@@ -17,13 +17,19 @@
     fieldErrors = {},
     dataResolved = {},
     disabled = false,
+    /** Sloupce, které zůstávají aktivní i když je formulář read-only
+     *  (doc_states.editable_columns) — `disabled` se na ně nevztahuje. */
+    unlockedColumns = [],
     onTrigger,
     onResolveChange,
     parentId = null,
   } = $props();
 
   const error = $derived(element.column ? (fieldErrors[element.column] ?? null) : null);
-  const elDisabled = $derived(disabled || element.read_only === true);
+  const elDisabled = $derived(
+    element.read_only === true
+      || (disabled && !(element.column && unlockedColumns.includes(element.column))),
+  );
   const idSuffix = Math.random().toString(36).slice(2, 6);
   const inputId = $derived(`shpd-${element.column ?? element.type}-${idSuffix}`);
 

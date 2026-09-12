@@ -1,12 +1,18 @@
 # Task: Zaúčtování přiznání DPH — účetní doklad per podání, správce daně, akce Zaúčtovat (M1 Fáze 4b) — #55 D28–D31
 
-**Stav:** naplánováno — k implementaci po F4a (`vat-period-lock.md`), 2026-09-11
+**Stav:** k implementaci — 2026-09-12 (F4a hotová, dev DS; viz „Odchylky" v
+`tasks/vat-period-lock.md` — relevantní pro F4b: registry zámků na `DocumentRegistry`,
+vynucení v `TableGateway` po `validate()`, `LockStamp::apply()` + `Core\Auth\CurrentUser`
+pro `locked_at/by`, endpoint zámku `POST /_vat/report-period-lock` ve
+`VatFilingController` jako vzor pro `filing-account` a `registration-tax-office`,
+`Checks\FiledUnlockedPeriodsCheck` jako vzor alertové obálky)
 **Issue:** #55 — komentář „Fáze 4 — Zámek a zaúčtování: rozhodnutí D23–D31 (2026-09-11)"
 **Návaznost:** staví na podáních a jejich snapshotu (`economy_vat_filings`,
 `economy_vat_filing_items`, `economy_vat_filing_return_rows` — `tasks/vat-filings.md`),
 na účetním dokladu `cmnbkp` (`modules/docs/accountingDocs`, `AccountingDocument`),
 účtovacím předpisu (`economy.accounting`, `accountingRules.cz.jsonc`) a saldokontu
-(`economy.accbal`). Kontrola zůstatků 343 vznikla ve F4a (`ClosedPeriodBalanceCheck`) —
+(`economy.accbal`). Kontrola zůstatků 343 vznikla ve F4a (`ClosedPeriodBalanceService` +
+alertová obálka `Checks\ClosedPeriodBalanceCheck`; TODO v hlavičce služby) —
 tato fáze jí dodá druhou množinu dokladů (`acc_document`) a tím ji „zhasne".
 Správce daně z registrace importuje `old_shipard` task 36.
 
@@ -26,7 +32,7 @@ a závazek vůči FÚ neexistuje. Starý Shipard to řešil `VatReturnAccEngine`
 
 Invarianta po zaúčtování: Σ deníku na `343*` (mimo 343801/802) přes doklady instance
 ∪ účetní doklady jejích podání = 0 per analytika — přesně to, co hlídá
-`ClosedPeriodBalanceCheck` z F4a.
+`ClosedPeriodBalanceService` z F4a.
 
 Před implementací **přečti**:
 
@@ -133,7 +139,7 @@ Výstup: seznam řádků `{account, acc_side, amount, description, partner?,
 payment_reference?, specific_symbol?, constant_symbol?, due_date?}` + `messages`:
 
 1. **Vynulování analytik**: per `vat_code` `delta = Σ items.tax_dom − Σ itemsPrevious.tax_dom`
-   (přesné). Směr kódu z `world.vat` (`direction`): vstupní kód (odpočet, v deníku MD)
+   (přesné). Směr kódu z `world.vat` (`modules/world/vat/config`, `direction` input/output): vstupní kód (odpočet, v deníku MD)
    → řádek **DAL** `343{NNN}`; výstupní (v deníku D) → **MD**. Nulová delta → žádný řádek.
    Popis = název kódu.
 2. **Saldo řádek** — podaná (zaokrouhlená) hodnota:
@@ -166,7 +172,8 @@ tímto — stejná logika jako `FilingComposer` pro kumulativní stav), účty p
 `TableGateway::saveDocument`:
 
 - hlavička: `doc_type = cmnbkp`, `number_series` = výchozí řada cmnbkp DS
-  (dohledej přes `NumberSeriesProvisioner`/aktivní řadu typu; **žádná nová
+  (dohledej stejně jako `DocumentApplier` pro `cmnbkp` — výchozí nevázaná řada
+  typu, ř. 370+; **žádná nová
   vázaná řada** — starý dbCounter „Přiznání DPH" nereprodukujeme, filtr dá
   `link` na podání), `issue_date` = dnes, `accounting_date` = `date_end`
   instance, `title` = „Přiznání DPH {name instance}" (+ „ — dodatečné/opravné
@@ -221,7 +228,7 @@ do PRD importéru; tady jen guard: služba odmítne podání s `date_filed` pře
   stornu dokladu projde znovu), cizí typ (`cs`) odmítne, koncept podání odmítne.
 - `FilingDocumentTest` — rozšířit: `acc_document` smí nastavit jen z NULL / z 30/90
   a jen na živý cmnbkp; ostatní frozen beze změny.
-- `ClosedPeriodBalanceCheckTest` (F4a) — rozšířit: po zaúčtování řádného podání
+- `tests/Integration/Vat/ClosedPeriodBalanceServiceTest` (F4a) — rozšířit: po zaúčtování řádného podání
   je výsledek prázdný; po změně DPH dokladu (odemknuto) nenulový; po dodatečném
   podání + zaúčtování opět prázdný.
 - **Zlatý test** (dev DS `btpg-p`, zdroj 689089): `vat-filing-account --dry-run`
@@ -261,7 +268,7 @@ do PRD importéru; tady jen guard: služba odmítne podání s `date_filed` pře
    čtení + `VatReturnAccountingBuilder` + testy.
 3. `VatReturnAccountingService` + CLI `vat-filing-account` (`--dry-run`) + integrační test.
 4. Akce Zaúčtovat (viewer, controller, api, Viewer.svelte) + rozšíření
-   `ClosedPeriodBalanceCheck` o `acc_document` + testy.
+   `ClosedPeriodBalanceService` o `acc_document` + testy.
 5. Dokumentace + help; zlatý test zapsaný v „Hotovo když".
 
 ## Hotovo když
@@ -269,7 +276,7 @@ do PRD importéru; tady jen guard: služba odmítne podání s `date_filed` pře
 - [ ] Testy zelené (builder matice, service, FilingDocument guard, kontrola zůstatků).
 - [ ] `ds-upgrade` na dev DS projde (`acc_document`, `tax_office_person`).
 - [ ] Dev DS: řádné podání DP3 → „Zaúčtovat" založí `cmnbkp` 10 s vyrovnanými
-      řádky; po jeho uzavření (40) `ClosedPeriodBalanceCheck` za instanci = prázdný;
+      řádky; po jeho uzavření (40) `ClosedPeriodBalanceService` za instanci = prázdný;
       druhé „Zaúčtovat" odmítne; po stornu dokladu projde znovu.
 - [ ] Dev DS: změna DPH dokladu v odemčené podané instanci → kontrola nenulová →
       dodatečné podání + zaúčtování → kontrola prázdná; doklad dodatečného nese jen

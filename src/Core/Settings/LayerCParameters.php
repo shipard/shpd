@@ -49,12 +49,33 @@ final class LayerCParameters
             'module'  => 'economy.codebooks',
             'example' => 'czk',
         ],
+        // Řada účetních dokladů (cmnbkp) pro zaúčtování přiznání DPH (#55
+        // F4b). Bez ní se použije jediná aktivní řada typu; při více řadách
+        // je parametr povinný — žádný tichý výběr první.
+        'economy.vat.filingAccountingSeries' => [
+            'module'   => 'economy.vat',
+            'example'  => '7',
+            // Volitelný: nepatří do průvodce nastavením ani do [TODO] výpisu
+            // ds-upgrade — DS s jedinou řadou ho nepotřebuje vůbec.
+            'optional' => true,
+        ],
     ];
 
-    /** @return list<string> */
+    /** @return list<string> Všechny klíče (whitelist `ds-setting set`). */
     public static function keys(): array
     {
         return array_keys(self::SPECS);
+    }
+
+    /** @return list<string> Klíče, o kterých má DS rozhodnout — průvodce nastavením, [TODO] v ds-upgrade. */
+    public static function setupKeys(): array
+    {
+        return array_values(array_filter(self::keys(), static fn (string $key): bool => !self::isOptional($key)));
+    }
+
+    public static function isOptional(string $key): bool
+    {
+        return (bool) (self::SPECS[$key]['optional'] ?? false);
     }
 
     /**
@@ -104,6 +125,14 @@ final class LayerCParameters
                     );
                 }
                 return $raw;
+
+            case 'economy.vat.filingAccountingSeries':
+                if (!ctype_digit($raw) || (int) $raw < 1) {
+                    throw new \InvalidArgumentException(
+                        "Invalid value '{$raw}' for {$key}. Allowed: positive integer (id of a cmnbkp number series)",
+                    );
+                }
+                return (int) $raw;
         }
 
         throw new \InvalidArgumentException("Unknown layer C parameter: {$key}");

@@ -368,7 +368,7 @@ class DsUpgradeCommand extends Command
         // porucha, je to nedokončené nastavení (D2/D6). Na nastaveném DS ticho.
         $undecided = [];
         foreach (LayerCParameters::SPECS as $paramKey => $spec) {
-            if (!$this->isModuleActive($resolvedModules, $spec['module'])) {
+            if (!$this->isModuleActive($resolvedModules, $spec['module']) || LayerCParameters::isOptional($paramKey)) {
                 continue;
             }
             if ($settings->get($paramKey) === null) {

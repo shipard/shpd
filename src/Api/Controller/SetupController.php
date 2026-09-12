@@ -856,9 +856,11 @@ class SetupController
 
         return [
             'items'           => $items,
-            // Hodnoty VŠECH klíčů včetně null — panel potřebuje i rozhodnuté
-            // parametry, aby šly změnit, ne jen doplnit.
-            'parameters'      => $settings->getMany(LayerCParameters::keys()),
+            // Hodnoty VŠECH klíčů průvodce včetně null — panel potřebuje
+            // i rozhodnuté parametry, aby šly změnit, ne jen doplnit.
+            // Volitelné parametry (řada dokladu přiznání DPH) do průvodce
+            // nepatří — nastavují se přes ds-setting, až když jsou potřeba.
+            'parameters'      => $settings->getMany(LayerCParameters::setupKeys()),
             'currencyOptions' => $this->currencyOptions(),
         ];
     }

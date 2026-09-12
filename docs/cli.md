@@ -611,6 +611,26 @@ s výčtem důvodů; `--force` zámek vědomě obejde a zapíše `warn` do
 derivát dokladu — force slouží k opravě rozvrhu nebo předpisu nad uzavřeným
 obdobím, obsah dokladu se nemění. Viz [accounting.md](accounting.md) §7.6.
 
+#### `vat-filing-account <filingId> [--dry-run]`
+
+```bash
+cd /opt/shipard/data-sources/<id>
+shpd-ds vat-filing-account 33 --dry-run   # řádky účetního dokladu přiznání bez zápisu
+shpd-ds vat-filing-account 33             # založí cmnbkp (koncept) a naváže ho na podání
+```
+
+Totéž co `POST /_vat/filing-account` (akce **Zaúčtovat** v detailu podání
+DPH, #55 D28–D31). Zapisuje jen nad **podaným** podáním typu přiznání;
+`--dry-run` vypíše plán (účet, strana, částka, popis, partner, VS/SS/KS,
+splatnost) i nad konceptem podání — tak se porovnává s doklady starého
+systému. Živý účetní doklad na podání → `ALREADY_ACCOUNTED` (nejdřív
+storno); chybějící účet v rozvrhu nebo zbytek mimo toleranci zaokrouhlení
+→ `PLAN_FAILED`, doklad nevznikne; zamčený fiskální měsíc konce období →
+`SAVE_FAILED` s důvodem zámku. Řadu dokladu určuje parametr vrstvy C
+`economy.vat.filingAccountingSeries` (`ds-setting set … <id řady cmnbkp>`),
+bez něj jen jediná aktivní řada typu. Viz README modulu `economy.vat` →
+Zaúčtování přiznání.
+
 ### Users
 
 #### `user-create`

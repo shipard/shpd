@@ -257,6 +257,7 @@ stavu“ je součást existujícího API.
 | `economy.homeCurrency` | string, ISO 4217 lower | domácí měna dokladů | `DocsHeadsFormBase`, `DocDocument`, `JournalLedgerHandler` → `LedgerGenerator`, `FiscalYearsForm`, `DsUpgradeCommand` (gate fiskálních roků) |
 | `economy.fiscalYearStartMonth` | int 1–12 | první měsíc fiskálního roku | `FiscalYearsProvisioner` |
 | `economy.vatAgenda` | bool | plátcovství DPH | formuláře dokladů (výchozí `vat_mode`), viditelnost DPH v UI |
+| `economy.vat.filingAccountingSeries` | int, id řady `cmnbkp` | řada účetního dokladu přiznání DPH (#55 F4b); **volitelný** — mimo průvodce i `[TODO]` výpis, bez něj se použije jediná aktivní řada typu, při více řadách zaúčtování skončí s pokynem klíč nastavit | `VatReturnAccountingService` |
 
 `SettingsStore` bere v konstruktoru jen `DataSourceConnection` a je podle
 `app-settings.md` výslovně volatelný z HTTP i CLI — tentýž klíč tedy čte

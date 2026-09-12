@@ -11,3 +11,7 @@
 
 # Referenční podaná XML zlatého testu — reálná data zdroje, jen lokálně (viz README)
 tests/Fixtures/vat-xml/689089/*.xml
+
+# Osobní instrukce a nastavení pro Claude Code (docs/ai-workflow.md §7)
+/CLAUDE.local.md
+/.claude/settings.local.json

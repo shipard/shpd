@@ -224,6 +224,7 @@ export default {
   'viewer.detail.inviteSent': 'Invitation sent.',
   'viewer.detail.filingFilesCreated': 'Filing files created: {names}. You will find them in the Attachments tab.',
   'viewer.detail.reloadFilingHeaderConfirm': 'Reload the filing header from the registration filing details? Manual edits in the Header tab will be overwritten.',
+  'viewer.detail.filingAccounted': 'The VAT return accounting document was created as a draft — review it and confirm it.',
   'viewer.detail.inviteFailed': 'Failed to send invitation: {msg}',
   'viewer.detail.deleteTagRuleConfirm': 'Really delete this rule? Deletion is permanent; the rule can be re-learned.',
   'viewer.detail.mailBody': 'Message body',

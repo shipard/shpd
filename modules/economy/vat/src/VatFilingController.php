@@ -10,10 +10,12 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocumentEventDispatcher;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
 use Shipard\Module\Economy\Codebooks\VatRegistrationDocument;
+use Shipard\Module\Economy\Vat\Accounting\VatReturnAccountingService;
 use Shipard\Module\Economy\Vat\Xml\FilingFile;
 use Shipard\Module\Economy\Vat\Xml\FilingFilesFactory;
 use Shipard\Module\Economy\Vat\Xml\FilingXmlValidationException;
@@ -39,6 +41,10 @@ use Shipard\Module\Economy\Vat\Xml\FilingXmlValidationException;
  * POST /_vat/registration-tax-office, body {"registrationId": N,
  * "personId": N|null} — správce daně na registraci k DPH (#55 D30), cesta
  * pro import po naimportování osob.
+ *
+ * POST /_vat/filing-account, body {"filingId": N} — zaúčtování podaného
+ * přiznání (#55 D28–D31): účetní doklad cmnbkp jako koncept + vazba na
+ * podání (akce „Zaúčtovat" v detailu podání).
  */
 final class VatFilingController
 {
@@ -53,7 +59,72 @@ final class VatFilingController
         private readonly ?TableDefinition $periodsDef = null,
         /** Správce daně jde přes Document — validace VatRegistrationDocument. */
         private readonly ?TableDefinition $registrationsDef = null,
+        /**
+         * Všechny tabulky DS + dispatcher event handlerů — zaúčtování zakládá
+         * doklad přes TableGateway se stejnými handlery jako formulář.
+         *
+         * @var array<string, TableDefinition>
+         */
+        private readonly array $tables = [],
+        private readonly ?DocumentEventDispatcher $dispatcher = null,
     ) {}
+
+    /**
+     * POST /_vat/filing-account, body {"filingId": N} — zaúčtuje podané
+     * přiznání DPH (#55 D28–D31). Odmítnutí služby (živý doklad, koncept,
+     * hlášení, chybějící účet, zámek měsíce) jde jako 422 s kódem služby
+     * a `details` = zprávy plánu / validace; 404 jen pro neexistující podání.
+     */
+    public function account(Request $request): Response
+    {
+        $filing = $this->resolveFiling($request);
+        if ($filing instanceof Response) {
+            return $filing;
+        }
+        if ($this->documents === null || $this->tables === []) {
+            return Response::error('INTERNAL_ERROR', 'Document registry or table definitions unavailable', 500);
+        }
+
+        $service = new VatReturnAccountingService(
+            $this->db->getDibiConnection(),
+            $this->config,
+            $this->dsConfig,
+            $this->documents,
+            $this->tables,
+            $this->dispatcher,
+        );
+        try {
+            $result = $service->account((int) $filing['id']);
+        } catch (\DomainException | \RuntimeException $e) {
+            return Response::error('FILING_ACCOUNT_FAILED', $e->getMessage(), 422);
+        }
+
+        if (!$result->ok) {
+            $details = [];
+            foreach ($result->plan?->messages ?? [] as $m) {
+                $details[] = ['field' => '', 'code' => (string) $m['code'], 'message' => (string) $m['message'], 'severity' => (string) $m['severity']];
+            }
+            foreach ($result->errors as $e) {
+                $details[] = $e + ['severity' => 'error'];
+            }
+            if (isset($result->context['existingDocId'])) {
+                $details[] = ['field' => 'acc_document', 'code' => 'existing', 'message' => (string) $result->context['existingDocId'], 'severity' => 'info'];
+            }
+            return Response::error(
+                (string) ($result->code ?? 'FILING_ACCOUNT_FAILED'),
+                $result->message,
+                $result->code === 'NOT_FOUND' ? 404 : 422,
+                $details,
+            );
+        }
+
+        return Response::success([
+            'filingId' => (int) $filing['id'],
+            'docId'    => $result->docId,
+            'rows'     => count($result->plan?->rows ?? []),
+            'warnings' => array_map(static fn (array $m): string => $m['message'], $result->plan?->warnings() ?? []),
+        ]);
+    }
 
     /**
      * POST /_vat/registration-tax-office, body {"registrationId": N,

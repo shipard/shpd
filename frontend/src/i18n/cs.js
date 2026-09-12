@@ -233,6 +233,7 @@ export default {
   'viewer.detail.inviteSent': 'Pozvánka byla odeslána.',
   'viewer.detail.filingFilesCreated': 'Soubory podání byly vytvořeny: {names}. Najdete je v záložce Přílohy.',
   'viewer.detail.reloadFilingHeaderConfirm': 'Načíst hlavičku podání znovu z podacích údajů registrace? Ruční úpravy v záložce Hlavička se přepíšou.',
+  'viewer.detail.filingAccounted': 'Účetní doklad přiznání byl založen jako koncept — zkontrolujte ho a uzavřete.',
   'viewer.detail.inviteFailed': 'Nepodařilo se poslat pozvánku: {msg}',
   'viewer.detail.deleteTagRuleConfirm': 'Opravdu smazat toto pravidlo? Smazání je trvalé; pravidlo může znovu vzniknout učením.',
   'viewer.detail.mailBody': 'Tělo zprávy',

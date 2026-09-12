@@ -218,9 +218,35 @@ class FilingsViewer extends TableViewer
             ];
         }
 
+        // Zaúčtování přiznání (#55 D28–D31) — jen podané přiznání: bez
+        // živého účetního dokladu akce Zaúčtovat, s dokladem odkaz na něj,
+        // po stornu dokladu Zaúčtovat znovu. Explicitní akce, ne automat
+        // při podání (D31) — doklad vzniká jako koncept ke kontrole.
+        $accDoc     = $this->accountingDocument($record);
+        $canAccount = $docState === FilingDocument::DOC_STATE_FILED && $type === 'return' && ($accDoc === null || !$accDoc['live']);
+        if ($canAccount) {
+            $detail['actions'][] = [
+                'id'      => 'accountFiling',
+                'label'   => $accDoc === null ? ($cs ? 'Zaúčtovat' : 'Post to accounting') : ($cs ? 'Zaúčtovat znovu' : 'Post again'),
+                'variant' => 'primary',
+            ];
+        }
+        if ($accDoc !== null && $accDoc['live']) {
+            $detail['actions'][] = [
+                'id'       => 'openAccountingDocument',
+                'label'    => ($cs ? 'Účetní doklad ' : 'Accounting document ') . $accDoc['label'],
+                'variant'  => 'secondary',
+                'kind'     => 'open_viewer',
+                'viewerId' => 'docs.accountingDocs.heads',
+                'recordId' => $accDoc['id'],
+            ];
+        }
+
         // Zámek tvrzení po podání (#55 D25) — „jeden klik po podání":
         // podané podání nad neuzamčenou instancí nabídne Uzamknout tvrzení.
         // Přechodový dialog volitelná pole neumí, proto akce, ne checkbox.
+        // Pořadí po podání: Zaúčtovat, Uzamknout tvrzení — primární je to,
+        // co ještě zbývá udělat první.
         if ($docState === FilingDocument::DOC_STATE_FILED) {
             $periodId = (int) ($record['report_period'] ?? 0);
             $period = $periodId > 0
@@ -229,7 +255,7 @@ class FilingsViewer extends TableViewer
             if ($period !== null && empty($period['locked']) && (int) $period['docState'] !== 90) {
                 $detail['actions'][] = ReportPeriodsViewer::lockAction(
                     $periodId,
-                    'primary',
+                    $canAccount ? 'secondary' : 'primary',
                     $cs ? 'Uzamknout tvrzení' : 'Lock period',
                 );
             }
@@ -340,6 +366,19 @@ class FilingsViewer extends TableViewer
         }
         if (!empty($record['note'])) {
             $items[] = ['label' => $cs ? 'Poznámka' : 'Note', 'value' => (string) $record['note']];
+        }
+        // Zaúčtování přiznání (#55 F4b) — jen u podaného přiznání; hlášení
+        // se neúčtují, koncept ještě nemá co účtovat.
+        if ($type === 'return' && (int) ($record['docState'] ?? 0) === FilingDocument::DOC_STATE_FILED) {
+            $accDoc = $this->accountingDocument($record);
+            $items[] = [
+                'label' => $cs ? 'Zaúčtování' : 'Accounting',
+                'value' => match (true) {
+                    $accDoc === null   => $cs ? 'Nezaúčtováno' : 'Not posted',
+                    $accDoc['live']    => ($cs ? 'Účetní doklad ' : 'Accounting document ') . $accDoc['label'] . ' (' . $accDoc['state'] . ')',
+                    default            => ($cs ? 'Doklad ' : 'Document ') . $accDoc['label'] . ' ' . ($cs ? 'je stornovaný — zaúčtujte znovu' : 'is cancelled — post again'),
+                },
+            ];
         }
 
         $groups = [[
@@ -734,6 +773,38 @@ class FilingsViewer extends TableViewer
     private function docStates(): DocStateConfig
     {
         return DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem));
+    }
+
+    /**
+     * Účetní doklad přiznání z `acc_document`: id, popisek (číslo dokladu,
+     * u konceptu #id), název stavu a zda „žije" (mimo Storno/Smazáno).
+     * Null = podání účetní doklad nemá (nebo je FK visící).
+     *
+     * @param array<string, mixed>|\Dibi\Row $record
+     * @return ?array{id: int, label: string, state: string, live: bool}
+     */
+    private function accountingDocument($record): ?array
+    {
+        $docId = (int) ($record['acc_document'] ?? 0);
+        if ($docId <= 0) {
+            return null;
+        }
+        $head = $this->db->fetchRow(
+            'SELECT `id`, `doc_number`, `docState` FROM `docs_core_heads` WHERE `id` = %i',
+            $docId,
+        );
+        if ($head === null) {
+            return null;
+        }
+        $state  = (int) $head['docState'];
+        $cfg    = DocStateConfig::fromCfgItem($this->config?->cfgItem('docs.core.docStates'));
+        $number = (string) ($head['doc_number'] ?? '');
+        return [
+            'id'    => $docId,
+            'label' => $number !== '' ? $number : "#{$docId}",
+            'state' => (string) ($cfg->getState($state)['stateName'] ?? $state),
+            'live'  => !in_array($state, FilingDocument::ACC_DOCUMENT_DEAD_STATES, true),
+        ];
     }
 
     /** @return array<string, string> */

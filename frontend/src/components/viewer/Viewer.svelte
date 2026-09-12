@@ -8,7 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
-  import { recomposeFiling, generateFilingFiles, reloadFilingHeader, lockReportPeriod } from '../../api/vat.js';
+  import { recomposeFiling, generateFilingFiles, reloadFilingHeader, lockReportPeriod, accountFiling } from '../../api/vat.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import { inviteUser } from '../../api/security.js';
   import { fileFromMessage } from '../../api/registry.js';
@@ -686,6 +686,33 @@
         refreshAfterAction();
       } else {
         const details = result?.error?.details ?? [];
+        alert(
+          translateError(result?.error)
+          + (details.length ? `\n\n${details.map((d) => `• ${d.message}`).join('\n')}` : ''),
+        );
+      }
+      return;
+    }
+    // Zaúčtovat podané přiznání DPH (FilingsViewer, #55 D28–D31): služba
+    // založí účetní doklad jako koncept — po úspěchu se otevře rovnou ve
+    // formuláři, uživatel ho zkontroluje a uzavře. Varování (chybějící
+    // správce daně) se ukážou před otevřením; odmítnutí (živý doklad,
+    // chybějící účet, zámek měsíce) přijde jako 422 s detaily.
+    if (actionId === 'accountFiling') {
+      const result = await accountFiling(recordId);
+      if (result?.success) {
+        const warnings = result.data?.warnings ?? [];
+        alert(t('viewer.detail.filingAccounted') + (warnings.length ? `\n\n${warnings.join('\n')}` : ''));
+        refreshAfterAction();
+        const docId = result.data?.docId ?? null;
+        if (docId != null) {
+          formTable = 'docs_core_heads';
+          editRecordId = docId;
+          formDefaultData = {};
+          formOpen = true;
+        }
+      } else {
+        const details = (result?.error?.details ?? []).filter((d) => d.code !== 'existing');
         alert(
           translateError(result?.error)
           + (details.length ? `\n\n${details.map((d) => `• ${d.message}`).join('\n')}` : ''),

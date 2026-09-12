@@ -348,7 +348,7 @@ function dispatch(
 		'dsAbout' => dispatchDsAbout($route, $auth, $db, $configRuntime, $resolved->config, resolveLanguage($request, $resolved->config), $tables),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher, $documentRegistry, $resolved->config),
-		'vat' => dispatchVat($route, $request, $db, $configRuntime, $resolved, $auth, $documentRegistry, $tables),
+		'vat' => dispatchVat($route, $request, $db, $configRuntime, $resolved, $auth, $documentRegistry, $tables, $documentEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'hostingPortal' => dispatchHostingPortal($route, $request, $auth, $db, $tables, $resolved, $modulePathResolver, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -491,6 +491,7 @@ function dispatchVat(
 	AuthContext $auth,
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	array $tables = [],
+	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
 ): Response {
 	$ctrl = new \Shipard\Module\Economy\Vat\VatFilingController(
 		$db,
@@ -500,6 +501,8 @@ function dispatchVat(
 		$documentRegistry,
 		$tables['economy_vat_report_periods'] ?? null,
 		$tables['economy_codebooks_vat_registrations'] ?? null,
+		$tables,
+		$documentEventDispatcher,
 	);
 	return match ($route->action) {
 		'filingCompose'           => $ctrl->compose($request),
@@ -507,6 +510,7 @@ function dispatchVat(
 		'filingHeaderFromProfile' => $ctrl->headerFromProfile($request),
 		'reportPeriodLock'        => $ctrl->lockPeriod($request),
 		'registrationTaxOffice'   => $ctrl->registrationTaxOffice($request),
+		'filingAccount'           => $ctrl->account($request),
 		default                   => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
 	};
 }

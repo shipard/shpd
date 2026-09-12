@@ -14,20 +14,19 @@ use Shipard\Core\Database\DataSourceConnection;
  *
  * Pro instanci `return` s podaným podáním (docState 40):
  *
- *   docs = docs_core_heads.id WHERE vat_period = instance AND docState != 90
+ *   docs = docs_core_heads.id WHERE docState != 90 AND (
+ *            vat_period = instance
+ *            OR id IN (economy_vat_filings.acc_document WHERE report_period = instance
+ *                      AND docState = 40 AND acc_document IS NOT NULL))
  *   Σ per account_number LIKE '343%' AND account_number NOT IN (343801, 343802)
  *     (money_dr − money_cr) FROM economy_accounting_journal WHERE doc_head IN docs
  *   nenulové (|Σ| > 0.005) → nález {account, balance}
  *
  * Nulový součet = DPH období je „vypořádaná": analytiky 343 se po zaúčtování
- * přiznání vynulují proti saldu 343801 (odvod) / 343802 (odpočet). Nenulový
- * = chybí zaúčtování přiznání, nebo se DPH po podání změnila.
- *
- * TODO(F4b, `tasks/vat-filing-accounting.md`): do množiny dokladů přidat
- * účetní doklady podání (`economy_vat_filings.acc_document` WHERE
- * report_period = instance AND docState = 40 AND acc_document IS NOT NULL).
- * Do té doby kontrola bere jen doklady instance a hlásí všechny podané
- * instance s DPH — to je očekávané, F4b ji „zhasne".
+ * přiznání (účetní doklad podání, F4b — do instance nespadá, drží ho FK
+ * `acc_document`) vynulují proti saldu 343801 (odvod) / 343802 (odpočet).
+ * Nenulový = chybí zaúčtování přiznání, doklad přiznání je ještě koncept,
+ * nebo se DPH po podání změnila (→ dodatečné podání + zaúčtování).
  */
 final class ClosedPeriodBalanceService
 {
@@ -76,7 +75,8 @@ final class ClosedPeriodBalanceService
     }
 
     /**
-     * Nenulové zůstatky 343 analytik (mimo 801/802) přes doklady instance.
+     * Nenulové zůstatky 343 analytik (mimo 801/802) přes doklady instance
+     * a účetní doklady jejích podaných podání.
      *
      * @return list<array{account: string, balance: float}>
      */
@@ -85,11 +85,14 @@ final class ClosedPeriodBalanceService
         $rows = $this->db->fetchAll(
             'SELECT [j].[account_number], SUM([j].[money_dr]) - SUM([j].[money_cr]) AS [balance]'
             . ' FROM [economy_accounting_journal] [j]'
-            . ' WHERE [j].[doc_head] IN (SELECT [id] FROM [docs_core_heads] WHERE [vat_period] = %i AND [docState] != 90)'
+            . ' WHERE [j].[doc_head] IN (SELECT [h].[id] FROM [docs_core_heads] [h]'
+            . '   WHERE [h].[docState] != 90 AND ([h].[vat_period] = %i'
+            . '     OR [h].[id] IN (SELECT [f].[acc_document] FROM [economy_vat_filings] [f]'
+            . '       WHERE [f].[report_period] = %i AND [f].[docState] = %i AND [f].[acc_document] IS NOT NULL)))'
             . ' AND [j].[account_number] LIKE %like~ AND [j].[account_number] NOT IN %in'
             . ' GROUP BY [j].[account_number]'
             . ' ORDER BY [j].[account_number]',
-            $periodId, '343', self::EXCLUDED_ANALYTICS,
+            $periodId, $periodId, FilingDocument::DOC_STATE_FILED, '343', self::EXCLUDED_ANALYTICS,
         );
         $out = [];
         foreach ($rows as $row) {

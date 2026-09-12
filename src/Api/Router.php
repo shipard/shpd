@@ -388,6 +388,14 @@ class Router
 			return new Route('vat', 'registrationTaxOffice');
 		}
 
+		// POST /_vat/filing-account — zaúčtování podaného přiznání DPH (#55 D28–D31)
+		if ($subpath === '/_vat/filing-account') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('vat', 'filingAccount');
+		}
+
 		// POST /_bank/import-statement — import bankovního výpisu (multipart)
 		if ($subpath === '/_bank/import-statement') {
 			if ($method !== 'POST') {

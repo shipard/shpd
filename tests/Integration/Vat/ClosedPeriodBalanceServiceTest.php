@@ -121,8 +121,8 @@ class ClosedPeriodBalanceServiceTest extends IntegrationTestCase
         $periodId = $this->insertPeriod();
         $head = $this->insertHead($periodId);
         $this->insertJournal($head, '343210', 0.0, 210.0);
-        // Doklad, který analytiku vynuluje (jako účetní doklad přiznání z F4b) —
-        // patří do instance přes vat_period, dokud F4b nezavede acc_document.
+        // Doklad, který analytiku vynuluje a patří do instance přes vat_period
+        // (ruční účetní doklad s registrací) — započítává se stejně jako dřív.
         $settle = $this->insertHead($periodId);
         $this->insertJournal($settle, '343210', 210.0, 0.0);
         $this->insertJournal($settle, '343801', 0.0, 210.0);
@@ -132,6 +132,34 @@ class ClosedPeriodBalanceServiceTest extends IntegrationTestCase
 
         $this->assertSame([], $service->balancesForPeriod($periodId));
         $this->assertSame([], $service->findings($periodId));
+    }
+
+    public function testAccountingDocumentOfFiledFilingSettlesAnalytics(): void
+    {
+        $periodId = $this->insertPeriod();
+        $head = $this->insertHead($periodId);
+        $this->insertJournal($head, '343210', 0.0, 210.0);
+        // Účetní doklad přiznání (F4b): bez registrace a rekapitulace do
+        // instance nespadá (vat_period NULL) — drží ho jen FK acc_document.
+        $accDoc = $this->insertHead(null, 40, 'cmnbkp');
+        $this->insertJournal($accDoc, '343210', 210.0, 0.0);
+        $this->insertJournal($accDoc, '343801', 0.0, 210.0);
+
+        // Bez vazby: nevypořádáno.
+        $this->insertFiling($periodId, FilingDocument::DOC_STATE_FILED);
+        $service = new ClosedPeriodBalanceService($this->db);
+        $this->assertCount(1, $service->balancesForPeriod($periodId));
+
+        // S vazbou na podané podání: vypořádáno.
+        $this->db->getDibiConnection()->update(FilingDocument::TABLE, ['acc_document' => $accDoc])
+            ->where('id = %i', end($this->createdFilings))->execute();
+        $this->assertSame([], $service->balancesForPeriod($periodId));
+        $this->assertSame([], $service->findings($periodId));
+
+        // Smazaný doklad přiznání se nepočítá — zůstatek se zase objeví.
+        $this->db->getDibiConnection()->update('docs_core_heads', ['docState' => 90, 'docStateMain' => 5])
+            ->where('id = %i', $accDoc)->execute();
+        $this->assertCount(1, $service->balancesForPeriod($periodId));
     }
 
     public function testPeriodWithoutFiledFilingIsNotChecked(): void
@@ -179,19 +207,20 @@ class ClosedPeriodBalanceServiceTest extends IntegrationTestCase
         return $id;
     }
 
-    private function insertHead(int $periodId, int $docState = 40): int
+    /** `$periodId` null = doklad mimo instanci (účetní doklad přiznání bez registrace). */
+    private function insertHead(?int $periodId, int $docState = 40, string $docType = 'invno'): int
     {
         $dibi = $this->db->getDibiConnection();
         $dibi->insert('docs_core_heads', [
-            'doc_type'         => 'invno',
+            'doc_type'         => $docType,
             'number_series'    => $this->seriesId,
             'doc_number'       => 'IT-CPB-' . uniqid(),
             'issue_date'       => self::DATE,
             'accounting_date'  => self::DATE,
             'due_date'         => self::DATE,
             'vat_duzp'         => self::DATE,
-            'vat_mode'         => 1,
-            'vat_registration' => $this->registrationId,
+            'vat_mode'         => $periodId !== null ? 1 : 0,
+            'vat_registration' => $periodId !== null ? $this->registrationId : null,
             'vat_period'       => $periodId,
             'doc_currency'     => 'czk',
             'home_currency'    => 'czk',

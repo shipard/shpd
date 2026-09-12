@@ -25,6 +25,12 @@ class VatReportsMappingCompletenessTest extends TestCase
     private const FILING_KINDS = VatOutputsMapping::FILING_KINDS;
     private const REPORT_TYPE_KEYS = [
         'validFrom', 'filingKinds', 'supplementaryMode', 'dateFoundRequiredFor', 'roundingUnit',
+        'accounting',
+    ];
+
+    /** Zaúčtování přiznání (#55 D29) — jen typ, který se účtuje. */
+    private const ACCOUNTING_KEYS = [
+        'payableDueDays', 'refundDueDays', 'specificSymbolPrefix', 'constantSymbol', 'excludeAccounts',
     ];
     /** Odpočtové řádky se sloupcem „V plné výši" / „Krácený odpočet". */
     private const DP3_DEDUCTION_ROWS = [40, 41, 43, 44];
@@ -162,6 +168,15 @@ class VatReportsMappingCompletenessTest extends TestCase
                 array_diff(array_keys($entry), self::REPORT_TYPE_KEYS),
                 "reportTypes.{$type}: neznámý klíč (validTo záměrně neexistuje)",
             );
+            if ($type === 'return') {
+                $this->assertSame(
+                    self::ACCOUNTING_KEYS,
+                    array_keys($entry['accounting'] ?? []),
+                    'reportTypes.return.accounting: kompletní blok zaúčtování přiznání',
+                );
+            } else {
+                $this->assertArrayNotHasKey('accounting', $entry, "reportTypes.{$type}: hlášení se neúčtují");
+            }
 
             if (array_key_exists('validFrom', $entry)) {
                 $this->assertMatchesRegularExpression(

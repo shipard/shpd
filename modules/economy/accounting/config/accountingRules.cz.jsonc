@@ -27,6 +27,9 @@
         "costs":            {"name:cs": "Náklady"},
         "rounding.cost":    {"name:cs": "Zaokrouhlení — náklad"},
         "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"},
+        "vat.payable":       {"name:cs": "DPH — odvod (závazek vůči FÚ)"},
+        "vat.receivable":    {"name:cs": "DPH — nadměrný odpočet (pohledávka za FÚ)"},
+        "vat.nondeductible": {"name:cs": "DPH bez nároku na odpočet (krácení)"},
         "fx.loss":          {"name:cs": "Kurzové ztráty"},
         "fx.gain":          {"name:cs": "Kurzové zisky"},
         "card.transit":     {"name:cs": "Karta — platební karty na cestě"},
@@ -159,6 +162,13 @@
 
         {"cat": "rounding.cost",    "accountMask": "548"},
         {"cat": "rounding.revenue", "accountMask": "648"},
+
+        // Zaúčtování přiznání DPH (#55 D28–D31, VatReturnAccountingBuilder):
+        // saldo účty odvodu / nadměrného odpočtu (partner = správce daně)
+        // a náklad z neuplatnitelné části krácených kódů (koeficient ř. 52).
+        {"cat": "vat.payable",       "accountMask": "343801"},
+        {"cat": "vat.receivable",    "accountMask": "343802"},
+        {"cat": "vat.nondeductible", "accountMask": "548"},
 
         // Kurzové rozdíly (vlna D, D12): analytiky per DS dohledá maska
         // (dle rozvrhu 563xxx/663xxx, resp. 563100/663100).

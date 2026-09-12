@@ -37,7 +37,6 @@ use Shipard\Module\World\Vat\VatRateResolver;
 final class FilingComposer
 {
     /** Pojistka proti zacyklení řetězu dodatečných podání. */
-    private const MAX_CHAIN_DEPTH = 50;
 
     /**
      * Zálohový koeficient odpočtu použitý při výpočtu ř. 52 — do snapshotu
@@ -48,6 +47,9 @@ final class FilingComposer
      * @var ?array{value: float, source: string, year: int}
      */
     private ?array $returnCoefficient = null;
+
+    /** Čtení snapshotu podání (řádky, řetěz kumulativního stavu) — sdílené se zaúčtováním. */
+    private ?FilingSnapshotLoader $snapshots = null;
 
     public function __construct(
         private readonly \Dibi\Connection $db,
@@ -336,37 +338,19 @@ final class FilingComposer
     }
 
     /**
-     * Kumulativní podaný stav podání: opravné a řádné je plná náhrada,
-     * dodatečné se přičítá k základu, ze kterého vzniklo.
+     * Kumulativní podaný stav podání (řádné a opravné = plná náhrada,
+     * dodatečné se přičítá) — sdílené se zaúčtováním přiznání.
      *
      * @return array<int, array{base: float, taxFull: float, taxReduced: float}>
      */
-    private function cumulativeFiledRows(int $filingId, int $depth = 0): array
+    private function cumulativeFiledRows(int $filingId): array
     {
-        if ($depth > self::MAX_CHAIN_DEPTH) {
-            throw new \RuntimeException("Řetěz dodatečných podání je zacyklený u podání #{$filingId}");
-        }
-        $filing = $this->loadFiling($filingId);
-        if ($filing === null) {
-            throw new \DomainException("Předchozí podání #{$filingId} nenalezeno");
-        }
+        return $this->snapshots()->cumulativeFiledRows($filingId);
+    }
 
-        $own = $this->loadFiledRows($filingId);
-        if ((string) $filing['filing_kind'] !== FilingDocument::KIND_SUPPLEMENTARY) {
-            return $own;
-        }
-        $previousId = (int) ($filing['previous_filing'] ?? 0);
-        if ($previousId <= 0) {
-            return $own;
-        }
-
-        $base = $this->cumulativeFiledRows($previousId, $depth + 1);
-        foreach ($own as $row => $values) {
-            foreach ($values as $field => $value) {
-                $base[$row][$field] = round(($base[$row][$field] ?? 0.0) + $value, 2);
-            }
-        }
-        return $base;
+    private function snapshots(): FilingSnapshotLoader
+    {
+        return $this->snapshots ??= new FilingSnapshotLoader($this->db);
     }
 
     // ── Výstupní řádky: kontrolní hlášení ───────────────────────────────────
@@ -724,20 +708,7 @@ final class FilingComposer
      */
     private function loadFiledRows(int $filingId): array
     {
-        $rows = $this->db->fetchAll(
-            'SELECT [row], [base_filed], [tax_full_filed], [tax_reduced_filed]'
-            . ' FROM [economy_vat_filing_return_rows] WHERE [filing] = %i',
-            $filingId,
-        );
-        $out = [];
-        foreach ($rows as $row) {
-            $out[(int) $row['row']] = [
-                'base'       => (float) $row['base_filed'],
-                'taxFull'    => (float) $row['tax_full_filed'],
-                'taxReduced' => (float) $row['tax_reduced_filed'],
-            ];
-        }
-        return $out;
+        return $this->snapshots()->filedRows($filingId);
     }
 
     /** Dibi neumí PHP pole pro `json` sloupce — serializace je na nás. */

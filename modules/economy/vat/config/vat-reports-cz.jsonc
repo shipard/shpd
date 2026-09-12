@@ -155,11 +155,31 @@
     // `roundingUnit`         jednotka podaných hodnot: 1 = celé Kč
     //                        (DP3 řádek po řádku, SH nahoru), 0.01 = beze
     //                        změny (KH se podává na haléře).
+    //
+    // Zaúčtování přiznání (#55 D28–D31) — čte VatOutputsMapping::accounting(),
+    // uplatňuje VatReturnAccountingBuilder; jen typ, který se účtuje (return):
+    //
+    // `accounting.payableDueDays`       splatnost odvodu od konce období
+    //                                   (saldo řádek 343801)
+    // `accounting.refundDueDays`        splatnost nadměrného odpočtu od konce
+    //                                   období (saldo řádek 343802)
+    // `accounting.specificSymbolPrefix` SS saldo řádku = prefix + RRRRMM konce
+    //                                   období (starý vzor `705` + období)
+    // `accounting.constantSymbol`       KS saldo řádku
+    // `accounting.excludeAccounts`      saldo analytiky, které vypořádání
+    //                                   nevynulovává (kontrola zůstatků 343)
     "reportTypes": {
         "return": {
             "filingKinds": ["regular", "corrective", "supplementary"],
             "supplementaryMode": "diff",
-            "roundingUnit": 1
+            "roundingUnit": 1,
+            "accounting": {
+                "payableDueDays": 25,
+                "refundDueDays": 60,
+                "specificSymbolPrefix": "705",
+                "constantSymbol": "1148",
+                "excludeAccounts": ["343801", "343802"]
+            }
         },
         "cs": {
             "validFrom": "2016-01-01",   // zavedení kontrolního hlášení (§ 101c ZDPH)

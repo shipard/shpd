@@ -39,7 +39,8 @@ final class VatOutputsMapping
     /**
      * @var array<string, array{validFrom: ?string, filingKinds: list<string>,
      *      supplementaryMode: string, dateFoundRequiredFor: list<string>,
-     *      roundingUnit: float}>
+     *      roundingUnit: float, accounting: ?array{payableDueDays: int, refundDueDays: int,
+     *      specificSymbolPrefix: string, constantSymbol: string, excludeAccounts: list<string>}}>
      */
     private readonly array $reportTypes;
 
@@ -119,6 +120,19 @@ final class VatOutputsMapping
     }
 
     /**
+     * Parametry zaúčtování přiznání (#55 D29): splatnosti od konce období,
+     * symboly saldo řádku a saldo účty mimo vypořádání analytik 343.
+     * Null = typ se neúčtuje (KH, SH) nebo config blok nemá.
+     *
+     * @return ?array{payableDueDays: int, refundDueDays: int, specificSymbolPrefix: string,
+     *         constantSymbol: string, excludeAccounts: list<string>}
+     */
+    public function accounting(string $type): ?array
+    {
+        return $this->reportTypes[$type]['accounting'] ?? null;
+    }
+
+    /**
      * @param mixed $section
      * @return array<string, array{validFrom: ?string, filingKinds: list<string>,
      *         supplementaryMode: string, dateFoundRequiredFor: list<string>,
@@ -157,6 +171,7 @@ final class VatOutputsMapping
                 'supplementaryMode'    => self::parseSupplementaryMode($type, $entry),
                 'dateFoundRequiredFor' => $dateFound,
                 'roundingUnit'         => self::parseRoundingUnit($type, $entry),
+                'accounting'           => self::parseAccounting($type, $entry),
             ];
         }
         return $out;
@@ -230,6 +245,63 @@ final class VatOutputsMapping
             );
         }
         return $unit;
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     * @return ?array{payableDueDays: int, refundDueDays: int, specificSymbolPrefix: string,
+     *         constantSymbol: string, excludeAccounts: list<string>}
+     */
+    private static function parseAccounting(string $type, array $entry): ?array
+    {
+        if (!array_key_exists('accounting', $entry)) {
+            return null;
+        }
+        $acc = $entry['accounting'];
+        if (!is_array($acc)) {
+            throw new \InvalidArgumentException("VAT outputs mapping: reportTypes.{$type}.accounting must be an object");
+        }
+        $days = [];
+        foreach (['payableDueDays', 'refundDueDays'] as $key) {
+            $value = $acc[$key] ?? null;
+            if (!is_int($value) || $value < 0) {
+                throw new \InvalidArgumentException(
+                    "VAT outputs mapping: reportTypes.{$type}.accounting.{$key} must be a non-negative integer",
+                );
+            }
+            $days[$key] = $value;
+        }
+        $symbols = [];
+        foreach (['specificSymbolPrefix' => 10, 'constantSymbol' => 10] as $key => $maxLength) {
+            $value = $acc[$key] ?? '';
+            if (!is_string($value) || preg_match('/^\d{0,' . $maxLength . '}$/', $value) !== 1) {
+                throw new \InvalidArgumentException(
+                    "VAT outputs mapping: reportTypes.{$type}.accounting.{$key} must be a string of at most"
+                    . " {$maxLength} digits",
+                );
+            }
+            $symbols[$key] = $value;
+        }
+        $exclude = $acc['excludeAccounts'] ?? [];
+        if (!is_array($exclude) || !array_is_list($exclude)) {
+            throw new \InvalidArgumentException(
+                "VAT outputs mapping: reportTypes.{$type}.accounting.excludeAccounts must be an array of account numbers",
+            );
+        }
+        foreach ($exclude as $number) {
+            if (!is_string($number) || $number === '') {
+                throw new \InvalidArgumentException(
+                    "VAT outputs mapping: reportTypes.{$type}.accounting.excludeAccounts must contain account numbers as strings",
+                );
+            }
+        }
+        return [
+            'payableDueDays'       => $days['payableDueDays'],
+            'refundDueDays'        => $days['refundDueDays'],
+            'specificSymbolPrefix' => $symbols['specificSymbolPrefix'],
+            'constantSymbol'       => $symbols['constantSymbol'],
+            'excludeAccounts'      => array_values($exclude),
+        ];
     }
 
     private static function isIsoDate(string $value): bool

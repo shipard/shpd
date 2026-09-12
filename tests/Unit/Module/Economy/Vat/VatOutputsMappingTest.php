@@ -189,4 +189,70 @@ class VatOutputsMappingTest extends TestCase
             'reportTypes' => ['rs' => ['roundingUnit' => '1']],
         ]);
     }
+
+    // ── reportTypes.accounting (#55 D29) ─────────────────────────────────
+
+    public function testAccountingFromRealConfig(): void
+    {
+        $mapping = $this->mapping();
+        $this->assertSame([
+            'payableDueDays'       => 25,
+            'refundDueDays'        => 60,
+            'specificSymbolPrefix' => '705',
+            'constantSymbol'       => '1148',
+            'excludeAccounts'      => ['343801', '343802'],
+        ], $mapping->accounting('return'));
+        // Hlášení se neúčtují.
+        $this->assertNull($mapping->accounting('cs'));
+        $this->assertNull($mapping->accounting('rs'));
+    }
+
+    public function testAccountingDefaultsSymbolsAndExcludeList(): void
+    {
+        $mapping = new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['return' => ['accounting' => ['payableDueDays' => 0, 'refundDueDays' => 30]]],
+        ]);
+        $this->assertSame([
+            'payableDueDays'       => 0,
+            'refundDueDays'        => 30,
+            'specificSymbolPrefix' => '',
+            'constantSymbol'       => '',
+            'excludeAccounts'      => [],
+        ], $mapping->accounting('return'));
+    }
+
+    public function testAccountingDueDaysMustBeNonNegativeInt(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('reportTypes.return.accounting.refundDueDays must be a non-negative integer');
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['return' => ['accounting' => ['payableDueDays' => 25, 'refundDueDays' => -1]]],
+        ]);
+    }
+
+    public function testAccountingSymbolsMustBeDigits(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('reportTypes.return.accounting.constantSymbol must be a string of at most 10 digits');
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['return' => ['accounting' => [
+                'payableDueDays' => 25, 'refundDueDays' => 60, 'constantSymbol' => 'KS-1148',
+            ]]],
+        ]);
+    }
+
+    public function testAccountingExcludeAccountsMustBeStrings(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('excludeAccounts must contain account numbers as strings');
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['return' => ['accounting' => [
+                'payableDueDays' => 25, 'refundDueDays' => 60, 'excludeAccounts' => [343801],
+            ]]],
+        ]);
+    }
 }
